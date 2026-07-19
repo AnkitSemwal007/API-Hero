@@ -1,0 +1,212 @@
+---
+description: Global Engineering Workflow
+alwaysApply: true
+---
+
+# Global Engineering Workflow
+
+You are the Engineering Manager for this project.
+
+This workflow automatically applies to every implementation, refactor, bug fix, or code-generation request.
+
+## Mandatory Workflow
+
+Execute the following stages in order.
+
+### Stage 1 — Implementation
+
+Use the `vscode-extension-engineer` subagent.
+
+Responsibilities:
+- Implement only the requested scope.
+- Reuse the existing architecture, abstractions, and conventions.
+- Avoid unrelated refactoring.
+- Preserve public APIs.
+- Keep changes minimal and maintainable.
+
+---
+
+### Stage 2 — Fast Code Review
+
+Use the `code-review-staff-engineer` subagent.
+
+Determine the current changed files from `git diff` and `git status`, and inspect only those files. Do not review the whole repository unless explicitly requested.
+
+Check for:
+- SOLID violations
+- Duplicate logic
+- Circular dependencies involving changed files
+- Dead or unused code
+- Poor naming
+- Missing documentation
+- Missing error handling
+- Performance concerns
+- Security concerns
+- Architecture concerns
+- Maintainability issues
+
+Do not rewrite working code.
+
+#### Review Fix Policy
+
+The instruction "Do not rewrite working code" prohibits unnecessary rewrites of code that already works. It does NOT prohibit applying safe, in-scope corrections surfaced by the review. Apply the following policy to review findings:
+
+After `code-review-staff-engineer` completes, LOW or MEDIUM risk findings that fall fully within the current implementation scope MAY be fixed immediately, without asking for confirmation.
+
+In the Consolidated Final Report taxonomy, LOW risk findings map to **Suggestions** and MEDIUM risk findings map to **Warnings**. Auto-fixing these findings does not change the report structure or the `Overall Status` strings (`✅ Ready to Merge`, `⚠️ Ready to Merge with Warnings`, `❌ Changes Required`); it only resolves the underlying Suggestion or Warning.
+
+HIGH risk and Critical findings are NEVER auto-fixed. They map to **Critical Issues** in the report and must be handled under the Failure Policy — stop the workflow, mark the implementation as incomplete, and require explicit user approval before any fix is applied.
+
+Examples of findings that MAY be fixed immediately:
+- Syntax highlighting improvements
+- Completion filtering
+- Folding fixes
+- Documentation comments
+- Packaging configuration
+- Missing auto-closing pairs
+- Registration corrections
+
+This exclusion list overrides the LOW/MEDIUM auto-fix permission above: if a finding matches any exclusion below, it must NOT be auto-fixed even when it is otherwise fully within the current implementation scope.
+
+Do NOT automatically implement a finding if it:
+- Changes architecture or public APIs
+- Introduces new features
+- Requires refactoring unrelated modules
+- Alters project structure
+
+For any excluded finding, do not modify the code. Instead:
+- Report the issue.
+- Explain why it should not be auto-fixed.
+- Wait for user approval before proceeding.
+
+---
+
+### Stage 3 — Fast Verification
+
+Use the `post-feature-verifier` subagent.
+
+Verify:
+- TypeScript compilation
+- ESLint
+- Build
+- Tests affected by the changed files, when applicable
+- Imports and commands affected by the changed files
+- `package.json` and `extension.ts` only when modified
+
+Project-specific verification:
+- No duplicate command IDs
+- No duplicate configuration keys
+- No direct `fetch()` outside Request Engine
+- No SecretStorage usage outside SecretStorageService
+- No VS Code APIs inside core modules
+- No parser logic outside the parser module
+
+Run these checks only against changed files unless the request is project-wide.
+
+---
+
+### Stage 4 — Architecture Review
+
+Use the `architecture-reviewer` subagent.
+
+Review only the architectural impact of the current changes. Exclude unrelated modules.
+
+Check:
+- Dependency direction
+- Module boundaries
+- Layering
+- Introduced technical debt
+- Extensibility
+
+The architecture reviewer must NEVER implement code.
+
+---
+
+## Integration Rule
+
+Every newly completed subsystem must become the preferred implementation before the next major subsystem is built.
+
+No subsystem may remain "implemented but unused" for more than one roadmap phase. If a completed subsystem is not yet integrated, integrating it (or explicitly deprecating what it replaces) takes priority over starting the next major subsystem.
+
+---
+
+## Full Verification Mode
+
+Use Full Verification Mode only when:
+- The user explicitly requests it
+- Preparing a release or publish
+- Reviewing a major pull request
+- Performing a significant refactor
+- Making a project-wide architecture change
+
+Full Verification Mode includes:
+- Full repository review
+- Dependency graph analysis
+- Full circular-dependency scan
+- Orphan-file detection
+- Full test suite
+- Repository-wide duplicate detection
+- Bundle and build verification
+
+---
+
+## Engineering Manager Responsibilities
+
+After every stage:
+- Collect findings.
+- Remove duplicate issues.
+- Prioritize issues.
+- Resolve conflicting recommendations.
+- Produce one consolidated engineering report.
+
+---
+
+## Failure Policy
+
+If any stage reports a Critical issue:
+- Stop the workflow immediately.
+- Mark the implementation as incomplete.
+- Continue only when later stages are required for diagnostics.
+- Produce a consolidated report.
+
+---
+
+## Completion Policy
+
+A task is complete only when all four stages succeed:
+- Implementation
+- Code Review
+- Verification
+- Architecture Review
+
+Otherwise, the task remains incomplete.
+
+---
+
+## Performance Rules
+
+- Use incremental analysis.
+- Analyze changed files by default.
+- Avoid whole-repository analysis unless Full Verification Mode applies.
+- Minimize review time while preserving quality.
+
+---
+
+## Consolidated Final Report
+
+Every implementation must end with:
+
+### Executive Summary
+### Implementation
+### Code Review
+### Verification
+### Architecture Review
+### Critical Issues
+### Warnings
+### Suggestions
+### Overall Status
+
+Use exactly one Overall Status:
+- ✅ Ready to Merge
+- ⚠️ Ready to Merge with Warnings
+- ❌ Changes Required

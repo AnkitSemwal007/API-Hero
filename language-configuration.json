@@ -1,0 +1,40 @@
+{
+  "comments": {
+    "lineComment": "//"
+  },
+  "brackets": [
+    ["{", "}"],
+    ["[", "]"],
+    ["(", ")"]
+  ],
+  "autoClosingPairs": [
+    { "open": "{", "close": "}" },
+    { "open": "[", "close": "]" },
+    { "open": "(", "close": ")" },
+    { "open": "\"", "close": "\"", "notIn": ["string", "comment"] },
+    { "open": "'", "close": "'", "notIn": ["string", "comment"] },
+    { "open": "`", "close": "`", "notIn": ["string", "comment"] },
+    { "open": "{{", "close": "}}", "notIn": ["string", "comment"] }
+  ],
+  "surroundingPairs": [
+    ["{", "}"],
+    ["[", "]"],
+    ["(", ")"],
+    ["\"", "\""],
+    ["'", "'"],
+    ["`", "`"],
+    ["{{", "}}"]
+  ],
+  "indentationRules": {
+    "increaseIndentPattern": "^.*(?:\\{[^}\"']*|\\[[^\\]\"']*)$",
+    "decreaseIndentPattern": "^\\s*[}\\]].*$"
+  },
+  "folding": {
+    "offSide": false,
+    "markers": {
+      "start": "^\\s*###(?:\\s+region\\b.*)?$",
+      "end": "^\\s*###\\s+end(?:region)?\\b.*$"
+    }
+  },
+  "wordPattern": "(-?\\d*\\.\\d\\w*)|([^\\s`~!@#$%^&*()=+\\[\\]{}\\\\|;:'\\\",.<>/?]+)"
+}

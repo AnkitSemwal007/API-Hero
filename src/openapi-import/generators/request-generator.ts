@@ -1,0 +1,499 @@
+/**
+ * Generates a single `.api` request source string from an OpenAPI operation.
+ *
+ * Layout (hand-written feel):
+ * - `#` comments for operationId / summary / response metadata
+ * - `@name`, `@description`, optional `@auth`
+ * - METHOD {{baseUrl}}/path/{{pathParam}}
+ * - headers and query as realistic lines
+ * - body from examples or schema-derived JSON (stubs for other media types)
+ */
+
+import type { ImportDiagnostic, ImportLimits } from '../models';
+import { DEFAULT_IMPORT_LIMITS } from '../models';
+import type { OpenApiRefResolver } from '../openapi/resolve';
+import type {
+  OpenApiDocument,
+  OpenApiExampleOrRef,
+  OpenApiHttpMethod,
+  OpenApiMediaType,
+  OpenApiOperation,
+  OpenApiParameter,
+  OpenApiPathItem,
+  OpenApiRequestBody,
+  OpenApiResponse,
+  OpenApiSecurityRequirement,
+} from '../openapi/types';
+import { isReference } from '../openapi/types';
+import {
+  isSensitiveName,
+  maskImportSecretText,
+  placeholderForSensitiveName,
+  scrubSensitiveExampleValue,
+} from '../sanitize';
+import { buildSchemaSample } from './schema-sample';
+
+export interface RequestGenerationInput {
+  readonly document: OpenApiDocument;
+  readonly resolver: OpenApiRefResolver;
+  readonly pathKey: string;
+  readonly method: OpenApiHttpMethod;
+  readonly pathItem: OpenApiPathItem;
+  readonly operation: OpenApiOperation;
+  readonly schemeToProfileId: ReadonlyMap<string, string>;
+  readonly limits?: Partial<ImportLimits>;
+}
+
+export interface RequestGenerationResult {
+  readonly content: string;
+  readonly requestName: string;
+  readonly diagnostics: readonly ImportDiagnostic[];
+}
+
+export function generateRequestSource(
+  input: RequestGenerationInput,
+): RequestGenerationResult {
+  const diagnostics: ImportDiagnostic[] = [];
+  const limits = { ...DEFAULT_IMPORT_LIMITS, ...input.limits };
+  const { operation, method, pathKey, resolver, schemeToProfileId } = input;
+
+  const requestName =
+    operation.operationId?.trim() ||
+    operation.summary?.trim() ||
+    `${method.toUpperCase()} ${pathKey}`;
+
+  const lines: string[] = [];
+
+  if (operation.operationId) {
+    lines.push(`# operationId: ${sanitizeComment(operation.operationId)}`);
+  }
+  if (operation.summary && operation.summary !== operation.operationId) {
+    lines.push(`# summary: ${sanitizeComment(operation.summary)}`);
+  }
+  if (operation.deprecated === true) {
+    lines.push('# deprecated: true');
+  }
+  if (operation.externalDocs?.url) {
+    lines.push(`# externalDocs: ${sanitizeComment(operation.externalDocs.url)}`);
+  }
+
+  appendResponseComments(operation, resolver, lines, diagnostics);
+
+  lines.push(`@name ${singleLine(requestName)}`);
+  if (operation.description) {
+    lines.push(`@description ${singleLine(operation.description)}`);
+  }
+
+  const authProfileId = pickAuthProfile(
+    operation.security ?? input.document.security,
+    schemeToProfileId,
+  );
+  if (authProfileId !== undefined) {
+    lines.push(`@auth ${authProfileId}`);
+  }
+
+  const parameters = collectParameters(
+    input.pathItem,
+    operation,
+    resolver,
+    diagnostics,
+  );
+
+  const url = buildUrl(pathKey, parameters);
+  lines.push(`${method.toUpperCase()} ${url}`);
+
+  for (const header of parameters.filter((item) => item.in === 'header')) {
+    const value = parameterValue(header);
+    lines.push(`${header.name}: ${value}`);
+  }
+
+  for (const cookie of parameters.filter((item) => item.in === 'cookie')) {
+    lines.push(`# cookie ${cookie.name}={{${cookieVarName(cookie.name)}}}`);
+  }
+
+  const bodyResult = generateBody(operation, resolver, limits, diagnostics);
+  if (bodyResult.contentType !== undefined) {
+    const hasContentType = parameters.some(
+      (item) =>
+        item.in === 'header' && item.name.toLowerCase() === 'content-type',
+    );
+    if (!hasContentType) {
+      lines.push(`Content-Type: ${bodyResult.contentType}`);
+    }
+  }
+  if (bodyResult.accept !== undefined) {
+    const hasAccept = parameters.some(
+      (item) => item.in === 'header' && item.name.toLowerCase() === 'accept',
+    );
+    if (!hasAccept) {
+      lines.push(`Accept: ${bodyResult.accept}`);
+    }
+  }
+
+  if (bodyResult.bodyLines.length > 0) {
+    lines.push('');
+    lines.push(...bodyResult.bodyLines);
+  }
+
+  lines.push('');
+  return {
+    content: lines.join('\n'),
+    requestName,
+    diagnostics,
+  };
+}
+
+function appendResponseComments(
+  operation: OpenApiOperation,
+  resolver: OpenApiRefResolver,
+  lines: string[],
+  diagnostics: ImportDiagnostic[],
+): void {
+  const responses = operation.responses;
+  if (responses === undefined) {
+    return;
+  }
+  for (const [status, responseOrRef] of Object.entries(responses)) {
+    if (responseOrRef === undefined) {
+      continue;
+    }
+    let response: OpenApiResponse | undefined;
+    if (isReference(responseOrRef)) {
+      const resolved = resolver.resolveRef<OpenApiResponse>(responseOrRef.$ref);
+      diagnostics.push(...resolved.diagnostics);
+      response = resolved.value;
+    } else {
+      response = responseOrRef;
+    }
+    const description = response?.description?.trim() ?? '';
+    const contentTypes = response?.content
+      ? Object.keys(response.content).join(', ')
+      : '';
+    const parts = [
+      `response ${status}`,
+      description.length > 0 ? description : undefined,
+      contentTypes.length > 0 ? `content: ${contentTypes}` : undefined,
+    ].filter((part): part is string => part !== undefined);
+    lines.push(`# ${sanitizeComment(parts.join(' — '))}`);
+  }
+}
+
+function collectParameters(
+  pathItem: OpenApiPathItem,
+  operation: OpenApiOperation,
+  resolver: OpenApiRefResolver,
+  diagnostics: ImportDiagnostic[],
+): OpenApiParameter[] {
+  const merged = new Map<string, OpenApiParameter>();
+  const sources = [
+    ...(pathItem.parameters ?? []),
+    ...(operation.parameters ?? []),
+  ];
+
+  for (const item of sources) {
+    let parameter: OpenApiParameter | undefined;
+    if (isReference(item)) {
+      const resolved = resolver.resolveRef<OpenApiParameter>(item.$ref);
+      diagnostics.push(...resolved.diagnostics);
+      parameter = resolved.value;
+    } else {
+      parameter = item;
+    }
+    if (
+      parameter === undefined ||
+      typeof parameter.name !== 'string' ||
+      typeof parameter.in !== 'string'
+    ) {
+      continue;
+    }
+    merged.set(`${parameter.in}:${parameter.name}`, parameter);
+  }
+
+  return [...merged.values()];
+}
+
+function buildUrl(
+  pathKey: string,
+  parameters: readonly OpenApiParameter[],
+): string {
+  let path = pathKey.replace(
+    /\{([^}]+)\}/gu,
+    (_match, name: string) => `{{${pathVarName(name)}}}`,
+  );
+
+  const query = parameters.filter((item) => item.in === 'query');
+  if (query.length > 0) {
+    const parts = query.map((item) => {
+      const value = parameterValue(item);
+      return `${encodeURIComponent(item.name)}=${value.startsWith('{{') ? value : encodeURIComponent(value)}`;
+    });
+    path = `${path}?${parts.join('&')}`;
+  }
+
+  return `{{baseUrl}}${path.startsWith('/') ? path : `/${path}`}`;
+}
+
+function parameterValue(parameter: OpenApiParameter): string {
+  if (parameter.in === 'header' && isSensitiveName(parameter.name)) {
+    return placeholderForSensitiveName(parameter.name);
+  }
+  if (parameter.in === 'cookie') {
+    return `{{${cookieVarName(parameter.name)}}}`;
+  }
+  if (isSensitiveName(parameter.name)) {
+    return placeholderForSensitiveName(parameter.name);
+  }
+
+  if (parameter.example !== undefined && parameter.example !== null) {
+    return String(parameter.example);
+  }
+  if (parameter.examples !== undefined) {
+    const first = firstExampleValue(parameter.examples);
+    if (first !== undefined) {
+      return String(first);
+    }
+  }
+  if (parameter.in === 'path') {
+    return `{{${pathVarName(parameter.name)}}}`;
+  }
+  if (parameter.in === 'query') {
+    return `{{${queryVarName(parameter.name)}}}`;
+  }
+  if (parameter.in === 'header') {
+    return `{{${headerVarName(parameter.name)}}}`;
+  }
+  return `{{${cookieVarName(parameter.name)}}}`;
+}
+
+function firstExampleValue(
+  examples: Readonly<Record<string, OpenApiExampleOrRef | undefined>>,
+): unknown {
+  for (const example of Object.values(examples)) {
+    if (example === undefined || isReference(example)) {
+      continue;
+    }
+    if (example.value !== undefined) {
+      return example.value;
+    }
+  }
+  return undefined;
+}
+
+function generateBody(
+  operation: OpenApiOperation,
+  resolver: OpenApiRefResolver,
+  limits: ImportLimits,
+  diagnostics: ImportDiagnostic[],
+): {
+  readonly contentType?: string;
+  readonly accept?: string;
+  readonly bodyLines: readonly string[];
+} {
+  const accept = pickPreferredResponseContentType(operation, resolver);
+  if (operation.requestBody === undefined) {
+    return {
+      ...(accept === undefined ? {} : { accept }),
+      bodyLines: [],
+    };
+  }
+
+  let requestBody: OpenApiRequestBody | undefined;
+  if (isReference(operation.requestBody)) {
+    const resolved = resolver.resolveRef<OpenApiRequestBody>(
+      operation.requestBody.$ref,
+    );
+    diagnostics.push(...resolved.diagnostics);
+    requestBody = resolved.value;
+  } else {
+    requestBody = operation.requestBody;
+  }
+
+  if (requestBody?.content === undefined) {
+    return {
+      ...(accept === undefined ? {} : { accept }),
+      bodyLines: [],
+    };
+  }
+
+  const media = pickMediaType(requestBody.content);
+  if (media === undefined) {
+    return {
+      ...(accept === undefined ? {} : { accept }),
+      bodyLines: [],
+    };
+  }
+
+  const [contentType, mediaType] = media;
+  const bodyLines = mediaTypeToBody(contentType, mediaType, resolver, limits, diagnostics);
+  return {
+    contentType,
+    ...(accept === undefined ? {} : { accept }),
+    bodyLines,
+  };
+}
+
+function pickMediaType(
+  content: Readonly<Record<string, OpenApiMediaType | undefined>>,
+): readonly [string, OpenApiMediaType] | undefined {
+  const preferred = [
+    'application/json',
+    'application/problem+json',
+    'text/json',
+    'application/x-www-form-urlencoded',
+    'multipart/form-data',
+    'application/xml',
+    'text/plain',
+  ];
+  for (const type of preferred) {
+    const media = content[type];
+    if (media !== undefined) {
+      return [type, media];
+    }
+  }
+  const first = Object.entries(content).find(
+    (entry): entry is [string, OpenApiMediaType] => entry[1] !== undefined,
+  );
+  return first;
+}
+
+function mediaTypeToBody(
+  contentType: string,
+  media: OpenApiMediaType,
+  resolver: OpenApiRefResolver,
+  limits: ImportLimits,
+  diagnostics: ImportDiagnostic[],
+): readonly string[] {
+  if (media.example !== undefined) {
+    return formatBody(contentType, scrubSensitiveExampleValue(media.example));
+  }
+  if (media.examples !== undefined) {
+    const value = firstExampleValue(media.examples);
+    if (value !== undefined) {
+      return formatBody(contentType, scrubSensitiveExampleValue(value));
+    }
+  }
+
+  if (contentType.includes('json')) {
+    const sample = buildSchemaSample(media.schema, { resolver, limits });
+    diagnostics.push(...sample.diagnostics);
+    return formatBody(contentType, scrubSensitiveExampleValue(sample.value));
+  }
+
+  if (contentType.includes('xml')) {
+    return [
+      '<!-- TODO: replace with a real XML body from the OpenAPI schema -->',
+      '<request />',
+    ];
+  }
+
+  if (contentType.includes('urlencoded')) {
+    return ['field={{fieldValue}}'];
+  }
+
+  if (contentType.includes('multipart')) {
+    return [
+      '# multipart/form-data body stub — replace parts as needed',
+      '--boundary',
+      'Content-Disposition: form-data; name="field"',
+      '',
+      'value',
+      '--boundary--',
+    ];
+  }
+
+  if (contentType.startsWith('text/')) {
+    return ['text body'];
+  }
+
+  return ['# binary or unsupported media type — add body manually'];
+}
+
+function formatBody(contentType: string, value: unknown): readonly string[] {
+  if (contentType.includes('json')) {
+    try {
+      return JSON.stringify(value, null, 2).split('\n');
+    } catch {
+      return ['{}'];
+    }
+  }
+  return [String(value)];
+}
+
+function pickPreferredResponseContentType(
+  operation: OpenApiOperation,
+  resolver: OpenApiRefResolver,
+): string | undefined {
+  const success =
+    operation.responses?.['200'] ??
+    operation.responses?.['201'] ??
+    operation.responses?.default;
+  if (success === undefined) {
+    return undefined;
+  }
+  let response: OpenApiResponse | undefined;
+  if (isReference(success)) {
+    response = resolver.resolveRef<OpenApiResponse>(success.$ref).value;
+  } else {
+    response = success;
+  }
+  const content = response?.content;
+  if (content === undefined) {
+    return undefined;
+  }
+  if (content['application/json'] !== undefined) {
+    return 'application/json';
+  }
+  return Object.keys(content)[0];
+}
+
+function pickAuthProfile(
+  security: readonly OpenApiSecurityRequirement[] | undefined,
+  schemeToProfileId: ReadonlyMap<string, string>,
+): string | undefined {
+  if (security === undefined || security.length === 0) {
+    return undefined;
+  }
+  // Empty requirement object means optional auth — skip @auth.
+  for (const requirement of security) {
+    const names = Object.keys(requirement);
+    if (names.length === 0) {
+      return undefined;
+    }
+    for (const name of names) {
+      const profileId = schemeToProfileId.get(name);
+      if (profileId !== undefined) {
+        return profileId;
+      }
+    }
+  }
+  return undefined;
+}
+
+function sanitizeComment(value: string): string {
+  return maskImportSecretText(value.replace(/[\r\n]+/gu, ' ').trim());
+}
+
+function singleLine(value: string): string {
+  return sanitizeComment(value);
+}
+
+function pathVarName(name: string): string {
+  return sanitizeVar(name);
+}
+
+function queryVarName(name: string): string {
+  return sanitizeVar(name);
+}
+
+function headerVarName(name: string): string {
+  return sanitizeVar(name.replace(/-/gu, '_'));
+}
+
+function cookieVarName(name: string): string {
+  return sanitizeVar(name);
+}
+
+function sanitizeVar(name: string): string {
+  const cleaned = name.replace(/[^\w.-]/gu, '_');
+  return /^[A-Za-z_]/u.test(cleaned) ? cleaned : `param_${cleaned}`;
+}
