@@ -1,0 +1,145 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "API Runner",
+  "scopeName": "source.api-runner",
+  "patterns": [
+    { "include": "#separator" },
+    { "include": "#comments" },
+    { "include": "#request" },
+    { "include": "#directives" },
+    { "include": "#headers" },
+    { "include": "#variables" },
+    { "include": "#json" }
+  ],
+  "repository": {
+    "separator": {
+      "match": "^\\s*(###)(?:\\s+(.*))?$",
+      "captures": {
+        "1": { "name": "punctuation.definition.separator.api-runner" },
+        "2": { "name": "comment.line.separator-title.api-runner" }
+      }
+    },
+    "comments": {
+      "patterns": [
+        {
+          "match": "^\\s*(#)(?!##).*",
+          "name": "comment.line.number-sign.api-runner",
+          "captures": {
+            "1": { "name": "punctuation.definition.comment.api-runner" }
+          }
+        },
+        {
+          "match": "^\\s*(//).*",
+          "name": "comment.line.double-slash.api-runner",
+          "captures": {
+            "1": { "name": "punctuation.definition.comment.api-runner" }
+          }
+        }
+      ]
+    },
+    "request": {
+      "begin": "^\\s*(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\\b\\s*",
+      "beginCaptures": {
+        "1": { "name": "keyword.control.http-method.api-runner" }
+      },
+      "end": "$",
+      "patterns": [
+        { "include": "#variables" },
+        {
+          "match": "(?:https?://|wss?://)[^\\s]+|(?:/|\\.\\.?/)[^\\s]*",
+          "name": "markup.underline.link.url.api-runner"
+        }
+      ]
+    },
+    "directives": {
+      "match": "^\\s*(@)(connection|auth|timeout|name|description|tag)\\b(?:\\s+(.*))?$",
+      "captures": {
+        "1": { "name": "punctuation.definition.directive.api-runner" },
+        "2": { "name": "keyword.other.directive.api-runner" },
+        "3": { "name": "string.unquoted.directive-value.api-runner" }
+      }
+    },
+    "headers": {
+      "begin": "^\\s*([A-Za-z][A-Za-z0-9-]*)(\\s*:\\s*)",
+      "beginCaptures": {
+        "1": { "name": "entity.name.tag.http-header.api-runner" },
+        "2": { "name": "punctuation.separator.key-value.api-runner" }
+      },
+      "end": "$",
+      "contentName": "string.unquoted.http-header-value.api-runner",
+      "patterns": [
+        { "include": "#variables" },
+        {
+          "match": "\\b(?:application|text|multipart|image|audio|video)/[A-Za-z0-9.+-]+\\b",
+          "name": "support.constant.mime-type.api-runner"
+        }
+      ]
+    },
+    "variables": {
+      "patterns": [
+        {
+          "match": "(\\{\\{)(\\$env(?:\\s+|\\.)[A-Za-z_][A-Za-z0-9_]*)(\\}\\})",
+          "captures": {
+            "1": { "name": "punctuation.definition.variable.begin.api-runner" },
+            "2": { "name": "variable.other.environment.api-runner" },
+            "3": { "name": "punctuation.definition.variable.end.api-runner" }
+          }
+        },
+        {
+          "match": "(\\{\\{)\\s*([A-Za-z_][A-Za-z0-9_.-]*)\\s*(\\}\\})",
+          "captures": {
+            "1": { "name": "punctuation.definition.variable.begin.api-runner" },
+            "2": { "name": "variable.other.api-runner" },
+            "3": { "name": "punctuation.definition.variable.end.api-runner" }
+          }
+        }
+      ]
+    },
+    "json": {
+      "patterns": [
+        {
+          "begin": "\"",
+          "beginCaptures": {
+            "0": { "name": "punctuation.definition.string.begin.json.api-runner" }
+          },
+          "end": "\"",
+          "endCaptures": {
+            "0": { "name": "punctuation.definition.string.end.json.api-runner" }
+          },
+          "name": "string.quoted.double.json.api-runner",
+          "patterns": [
+            {
+              "match": "\\\\(?:[\"\\\\/bfnrt]|u[0-9A-Fa-f]{4})",
+              "name": "constant.character.escape.json.api-runner"
+            },
+            { "include": "#variables" }
+          ]
+        },
+        {
+          "match": "(?<![\\w.-])-?\\b(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?\\b",
+          "name": "constant.numeric.json.api-runner"
+        },
+        {
+          "match": "\\b(?:true|false)\\b",
+          "name": "constant.language.boolean.json.api-runner"
+        },
+        {
+          "match": "\\bnull\\b",
+          "name": "constant.language.null.json.api-runner"
+        },
+        {
+          "match": "[{}\\[\\]]",
+          "name": "punctuation.definition.json.api-runner"
+        },
+        {
+          "match": ":",
+          "name": "punctuation.separator.dictionary.key-value.json.api-runner"
+        },
+        {
+          "match": ",",
+          "name": "punctuation.separator.dictionary.pair.json.api-runner"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,85 @@
+{
+  "GET request": {
+    "prefix": "get",
+    "body": [
+      "GET ${1:https://api.example.com/resource}",
+      "Accept: application/json",
+      "",
+      "$0"
+    ],
+    "description": "Create a GET request"
+  },
+  "POST JSON request": {
+    "prefix": "post",
+    "body": [
+      "POST ${1:https://api.example.com/resource}",
+      "Content-Type: application/json",
+      "Accept: application/json",
+      "",
+      "{",
+      "  \"${2:key}\": \"${3:value}\"",
+      "}",
+      "$0"
+    ],
+    "description": "Create a POST request with a JSON body"
+  },
+  "Bearer authorization": {
+    "prefix": "bearer",
+    "body": ["Authorization: Bearer {{${1:accessToken}}}"],
+    "description": "Add a Bearer authorization header"
+  },
+  "JSON body": {
+    "prefix": "json",
+    "body": [
+      "Content-Type: application/json",
+      "",
+      "{",
+      "  \"${1:key}\": ${2:\"value\"}",
+      "}"
+    ],
+    "description": "Add a JSON content type and body"
+  },
+  "Multipart form request": {
+    "prefix": "multipart",
+    "body": [
+      "Content-Type: multipart/form-data; boundary=${1:boundary}",
+      "",
+      "--${1:boundary}",
+      "Content-Disposition: form-data; name=\"${2:field}\"",
+      "",
+      "${3:value}",
+      "--${1:boundary}--"
+    ],
+    "description": "Add a multipart form body"
+  },
+  "Basic authorization": {
+    "prefix": "basic",
+    "body": ["Authorization: Basic {{${1:basicCredentials}}}"],
+    "description": "Add a Basic authorization header"
+  },
+  "API key header": {
+    "prefix": "apikey",
+    "body": ["${1:X-API-Key}: {{${2:apiKey}}}"],
+    "description": "Add an API key header"
+  },
+  "Environment variable": {
+    "prefix": "env",
+    "body": ["{{\\$env ${1:VARIABLE_NAME}}}"],
+    "description": "Insert an environment variable reference"
+  },
+  "Request separator": {
+    "prefix": "separator",
+    "body": ["### ${1:Request name}", ""],
+    "description": "Separate request blocks"
+  },
+  "Connection directive": {
+    "prefix": "connection",
+    "body": ["@connection ${1:connection-name}"],
+    "description": "Select a connection"
+  },
+  "Timeout directive": {
+    "prefix": "timeout",
+    "body": ["@timeout ${1:30000}"],
+    "description": "Set the request timeout in milliseconds"
+  }
+}

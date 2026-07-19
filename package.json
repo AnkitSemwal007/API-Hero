@@ -1,0 +1,800 @@
+{
+  "name": "api-runner",
+  "displayName": "API Runner",
+  "description": "A scalable foundation for running API definitions in Visual Studio Code.",
+  "version": "0.0.1",
+  "publisher": "api-runner",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Other"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "api",
+        "aliases": [
+          "API Runner",
+          "api"
+        ],
+        "extensions": [
+          ".api"
+        ],
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./images/api-light.svg",
+          "dark": "./images/api-dark.svg"
+        }
+      }
+    ],
+    "grammars": [
+      {
+        "language": "api",
+        "scopeName": "source.api-runner",
+        "path": "./syntaxes/api.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "api",
+        "path": "./snippets/api.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "apiRunner.runRequest",
+        "title": "API Runner: Run Request",
+        "enablement": "editorLangId == api"
+      },
+      {
+        "command": "apiRunner.runRequestWithAssertions",
+        "title": "API Runner: Run Request with Assertions",
+        "enablement": "editorLangId == api"
+      },
+      {
+        "command": "apiRunner.runFile",
+        "title": "API Runner: Run File"
+      },
+      {
+        "command": "apiRunner.login",
+        "title": "API Runner: Login"
+      },
+      {
+        "command": "apiRunner.logout",
+        "title": "API Runner: Logout"
+      },
+      {
+        "command": "apiRunner.switchEnvironment",
+        "title": "API Runner: Switch Environment"
+      },
+      {
+        "command": "apiRunner.selectAuthentication",
+        "title": "API Runner: Select Authentication Profile"
+      },
+      {
+        "command": "apiRunner.refreshCollections",
+        "title": "API Runner: Refresh Collections",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "apiRunner.revealActiveRequest",
+        "title": "API Runner: Reveal Active Request",
+        "icon": "$(target)"
+      },
+      {
+        "command": "apiRunner.openCollectionRequest",
+        "title": "API Runner: Open Request"
+      },
+      {
+        "command": "apiRunner.focusCollections",
+        "title": "API Runner: Focus Collections"
+      },
+      {
+        "command": "apiRunner.runCollection",
+        "title": "API Runner: Run Collection",
+        "icon": "$(play)"
+      },
+      {
+        "command": "apiRunner.runCollectionTests",
+        "title": "API Runner: Run Collection Tests",
+        "icon": "$(beaker)"
+      },
+      {
+        "command": "apiRunner.runFolder",
+        "title": "API Runner: Run Folder",
+        "icon": "$(play)"
+      },
+      {
+        "command": "apiRunner.runSelectedRequests",
+        "title": "API Runner: Run Selected Requests",
+        "icon": "$(play)"
+      },
+      {
+        "command": "apiRunner.focusHistory",
+        "title": "API Runner: Focus History"
+      },
+      {
+        "command": "apiRunner.openHistoryEntry",
+        "title": "API Runner: Open History Entry"
+      },
+      {
+        "command": "apiRunner.rerunHistoryEntry",
+        "title": "API Runner: Re-run History Entry",
+        "icon": "$(play)"
+      },
+      {
+        "command": "apiRunner.revealHistoryRequest",
+        "title": "API Runner: Reveal Original Request",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "apiRunner.deleteHistoryEntry",
+        "title": "API Runner: Delete History Entry",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "apiRunner.clearHistory",
+        "title": "API Runner: Clear History",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "apiRunner.searchHistory",
+        "title": "API Runner: Search History",
+        "icon": "$(search)"
+      },
+      {
+        "command": "apiRunner.refreshHistory",
+        "title": "API Runner: Refresh History",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "apiRunner.importOpenApi",
+        "title": "API Runner: Import OpenAPI Specification",
+        "icon": "$(cloud-download)"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "apiRunner.runRequest",
+          "when": "editorLangId == api && editorTextFocus",
+          "group": "navigation@10"
+        },
+        {
+          "command": "apiRunner.revealActiveRequest",
+          "when": "editorLangId == api && editorTextFocus",
+          "group": "navigation@11"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "apiRunner.refreshCollections",
+          "when": "view == apiRunner.collections",
+          "group": "navigation"
+        },
+        {
+          "command": "apiRunner.revealActiveRequest",
+          "when": "view == apiRunner.collections",
+          "group": "navigation"
+        },
+        {
+          "command": "apiRunner.refreshHistory",
+          "when": "view == apiRunner.history",
+          "group": "navigation@1"
+        },
+        {
+          "command": "apiRunner.searchHistory",
+          "when": "view == apiRunner.history",
+          "group": "navigation@2"
+        },
+        {
+          "command": "apiRunner.clearHistory",
+          "when": "view == apiRunner.history",
+          "group": "navigation@3"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "apiRunner.runCollection",
+          "when": "view == apiRunner.collections && viewItem == collection",
+          "group": "inline@1"
+        },
+        {
+          "command": "apiRunner.runFolder",
+          "when": "view == apiRunner.collections && viewItem == folder",
+          "group": "inline@1"
+        },
+        {
+          "command": "apiRunner.runSelectedRequests",
+          "when": "view == apiRunner.collections && viewItem == request",
+          "group": "inline@1"
+        },
+        {
+          "command": "apiRunner.openCollectionRequest",
+          "when": "view == apiRunner.collections && viewItem == request",
+          "group": "inline@2"
+        },
+        {
+          "command": "apiRunner.runCollection",
+          "when": "view == apiRunner.collections && viewItem == collection",
+          "group": "1_run"
+        },
+        {
+          "command": "apiRunner.runFolder",
+          "when": "view == apiRunner.collections && viewItem == folder",
+          "group": "1_run"
+        },
+        {
+          "command": "apiRunner.runSelectedRequests",
+          "when": "view == apiRunner.collections && viewItem == request",
+          "group": "1_run"
+        },
+        {
+          "command": "apiRunner.openCollectionRequest",
+          "when": "view == apiRunner.collections && viewItem == request",
+          "group": "2_open"
+        },
+        {
+          "command": "apiRunner.rerunHistoryEntry",
+          "when": "view == apiRunner.history && viewItem == historyEntry",
+          "group": "inline@1"
+        },
+        {
+          "command": "apiRunner.revealHistoryRequest",
+          "when": "view == apiRunner.history && viewItem == historyEntry",
+          "group": "inline@2"
+        },
+        {
+          "command": "apiRunner.deleteHistoryEntry",
+          "when": "view == apiRunner.history && viewItem == historyEntry",
+          "group": "inline@3"
+        },
+        {
+          "command": "apiRunner.openHistoryEntry",
+          "when": "view == apiRunner.history && viewItem == historyEntry",
+          "group": "1_open"
+        },
+        {
+          "command": "apiRunner.rerunHistoryEntry",
+          "when": "view == apiRunner.history && viewItem == historyEntry",
+          "group": "2_run"
+        },
+        {
+          "command": "apiRunner.revealHistoryRequest",
+          "when": "view == apiRunner.history && viewItem == historyEntry",
+          "group": "2_run"
+        },
+        {
+          "command": "apiRunner.deleteHistoryEntry",
+          "when": "view == apiRunner.history && viewItem == historyEntry",
+          "group": "3_modify"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "apiRunner",
+          "title": "API Hero",
+          "icon": "images/api-dark.svg"
+        }
+      ]
+    },
+    "views": {
+      "apiRunner": [
+        {
+          "id": "apiRunner.collections",
+          "name": "Collections"
+        },
+        {
+          "id": "apiRunner.history",
+          "name": "History"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "apiRunner.runRequest",
+        "key": "ctrl+alt+r",
+        "mac": "cmd+alt+r",
+        "when": "editorLangId == api && editorTextFocus"
+      }
+    ],
+    "configuration": {
+      "title": "API Runner",
+      "properties": {
+        "apiRunner.logLevel": {
+          "type": "string",
+          "enum": [
+            "debug",
+            "info",
+            "warning",
+            "error"
+          ],
+          "default": "info",
+          "description": "Minimum severity written to the API Runner output channel."
+        },
+        "apiRunner.requestTimeout": {
+          "type": "number",
+          "default": 30000,
+          "minimum": 0,
+          "description": "Request timeout in milliseconds."
+        },
+        "apiRunner.maxResponseBytes": {
+          "type": "number",
+          "default": 10485760,
+          "minimum": 0,
+          "description": "Maximum buffered HTTP response body size in bytes. When exceeded during download, the request fails with RESPONSE_TOO_LARGE. Set to 0 for no limit."
+        },
+        "apiRunner.history.maxEntries": {
+          "type": "number",
+          "default": 1000,
+          "minimum": 1,
+          "maximum": 10000,
+          "description": "Maximum number of request history entries to retain. Newest entries are kept when the limit is exceeded."
+        },
+        "apiRunner.variables.global": {
+          "type": "array",
+          "default": [],
+          "description": "Global API Runner variables. Sensitive values are masked by language and response UI; use trusted user settings for storage.",
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "value"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$"
+              },
+              "value": {
+                "type": "string"
+              },
+              "sensitive": {
+                "type": "boolean",
+                "default": false
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "apiRunner.variables.workspace": {
+          "type": "array",
+          "default": [],
+          "description": "Workspace API Runner variables. Do not commit sensitive values in workspace settings.",
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "value"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$"
+              },
+              "value": {
+                "type": "string"
+              },
+              "sensitive": {
+                "type": "boolean",
+                "default": false
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "apiRunner.environments": {
+          "type": "array",
+          "default": [],
+          "description": "Named API Runner environments. Exactly one environment may be active.",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "name",
+              "variables"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "variables": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "name",
+                    "value"
+                  ],
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$"
+                    },
+                    "value": {
+                      "type": "string"
+                    },
+                    "sensitive": {
+                      "type": "boolean",
+                      "default": false
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "apiRunner.activeEnvironment": {
+          "type": "string",
+          "description": "ID of the active named environment. Omit to use no environment."
+        },
+        "apiRunner.authentication.profiles": {
+          "type": "array",
+          "default": [],
+          "description": "Named authentication profile metadata. Secret sources are stored in VS Code SecretStorage; literal sources require unsafe: true.",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "providerId"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "label": {
+                "type": "string"
+              },
+              "providerId": {
+                "type": "string",
+                "enum": [
+                  "none",
+                  "basic",
+                  "bearer",
+                  "apiKey"
+                ]
+              },
+              "username": {
+                "type": "object",
+                "required": [
+                  "kind"
+                ],
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "secret",
+                      "variable",
+                      "literal"
+                    ]
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "string"
+                  },
+                  "unsafe": {
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": false,
+                "allOf": [
+                  {
+                    "if": {
+                      "required": [
+                        "kind"
+                      ],
+                      "properties": {
+                        "kind": {
+                          "const": "literal"
+                        }
+                      }
+                    },
+                    "then": {
+                      "required": [
+                        "value",
+                        "unsafe"
+                      ],
+                      "properties": {
+                        "unsafe": {
+                          "const": true
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "required": [
+                        "kind"
+                      ],
+                      "properties": {
+                        "kind": {
+                          "const": "variable"
+                        }
+                      }
+                    },
+                    "then": {
+                      "required": [
+                        "name"
+                      ]
+                    }
+                  }
+                ]
+              },
+              "password": {
+                "type": "object",
+                "required": [
+                  "kind"
+                ],
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "secret",
+                      "variable",
+                      "literal"
+                    ]
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "string"
+                  },
+                  "unsafe": {
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": false,
+                "allOf": [
+                  {
+                    "if": {
+                      "required": [
+                        "kind"
+                      ],
+                      "properties": {
+                        "kind": {
+                          "const": "literal"
+                        }
+                      }
+                    },
+                    "then": {
+                      "required": [
+                        "value",
+                        "unsafe"
+                      ],
+                      "properties": {
+                        "unsafe": {
+                          "const": true
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "required": [
+                        "kind"
+                      ],
+                      "properties": {
+                        "kind": {
+                          "const": "variable"
+                        }
+                      }
+                    },
+                    "then": {
+                      "required": [
+                        "name"
+                      ]
+                    }
+                  }
+                ]
+              },
+              "token": {
+                "type": "object",
+                "required": [
+                  "kind"
+                ],
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "secret",
+                      "variable",
+                      "literal"
+                    ]
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "string"
+                  },
+                  "unsafe": {
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": false,
+                "allOf": [
+                  {
+                    "if": {
+                      "required": [
+                        "kind"
+                      ],
+                      "properties": {
+                        "kind": {
+                          "const": "literal"
+                        }
+                      }
+                    },
+                    "then": {
+                      "required": [
+                        "value",
+                        "unsafe"
+                      ],
+                      "properties": {
+                        "unsafe": {
+                          "const": true
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "required": [
+                        "kind"
+                      ],
+                      "properties": {
+                        "kind": {
+                          "const": "variable"
+                        }
+                      }
+                    },
+                    "then": {
+                      "required": [
+                        "name"
+                      ]
+                    }
+                  }
+                ]
+              },
+              "value": {
+                "type": "object",
+                "required": [
+                  "kind"
+                ],
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "secret",
+                      "variable",
+                      "literal"
+                    ]
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "string"
+                  },
+                  "unsafe": {
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": false,
+                "allOf": [
+                  {
+                    "if": {
+                      "required": [
+                        "kind"
+                      ],
+                      "properties": {
+                        "kind": {
+                          "const": "literal"
+                        }
+                      }
+                    },
+                    "then": {
+                      "required": [
+                        "value",
+                        "unsafe"
+                      ],
+                      "properties": {
+                        "unsafe": {
+                          "const": true
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "required": [
+                        "kind"
+                      ],
+                      "properties": {
+                        "kind": {
+                          "const": "variable"
+                        }
+                      }
+                    },
+                    "then": {
+                      "required": [
+                        "name"
+                      ]
+                    }
+                  }
+                ]
+              },
+              "name": {
+                "type": "string"
+              },
+              "location": {
+                "type": "string",
+                "enum": [
+                  "header",
+                  "query"
+                ]
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "apiRunner.import.maxFileBytes": {
+          "type": "number",
+          "default": 5242880,
+          "minimum": 1,
+          "maximum": 52428800,
+          "description": "Maximum OpenAPI specification file size in bytes accepted by Import OpenAPI Specification. Larger files are rejected with a clear error."
+        },
+        "apiRunner.languageFeatures.hover": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable documentation hovers in API Runner files."
+        },
+        "apiRunner.languageFeatures.outline": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable request symbols in the Outline view for API Runner files."
+        },
+        "apiRunner.languageFeatures.diagnostics": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable lightweight syntax diagnostics in API Runner files."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "check": "tsc -p ./ --noEmit",
+    "lint": "eslint \"src/**/*.ts\"",
+    "test": "npm run compile && node ./scripts/run-unit-tests.mjs",
+    "test:unit": "npm test",
+    "test:coverage": "npm run compile && c8 --reporter=text-summary --reporter=text node ./scripts/run-unit-tests.mjs",
+    "vscode:prepublish": "npm run compile"
+  },
+  "dependencies": {
+    "yaml": "^2.9.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^20.14.10",
+    "@types/vscode": "^1.90.0",
+    "c8": "^10.1.3",
+    "eslint": "^10.7.0",
+    "typescript": "^5.5.3",
+    "typescript-eslint": "^8.64.0"
+  }
+}

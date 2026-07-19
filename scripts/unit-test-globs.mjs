@@ -1,0 +1,25 @@
+/**
+ * Shared unit-test globs for `npm test` and `npm run test:coverage`.
+ * Keep this list as the single source of truth.
+ */
+export const UNIT_TEST_GLOBS = Object.freeze([
+  'dist/auth/*.test.js',
+  'dist/assertions/*.test.js',
+  'dist/commands/*.test.js',
+  'dist/collections/*.test.js',
+  'dist/collection-runner/*.test.js',
+  'dist/history/*.test.js',
+  'dist/language-support/core/*.test.js',
+  'dist/openapi-import/*.test.js',
+  'dist/parser/ast/*.test.js',
+  'dist/parser/tokenizer/*.test.js',
+  'dist/parser/lexer/*.test.js',
+  'dist/parser/*.test.js',
+  'dist/request/*.test.js',
+  'dist/execution/*.test.js',
+  'dist/orchestration/*.test.js',
+  'dist/response/*.test.js',
+  'dist/variables/*.test.js',
+  'dist/storage/*.test.js',
+  'dist/shared/*.test.js',
+]);
