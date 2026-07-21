@@ -1,14 +1,16 @@
 import type { AuthenticationProfile } from '../../models';
-import type {
-  AuthenticationProfileIssue,
-  AuthenticationProfileValidation,
-  AuthenticationSecretRepository,
+import {
+  secretFieldNamesForProvider,
+  type AuthenticationProfileIssue,
+  type AuthenticationProfileValidation,
+  type AuthenticationSecretRepository,
 } from '../../auth';
 import type {
   ApiDocument,
   AstDiagnostic,
   DirectiveNode,
 } from '../../parser';
+import { LANGUAGE_DIAGNOSTIC_SOURCE } from '../constants';
 
 export const AUTHENTICATION_DIAGNOSTIC_CODES = Object.freeze({
   missingProfile: 'authentication.missing-profile',
@@ -84,15 +86,8 @@ export async function createAuthenticationAvailabilityDiagnostics(
 }
 
 function secretFields(profile: AuthenticationProfile): readonly string[] {
-  const fields = profile.providerId === 'basic'
-    ? ['username', 'password']
-    : profile.providerId === 'bearer'
-      ? ['token']
-      : profile.providerId === 'apiKey'
-        ? ['value']
-        : [];
   const data = profile as Readonly<Record<string, unknown>>;
-  return fields.filter((field) => {
+  return secretFieldNamesForProvider(profile.providerId).filter((field) => {
     const source = data[field];
     return typeof source === 'object' &&
       source !== null &&
@@ -159,6 +154,6 @@ function diagnostic(
     severity: 'error',
     range: directive.range,
     location: directive.location,
-    source: 'api-runner',
+    source: LANGUAGE_DIAGNOSTIC_SOURCE,
   });
 }
