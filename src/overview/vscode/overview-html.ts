@@ -229,7 +229,11 @@ function listRecentCollections(
     }
     return a.label.localeCompare(b.label);
   });
-  return items.slice(0, limit).map(({ lastModified: _ignored, ...item }) => item);
+  return items.slice(0, limit).map((entry) => {
+    const { lastModified, ...item } = entry;
+    void lastModified;
+    return item;
+  });
 }
 
 function resolveStatusBadge(summary: HistoryEntry['summary']): {
