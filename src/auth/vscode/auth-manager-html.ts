@@ -5,6 +5,13 @@
  */
 
 import {
+  AUTH_PROVIDER_IDS as CORE_AUTH_PROVIDER_IDS,
+  isAuthenticationCommitProviderId,
+  isValidAuthenticationProfileId,
+  secretFieldsForProvider as coreSecretFieldsForProvider,
+  validateAuthenticationProfilesForCommit,
+} from '../authentication-profile-validation';
+import {
   buildNonceOnlyCsp,
   escapeAttribute,
   isWebviewMessageRecord,
@@ -12,7 +19,7 @@ import {
 
 export { escapeAttribute };
 
-export const AUTH_PROVIDER_IDS = ['none', 'basic', 'bearer', 'apiKey'] as const;
+export const AUTH_PROVIDER_IDS = CORE_AUTH_PROVIDER_IDS;
 
 export type AuthManagerProviderId = (typeof AUTH_PROVIDER_IDS)[number];
 
@@ -59,14 +66,6 @@ export type AuthManagerInboundMessage =
 export type AuthManagerOutboundMessage =
   | { readonly type: 'init'; readonly state: AuthManagerState }
   | { readonly type: 'error'; readonly message: string };
-
-const FORBIDDEN_IDS: ReadonlySet<string> = new Set([
-  '__proto__',
-  'prototype',
-  'constructor',
-]);
-
-const PROFILE_ID_PATTERN = /^[A-Za-z][A-Za-z0-9_.-]*$/u;
 
 /** Validates webview → extension messages. */
 export function parseAuthManagerMessage(
@@ -118,64 +117,30 @@ export function parseAuthManagerMessage(
   return undefined;
 }
 
-/** Returns an error string when the committed state is invalid. */
+/**
+ * Returns an error string when the committed state is invalid.
+ * Thin projection of core commit validation — rules live in auth core.
+ */
 export function validateAuthManagerState(
   state: AuthManagerState,
 ): string | undefined {
-  const ids = new Set<string>();
-  for (const profile of state.profiles) {
-    const id = profile.id.trim();
-    if (id.length === 0) {
-      return 'Profile id is required.';
-    }
-    if (FORBIDDEN_IDS.has(id) || !PROFILE_ID_PATTERN.test(id)) {
-      return `Invalid profile id "${id}".`;
-    }
-    if (ids.has(id)) {
-      return `Duplicate profile id "${id}".`;
-    }
-    ids.add(id);
-    if (profile.label.trim().length === 0) {
-      return 'Profile label is required.';
-    }
-    if (!isAuthManagerProviderId(profile.providerId)) {
-      return `Unsupported provider "${String(profile.providerId)}".`;
-    }
-    if (profile.providerId === 'apiKey') {
-      const name = profile.apiKeyName?.trim() ?? '';
-      if (name.length === 0) {
-        return `API key profile "${id}" requires a header or query name.`;
-      }
-      if (
-        profile.apiKeyLocation !== 'header' &&
-        profile.apiKeyLocation !== 'query'
-      ) {
-        return `API key profile "${id}" requires location header or query.`;
-      }
-    }
-  }
-  if (
-    state.defaultProfileId !== undefined &&
-    !ids.has(state.defaultProfileId)
-  ) {
-    return `Unknown default profile "${state.defaultProfileId}".`;
-  }
-  return undefined;
+  const { issues } = validateAuthenticationProfilesForCommit({
+    profiles: state.profiles,
+    defaultProfileId: state.defaultProfileId,
+  });
+  return issues[0]?.message;
 }
 
 /** True when the value is a supported manager provider id. */
 export function isAuthManagerProviderId(
   value: unknown,
 ): value is AuthManagerProviderId {
-  return (
-    typeof value === 'string' &&
-    (AUTH_PROVIDER_IDS as readonly string[]).includes(value)
-  );
+  return isAuthenticationCommitProviderId(value);
 }
 
 /** True when a profile id matches the settings-friendly pattern. */
 export function isValidAuthProfileId(id: string): boolean {
-  return id.length > 0 && !FORBIDDEN_IDS.has(id) && PROFILE_ID_PATTERN.test(id);
+  return isValidAuthenticationProfileId(id);
 }
 
 /**
@@ -200,21 +165,8 @@ export function allocateAuthProfileId(
 export function secretFieldsForProvider(
   providerId: AuthManagerProviderId,
 ): readonly { readonly field: string; readonly label: string }[] {
-  switch (providerId) {
-    case 'none':
-      return [];
-    case 'basic':
-      return [
-        { field: 'username', label: 'Username' },
-        { field: 'password', label: 'Password' },
-      ];
-    case 'bearer':
-      return [{ field: 'token', label: 'Token' }];
-    case 'apiKey':
-      return [{ field: 'value', label: 'API key value' }];
-  }
+  return coreSecretFieldsForProvider(providerId);
 }
-
 /** Builds the Auth Profiles Manager document. */
 export function renderAuthManagerHtml(nonce: string): string {
   const safeNonce = escapeAttribute(nonce);
