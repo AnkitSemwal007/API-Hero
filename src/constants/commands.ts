@@ -1,4 +1,4 @@
-/** Stable command identifiers contributed by API Runner. */
+/** Stable command identifiers contributed by API Hero. */
 export const COMMAND_IDS = {
   runRequest: 'apiRunner.runRequest',
   runRequestWithAssertions: 'apiRunner.runRequestWithAssertions',
@@ -8,6 +8,7 @@ export const COMMAND_IDS = {
   switchEnvironment: 'apiRunner.switchEnvironment',
   selectAuthentication: 'apiRunner.selectAuthentication',
   refreshCollections: 'apiRunner.refreshCollections',
+  filterCollections: 'apiRunner.filterCollections',
   revealActiveRequest: 'apiRunner.revealActiveRequest',
   openCollectionRequest: 'apiRunner.openCollectionRequest',
   focusCollections: 'apiRunner.focusCollections',
@@ -24,7 +25,24 @@ export const COMMAND_IDS = {
   refreshHistory: 'apiRunner.refreshHistory',
   revealHistoryRequest: 'apiRunner.revealHistoryRequest',
   importOpenApi: 'apiRunner.importOpenApi',
+  createCollection: 'apiRunner.createCollection',
+  renameCollection: 'apiRunner.renameCollection',
+  deleteCollection: 'apiRunner.deleteCollection',
+  duplicateCollection: 'apiRunner.duplicateCollection',
+  exportCollection: 'apiRunner.exportCollection',
+  importCollection: 'apiRunner.importCollection',
+  createFolder: 'apiRunner.createFolder',
+  renameFolder: 'apiRunner.renameFolder',
+  deleteFolder: 'apiRunner.deleteFolder',
+  duplicateFolder: 'apiRunner.duplicateFolder',
+  createRequest: 'apiRunner.createRequest',
+  renameRequest: 'apiRunner.renameRequest',
+  duplicateRequest: 'apiRunner.duplicateRequest',
+  deleteRequest: 'apiRunner.deleteRequest',
+  moveRequest: 'apiRunner.moveRequest',
+  openWorkspace: 'apiRunner.openWorkspace',
+  openRequestEditor: 'apiRunner.openRequestEditor',
 } as const;
 
-/** A command identifier contributed by API Runner. */
+/** A command identifier contributed by API Hero. */
 export type CommandId = (typeof COMMAND_IDS)[keyof typeof COMMAND_IDS];
