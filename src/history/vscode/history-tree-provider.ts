@@ -1,5 +1,6 @@
 import {
   EventEmitter,
+  ThemeColor,
   ThemeIcon,
   TreeItem,
   TreeItemCollapsibleState,
@@ -12,6 +13,7 @@ import {
   filterHistoryEntries,
   groupHistoryEntries,
   type HistoryEntry,
+  type HistoryFilter,
   type HistoryGroup,
   type HistoryTimeGroup,
 } from '../index';
@@ -46,23 +48,35 @@ export class HistoryTreeDataProvider
   > = this.changeEmitter.event;
 
   private entries: readonly HistoryEntry[] = [];
-  private filterQuery: string | undefined;
+  private filter: HistoryFilter = {};
 
   public setEntries(entries: readonly HistoryEntry[]): void {
     this.entries = entries;
     this.changeEmitter.fire(undefined);
   }
 
-  public setFilterQuery(query: string | undefined): void {
-    this.filterQuery =
-      query === undefined || query.trim().length === 0
-        ? undefined
-        : query.trim();
+  /** Applies status / method / query facets from {@link filterHistoryEntries}. */
+  public setFilter(filter: HistoryFilter): void {
+    this.filter = normalizeFilter(filter);
     this.changeEmitter.fire(undefined);
   }
 
+  public getFilter(): HistoryFilter {
+    return this.filter;
+  }
+
+  /** @deprecated Prefer {@link setFilter}; retained for free-text-only callers. */
+  public setFilterQuery(query: string | undefined): void {
+    this.setFilter({
+      ...this.filter,
+      ...(query === undefined || query.trim().length === 0
+        ? { query: undefined }
+        : { query: query.trim() }),
+    });
+  }
+
   public getFilterQuery(): string | undefined {
-    return this.filterQuery;
+    return this.filter.query;
   }
 
   public getTreeItem(element: HistoryTreeNode): TreeItem {
@@ -79,15 +93,18 @@ export class HistoryTreeDataProvider
     }
 
     const { entry } = element;
-    const label = entry.metadata.requestName?.trim().length
-      ? entry.metadata.requestName
-      : `${entry.summary.method} ${shortUrl(entry.summary.url)}`;
+    const method = entry.summary.method.trim().toUpperCase() || 'HTTP';
+    const name = entry.metadata.requestName?.trim();
+    const label =
+      name !== undefined && name.length > 0
+        ? `${method}  ${name}`
+        : `${method}  ${shortUrl(entry.summary.url)}`;
     const item = new TreeItem(label, TreeItemCollapsibleState.None);
     item.id = element.id;
     item.contextValue = 'historyEntry';
     item.description = describeEntry(entry);
     item.tooltip = buildTooltip(entry);
-    item.iconPath = iconForStatus(entry.summary.status);
+    item.iconPath = iconForEntry(entry);
     item.command = {
       command: COMMAND_IDS.openHistoryEntry,
       title: 'Open History Entry',
@@ -108,11 +125,48 @@ export class HistoryTreeDataProvider
   }
 
   private visibleEntries(): readonly HistoryEntry[] {
-    if (this.filterQuery === undefined) {
-      return this.entries;
-    }
-    return filterHistoryEntries(this.entries, { query: this.filterQuery });
+    return filterHistoryEntries(this.entries, this.filter);
   }
+}
+
+/** Human-readable active filter for TreeView.message / status. */
+export function describeHistoryFilter(filter: HistoryFilter): string | undefined {
+  const parts: string[] = [];
+  if (filter.status !== undefined) {
+    const statuses = Array.isArray(filter.status)
+      ? filter.status
+      : [filter.status];
+    if (statuses.length > 0) {
+      parts.push(`status: ${statuses.join(', ')}`);
+    }
+  }
+  if (filter.method !== undefined && filter.method.trim().length > 0) {
+    parts.push(`method: ${filter.method.trim().toUpperCase()}`);
+  }
+  if (filter.query !== undefined && filter.query.trim().length > 0) {
+    parts.push(`text: ${filter.query.trim()}`);
+  }
+  if (parts.length === 0) {
+    return undefined;
+  }
+  return `Filtered · ${parts.join(' · ')}`;
+}
+
+function normalizeFilter(filter: HistoryFilter): HistoryFilter {
+  const status = filter.status;
+  const method =
+    filter.method === undefined || filter.method.trim().length === 0
+      ? undefined
+      : filter.method.trim().toUpperCase();
+  const query =
+    filter.query === undefined || filter.query.trim().length === 0
+      ? undefined
+      : filter.query.trim();
+  return {
+    ...(status === undefined ? {} : { status }),
+    ...(method === undefined ? {} : { method }),
+    ...(query === undefined ? {} : { query }),
+  };
 }
 
 function groupNode(group: HistoryGroup): HistoryTreeNode {
@@ -167,15 +221,27 @@ function buildTooltip(entry: HistoryEntry): string {
   return lines.join('\n');
 }
 
-function iconForStatus(status: HistoryEntry['summary']['status']): ThemeIcon {
-  switch (status) {
+/**
+ * Status ThemeIcon with theme colors; method is always in the TreeItem label.
+ */
+function iconForEntry(entry: HistoryEntry): ThemeIcon {
+  switch (entry.summary.status) {
     case 'success':
-      return new ThemeIcon('pass');
+      return new ThemeIcon(
+        'pass',
+        new ThemeColor('testing.iconPassed'),
+      );
     case 'cancelled':
-      return new ThemeIcon('circle-slash');
+      return new ThemeIcon(
+        'circle-slash',
+        new ThemeColor('disabledForeground'),
+      );
     case 'failure':
     default:
-      return new ThemeIcon('error');
+      return new ThemeIcon(
+        'error',
+        new ThemeColor('testing.iconFailed'),
+      );
   }
 }
 

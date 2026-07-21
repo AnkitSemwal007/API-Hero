@@ -175,6 +175,11 @@
         "icon": "$(go-to-file)"
       },
       {
+        "command": "apiRunner.copyHistorySummary",
+        "title": "API Hero: Copy History Summary",
+        "icon": "$(copy)"
+      },
+      {
         "command": "apiRunner.deleteHistoryEntry",
         "title": "API Hero: Delete History Entry",
         "icon": "$(trash)"
@@ -186,8 +191,8 @@
       },
       {
         "command": "apiRunner.searchHistory",
-        "title": "API Hero: Search History",
-        "icon": "$(search)"
+        "title": "API Hero: Filter History",
+        "icon": "$(filter)"
       },
       {
         "command": "apiRunner.refreshHistory",
@@ -518,6 +523,11 @@
         },
         {
           "command": "apiRunner.revealHistoryRequest",
+          "when": "view == apiRunner.history && viewItem == historyEntry",
+          "group": "2_run"
+        },
+        {
+          "command": "apiRunner.copyHistorySummary",
           "when": "view == apiRunner.history && viewItem == historyEntry",
           "group": "2_run"
         },
