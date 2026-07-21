@@ -100,6 +100,11 @@
         "title": "API Hero: Switch Environment"
       },
       {
+        "command": "apiRunner.manageEnvironments",
+        "title": "API Hero: Manage Environments",
+        "icon": "$(globe)"
+      },
+      {
         "command": "apiRunner.selectAuthentication",
         "title": "API Hero: Select Authentication Profile"
       },

@@ -6,6 +6,7 @@ export const COMMAND_IDS = {
   login: 'apiRunner.login',
   logout: 'apiRunner.logout',
   switchEnvironment: 'apiRunner.switchEnvironment',
+  manageEnvironments: 'apiRunner.manageEnvironments',
   selectAuthentication: 'apiRunner.selectAuthentication',
   refreshCollections: 'apiRunner.refreshCollections',
   filterCollections: 'apiRunner.filterCollections',

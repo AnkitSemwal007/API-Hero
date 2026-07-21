@@ -66,6 +66,7 @@ import {
   EnvironmentManager,
   extractDocumentVariables,
 } from './variables';
+import { registerEnvironments } from './variables/vscode';
 
 /** Composes infrastructure adapters and registers extension entry points. */
 export function activate(context: ExtensionContext): void {
@@ -240,6 +241,10 @@ export function activate(context: ExtensionContext): void {
     variableResolver,
     getExternalVariableDefinitions: () =>
       externalVariableContext().definitions,
+  });
+  registerEnvironments({
+    context,
+    environmentManager,
   });
 
   context.subscriptions.push(
