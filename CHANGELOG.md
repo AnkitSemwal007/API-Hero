@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OpenAPI import emits `.api` files through shared `request-source` serialization (same emitter as Request Editor / New Request)
 - Webview panels share `src/ui/webview` helpers (escape, nonce, CSP, message-record)
 - Authentication validation centralized in auth core (soft load + strict commit); Auth Manager and diagnostics are thin projections
+- Auth Manager Preview strings centralized in `authentication-presentation-preview` (secret-free core helper)
+- Shell/IA commands relocated: Coming Soon stubs stay in `placeholder-commands`; `openWorkspace` / `openSettings` register with Overview; `recentRequests` aliases History focus
 - Version bump to `0.6.1`
 
 ### Unchanged

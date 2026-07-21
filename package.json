@@ -76,6 +76,7 @@
       {
         "command": "apiRunner.runRequest",
         "title": "API Hero: Run Request",
+        "icon": "$(play)",
         "enablement": "editorLangId == api"
       },
       {
@@ -106,7 +107,7 @@
       },
       {
         "command": "apiRunner.manageAuthProfiles",
-        "title": "API Hero: Manage Auth Profiles",
+        "title": "API Hero: Manage Authentication",
         "icon": "$(key)"
       },
       {
@@ -206,7 +207,7 @@
       },
       {
         "command": "apiRunner.createCollection",
-        "title": "API Hero: Create Collection",
+        "title": "API Hero: New Collection",
         "icon": "$(new-folder)"
       },
       {
@@ -286,6 +287,16 @@
         "command": "apiRunner.openOverview",
         "title": "API Hero: Open Overview",
         "icon": "$(home)"
+      },
+      {
+        "command": "apiRunner.openSettings",
+        "title": "API Hero: Open Settings",
+        "icon": "$(gear)"
+      },
+      {
+        "command": "apiRunner.recentRequests",
+        "title": "API Hero: Recent Requests",
+        "icon": "$(history)"
       }
     ],
     "customEditors": [
@@ -309,6 +320,32 @@
         {
           "command": "apiRunner.logout",
           "when": "false"
+        },
+        {
+          "command": "apiRunner.runFile",
+          "when": "false"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "apiRunner.runRequest",
+          "when": "resourceLangId == api",
+          "group": "navigation@1"
+        },
+        {
+          "command": "apiRunner.openRequestEditor",
+          "when": "resourceLangId == api && !activeCustomEditorId",
+          "group": "1_more@1"
+        },
+        {
+          "command": "apiRunner.switchEnvironment",
+          "when": "resourceLangId == api",
+          "group": "1_more@2"
+        },
+        {
+          "command": "apiRunner.selectAuthentication",
+          "when": "resourceLangId == api",
+          "group": "1_more@3"
         }
       ],
       "editor/context": [
@@ -325,12 +362,12 @@
       ],
       "view/title": [
         {
-          "command": "apiRunner.createCollection",
+          "command": "apiRunner.createRequest",
           "when": "view == apiRunner.collections",
           "group": "navigation@1"
         },
         {
-          "command": "apiRunner.importCollection",
+          "command": "apiRunner.createCollection",
           "when": "view == apiRunner.collections",
           "group": "navigation@2"
         },
@@ -340,39 +377,74 @@
           "group": "navigation@3"
         },
         {
-          "command": "apiRunner.createRequest",
+          "command": "apiRunner.manageEnvironments",
           "when": "view == apiRunner.collections",
-          "group": "navigation@4"
+          "group": "1_manage@1"
+        },
+        {
+          "command": "apiRunner.manageAuthProfiles",
+          "when": "view == apiRunner.collections",
+          "group": "1_manage@2"
+        },
+        {
+          "command": "apiRunner.openSettings",
+          "when": "view == apiRunner.collections",
+          "group": "1_manage@3"
+        },
+        {
+          "command": "apiRunner.recentRequests",
+          "when": "view == apiRunner.collections",
+          "group": "1_manage@4"
+        },
+        {
+          "command": "apiRunner.openOverview",
+          "when": "view == apiRunner.collections",
+          "group": "2_more@1"
+        },
+        {
+          "command": "apiRunner.importCollection",
+          "when": "view == apiRunner.collections",
+          "group": "2_more@2"
         },
         {
           "command": "apiRunner.filterCollections",
           "when": "view == apiRunner.collections",
-          "group": "navigation@5"
+          "group": "2_more@3"
         },
         {
           "command": "apiRunner.refreshCollections",
           "when": "view == apiRunner.collections",
-          "group": "navigation@6"
+          "group": "2_more@4"
         },
         {
           "command": "apiRunner.revealActiveRequest",
           "when": "view == apiRunner.collections",
-          "group": "navigation@7"
+          "group": "2_more@5"
         },
         {
-          "command": "apiRunner.refreshHistory",
+          "command": "apiRunner.searchHistory",
           "when": "view == apiRunner.history",
           "group": "navigation@1"
         },
         {
-          "command": "apiRunner.searchHistory",
+          "command": "apiRunner.refreshHistory",
           "when": "view == apiRunner.history",
           "group": "navigation@2"
         },
         {
           "command": "apiRunner.clearHistory",
           "when": "view == apiRunner.history",
-          "group": "navigation@3"
+          "group": "1_more@1"
+        },
+        {
+          "command": "apiRunner.focusCollections",
+          "when": "view == apiRunner.history",
+          "group": "1_more@2"
+        },
+        {
+          "command": "apiRunner.openOverview",
+          "when": "view == apiRunner.history",
+          "group": "1_more@3"
         }
       ],
       "view/item/context": [
@@ -567,11 +639,11 @@
     "viewsWelcome": [
       {
         "view": "apiRunner.collections",
-        "contents": "No collections yet.\nCreate a request, start a collection, or import an OpenAPI specification.\n\n[New Request](command:apiRunner.createRequest)\n[New Collection](command:apiRunner.createCollection)\n[Import OpenAPI](command:apiRunner.importOpenApi)\n[Open Workspace](command:apiRunner.openWorkspace)"
+        "contents": "No collections yet.\nCreate a request, start a collection, or import an OpenAPI specification.\n\n[New Request](command:apiRunner.createRequest)\n[New Collection](command:apiRunner.createCollection)\n[Import OpenAPI](command:apiRunner.importOpenApi)\n[Manage Environments](command:apiRunner.manageEnvironments)\n[Manage Authentication](command:apiRunner.manageAuthProfiles)\n[Open Overview](command:apiRunner.openOverview)\n[Open Workspace](command:apiRunner.openWorkspace)"
       },
       {
         "view": "apiRunner.history",
-        "contents": "No recent runs yet.\nRun a request from Collections or the editor to start building history.\n\n[Focus Collections](command:apiRunner.focusCollections)\n[Open Overview](command:apiRunner.openOverview)\n[Refresh History](command:apiRunner.refreshHistory)"
+        "contents": "No recent requests yet.\nRun a request from Collections or the editor to start building history.\n\n[Focus Collections](command:apiRunner.focusCollections)\n[Open Overview](command:apiRunner.openOverview)\n[New Request](command:apiRunner.createRequest)\n[Refresh History](command:apiRunner.refreshHistory)"
       }
     ],
     "keybindings": [

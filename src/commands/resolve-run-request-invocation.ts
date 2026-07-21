@@ -49,7 +49,7 @@ export function resolveRunRequestInvocation(
   if (input.suppliedArgument !== undefined && argument === undefined) {
     return {
       ok: false,
-      errorMessage: 'API Runner received an invalid request location.',
+      errorMessage: 'API Hero received an invalid request location.',
     };
   }
 
@@ -57,13 +57,13 @@ export function resolveRunRequestInvocation(
   if (document === undefined) {
     return {
       ok: false,
-      errorMessage: 'Open an API Runner request file and try again.',
+      errorMessage: 'Open an API Hero request file and try again.',
     };
   }
   if (document.languageId !== input.apiLanguageId) {
     return {
       ok: false,
-      errorMessage: 'Run Request is available only in API Runner (.api) files.',
+      errorMessage: 'Run Request is available only in API Hero (.api) files.',
     };
   }
   if (argument !== undefined && document.uri !== argument.uri) {

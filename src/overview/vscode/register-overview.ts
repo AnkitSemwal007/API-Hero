@@ -1,5 +1,9 @@
 /**
  * Registers the Overview command panel (command-opened, not Activity Bar).
+ *
+ * Also hosts shell/IA workbench shortcuts (`openWorkspace`, `openSettings`)
+ * used by Overview quick actions and Collections welcome/overflow. Intentional
+ * composition ownership — not Overview-panel internals.
  */
 
 import {
@@ -9,7 +13,7 @@ import {
 } from 'vscode';
 
 import type { CollectionDiscoveryService } from '../../collections/discovery';
-import { COMMAND_IDS } from '../../constants';
+import { COMMAND_IDS, EXTENSION_ID } from '../../constants';
 import type { HistoryRepository } from '../../history/repository';
 import { OverviewPanel } from './overview-panel';
 
@@ -34,7 +38,26 @@ export function registerOverview(
     panel.show();
   });
 
-  const disposables: Disposable[] = [panel, command];
+  /** Shell/IA navigation shortcut — opens a folder in the current window. */
+  const openWorkspace = commands.registerCommand(
+    COMMAND_IDS.openWorkspace,
+    async () => {
+      await commands.executeCommand('vscode.openFolder');
+    },
+  );
+
+  /** Shell/IA navigation shortcut — opens API Hero extension settings. */
+  const openSettings = commands.registerCommand(
+    COMMAND_IDS.openSettings,
+    async () => {
+      await commands.executeCommand(
+        'workbench.action.openSettings',
+        `@ext:${EXTENSION_ID}`,
+      );
+    },
+  );
+
+  const disposables: Disposable[] = [panel, command, openWorkspace, openSettings];
   context.subscriptions.push(...disposables);
   return { disposables };
 }

@@ -199,6 +199,10 @@ export function renderEnvironmentManagerHtml(nonce: string): string {
       <h1>Environments</h1>
       <button type="button" id="addEnv" class="primary" title="Add environment">Add</button>
     </div>
+    <label class="search-field">
+      <span class="sr-only">Search environments</span>
+      <input id="envSearch" type="search" placeholder="Search environments" autocomplete="off" />
+    </label>
     <ul id="envList" class="env-list" role="listbox" aria-label="Environments"></ul>
     <div class="scope-list">
       <button type="button" class="scope-item" data-scope="global" id="scopeGlobal">Global variables</button>
@@ -210,6 +214,7 @@ export function renderEnvironmentManagerHtml(nonce: string): string {
       <div class="title-row">
         <input id="envName" type="text" autocomplete="off" placeholder="Environment name" aria-label="Environment name" />
         <button type="button" id="setActive" class="secondary">Set Active</button>
+        <button type="button" id="duplicateEnv" class="secondary">Duplicate</button>
         <button type="button" id="deleteEnv" class="danger">Delete</button>
       </div>
       <p id="scopeHint" class="hint" hidden></p>
@@ -629,6 +634,15 @@ button:disabled {
   clip: rect(0, 0, 0, 0);
   border: 0;
 }
+.search-field input {
+  width: 100%;
+  color: var(--vscode-input-foreground);
+  background: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
+  border-radius: 2px;
+  padding: 4px 8px;
+  font: inherit;
+}
 @media (max-width: 720px) {
   #app { grid-template-columns: 1fr; }
   aside { border-right: none; border-bottom: 1px solid var(--vscode-panel-border, var(--vscode-contrastBorder)); }
@@ -648,6 +662,7 @@ let state = {
   selectedId: 'global',
 };
 let dirty = false;
+let envFilter = '';
 
 const el = (id) => {
   const node = document.getElementById(id);
@@ -723,7 +738,10 @@ function allocateId(name) {
 function renderList() {
   const list = el('envList');
   list.innerHTML = '';
+  const query = envFilter.trim().toLowerCase();
   for (const environment of state.environments) {
+    const haystack = ((environment.name || '') + ' ' + (environment.id || '')).toLowerCase();
+    if (query && !haystack.includes(query)) continue;
     const item = document.createElement('button');
     item.type = 'button';
     item.className = 'env-item' + (state.selectedId === environment.id ? ' active' : '');
@@ -828,6 +846,7 @@ function renderMain() {
   const nameInput = el('envName');
   const setActive = el('setActive');
   const deleteEnv = el('deleteEnv');
+  const duplicateEnv = el('duplicateEnv');
   const hint = el('scopeHint');
   const badge = el('activeBadge');
 
@@ -836,6 +855,7 @@ function renderMain() {
     nameInput.value = scope === 'global' ? 'Global variables' : 'Workspace variables';
     setActive.disabled = true;
     deleteEnv.disabled = true;
+    duplicateEnv.disabled = true;
     hint.hidden = false;
     hint.textContent = scope === 'global'
       ? 'Shared across all workspaces (user settings).'
@@ -847,6 +867,7 @@ function renderMain() {
     nameInput.value = environment ? environment.name : '';
     setActive.disabled = !environment;
     deleteEnv.disabled = !environment;
+    duplicateEnv.disabled = !environment;
     hint.hidden = true;
     const isActive = environment && environment.id === state.activeEnvironmentId;
     badge.hidden = !isActive;
@@ -873,6 +894,31 @@ el('addEnv').addEventListener('click', () => {
   state = {
     ...state,
     environments: [...state.environments, { id, name, variables: [] }],
+    selectedId: id,
+  };
+  setDirty(true);
+  render();
+});
+el('envSearch').addEventListener('input', () => {
+  envFilter = el('envSearch').value;
+  renderList();
+});
+el('duplicateEnv').addEventListener('click', () => {
+  if (selectedScope() !== 'environment' || !state.selectedId) return;
+  const source = state.environments.find((entry) => entry.id === state.selectedId);
+  if (!source) return;
+  const name = (source.name || source.id) + ' Copy';
+  const id = allocateId(name);
+  state = {
+    ...state,
+    environments: [
+      ...state.environments,
+      {
+        id,
+        name,
+        variables: source.variables.map((variable) => ({ ...variable })),
+      },
+    ],
     selectedId: id,
   };
   setDirty(true);

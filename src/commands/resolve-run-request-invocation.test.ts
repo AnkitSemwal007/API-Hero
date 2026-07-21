@@ -59,7 +59,7 @@ test('resolveRunRequestInvocation requires an active API document', () => {
         apiLanguageId: 'api',
       }) as { errorMessage: string }
     ).errorMessage,
-    /Open an API Runner/i,
+    /Open an API Hero/i,
   );
   assert.match(
     (

@@ -2,6 +2,7 @@ import {
   Position,
   Selection,
   Uri,
+  commands,
   window,
   workspace,
   type Disposable,
@@ -16,6 +17,7 @@ import {
   type NavigationIndex,
 } from '../navigation';
 import type { CollectionTreeNode, RequestReference } from '../index';
+import { REQUEST_EDITOR_VIEW_TYPE } from '../../constants';
 import type { CollectionTreeDataProvider } from './collection-tree-provider';
 
 const REVEAL_DEBOUNCE_MS = 200;
@@ -59,17 +61,34 @@ export class CollectionNavigationService implements Disposable {
     }
   }
 
-  /** Opens the request file and positions the cursor at the request start. */
+  /** Opens the request file — form editor for single-request files. */
   public async openRequest(
     target: CollectionTreeNode | RequestReference | string,
   ): Promise<void> {
     const request = this.resolveRequest(target);
     if (request === undefined) {
-      void window.showWarningMessage('API Runner could not find that request.');
+      void window.showWarningMessage('API Hero could not find that request.');
       return;
     }
 
     const uri = Uri.parse(request.filePath);
+    const requestCount = this.countRequestsInFile(request.filePath);
+
+    if (requestCount === 1) {
+      this.revealing = true;
+      try {
+        await commands.executeCommand(
+          'vscode.openWith',
+          uri,
+          REQUEST_EDITOR_VIEW_TYPE,
+        );
+        await this.tree.revealRequest(request.id);
+      } finally {
+        this.revealing = false;
+      }
+      return;
+    }
+
     const document = await workspace.openTextDocument(uri);
     const editor = await window.showTextDocument(document, { preview: false });
     const position = new Position(
@@ -86,12 +105,28 @@ export class CollectionNavigationService implements Disposable {
     }
   }
 
+  private countRequestsInFile(filePath: string): number {
+    const aggregate = this.discovery.snapshot;
+    if (aggregate === undefined) {
+      return 0;
+    }
+    let count = 0;
+    for (const collection of Object.values(aggregate.collections)) {
+      for (const request of Object.values(collection.requests)) {
+        if (request.filePath === filePath) {
+          count += 1;
+        }
+      }
+    }
+    return count;
+  }
+
   /** Reveals the request under the active editor cursor in the tree. */
   public async revealActiveRequest(): Promise<void> {
     const editor = window.activeTextEditor;
     if (editor === undefined || !isApiDocument(editor)) {
       void window.showInformationMessage(
-        'Open an API Runner (.api) file to reveal the active request.',
+        'Open an API Hero (.api) file to reveal the active request.',
       );
       return;
     }

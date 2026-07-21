@@ -60,6 +60,6 @@ function toDiagnostic(
     severity: 'error',
     range: directive.range,
     location: directive.location,
-    source: 'API Runner Variables',
+    source: 'API Hero Variables',
   });
 }

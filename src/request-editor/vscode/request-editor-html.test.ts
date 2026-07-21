@@ -37,8 +37,17 @@ describe('request editor webview helpers', () => {
     assert.match(html, /id="openText"/u);
     assert.match(html, /id="envShortcut"/u);
     assert.match(html, /id="authShortcut"/u);
+    assert.match(html, /id="method"/u);
+    assert.match(html, /id="url"/u);
+    assert.match(html, /class="run-row"/u);
     assert.match(html, /id="manageAuthProfiles"/u);
-    assert.match(html, /Manage Auth Profiles/u);
+    assert.match(html, /id="manageEnvironments"/u);
+    assert.match(html, /Manage Authentication/u);
+    assert.match(html, /Manage Environments/u);
+    // Tab order: Request, Headers, Params, …
+    const headersAt = html.indexOf('data-tab="headers"');
+    const paramsAt = html.indexOf('data-tab="params"');
+    assert.ok(headersAt > 0 && paramsAt > headersAt);
     assert.match(html, /--vscode-editor-background/u);
     assert.match(html, /--vscode-button-background/u);
     assert.doesNotMatch(html, /connect-src [^']*https/u);
@@ -72,6 +81,10 @@ describe('request editor webview helpers', () => {
     assert.deepEqual(
       parseRequestEditorMessage({ type: 'manageAuthProfiles' }),
       { type: 'manageAuthProfiles' },
+    );
+    assert.deepEqual(
+      parseRequestEditorMessage({ type: 'manageEnvironments' }),
+      { type: 'manageEnvironments' },
     );
   });
 

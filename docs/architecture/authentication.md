@@ -50,7 +50,7 @@ encoded bytes, duplicate order, empty values, and fragments.
 `@auth profileName` is the source-visible reference syntax. No grammar change
 is required. A request-level directive takes precedence over a document-level
 directive, which takes precedence over the explicit session default selected by
-`API Runner: Select Authentication Profile`. If none exists, `none` is used.
+`API Hero: Select Authentication Profile`. If none exists, `none` is used.
 The picker does not edit `.api` files or persist a default.
 
 Non-secret profile metadata lives in `apiRunner.authentication.profiles`:

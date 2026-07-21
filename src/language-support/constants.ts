@@ -1,9 +1,9 @@
 import { HTTP_METHODS as SHARED_HTTP_METHODS } from '../types';
 
-/** VS Code language identifier contributed for API Runner documents. */
+/** VS Code language identifier contributed for API Hero documents. */
 export const API_LANGUAGE_ID = 'api';
 
-/** HTTP methods recognized by API Runner language features. */
+/** HTTP methods recognized by API Hero language features. */
 export const HTTP_METHODS = SHARED_HTTP_METHODS;
 
 /** Built-in request directives. */
@@ -59,8 +59,8 @@ export const LANGUAGE_DIAGNOSTIC_CODES = {
   missingUrl: 'api-runner.missing-url',
 } as const;
 
-/** Source label used for API Runner diagnostics. */
-export const LANGUAGE_DIAGNOSTIC_SOURCE = 'API Runner';
+/** Source label used for API Hero diagnostics. */
+export const LANGUAGE_DIAGNOSTIC_SOURCE = 'API Hero';
 
 /** Documentation shown for language keywords. */
 export const HOVER_DOCUMENTATION: Readonly<Record<string, string>> = {

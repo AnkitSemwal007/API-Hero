@@ -1,4 +1,4 @@
-import { commands, window } from 'vscode';
+import { window } from 'vscode';
 
 import { COMMAND_IDS } from '../constants';
 import type { CommandDefinition } from './command-definition';
@@ -13,7 +13,12 @@ async function notifyComingSoon(featureLabel: string): Promise<void> {
   );
 }
 
-/** Creates the remaining placeholder commands still contributed by the manifest. */
+/**
+ * Creates Coming Soon stub commands still contributed by the manifest
+ * (`runFile`, `login`, `logout`).
+ * Shell/IA shortcuts live elsewhere: `openWorkspace` / `openSettings` in
+ * Overview registration; `recentRequests` (History focus alias) in History.
+ */
 export function createPlaceholderCommands(): readonly CommandDefinition[] {
   return [
     {
@@ -30,12 +35,6 @@ export function createPlaceholderCommands(): readonly CommandDefinition[] {
     {
       id: COMMAND_IDS.logout,
       execute: () => notifyComingSoon('Logout'),
-    },
-    {
-      id: COMMAND_IDS.openWorkspace,
-      execute: async () => {
-        await commands.executeCommand('vscode.openFolder');
-      },
     },
   ];
 }

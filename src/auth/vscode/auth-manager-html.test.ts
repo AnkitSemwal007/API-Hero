@@ -2,6 +2,10 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
 import {
+  AUTHENTICATION_PRESENTATION_MASK,
+  buildAuthenticationPresentationPreview,
+} from '../authentication-presentation-preview';
+import {
   allocateAuthProfileId,
   escapeAttribute,
   isValidAuthProfileId,
@@ -20,6 +24,9 @@ describe('auth-manager-html', () => {
     assert.match(html, /default-src 'none'/u);
     assert.match(html, /id="addProfile"/u);
     assert.match(html, /id="save"/u);
+    assert.match(html, /id="duplicateProfile"/u);
+    assert.match(html, /id="profileSearch"/u);
+    assert.match(html, /id="authPreview"/u);
     assert.match(html, /id="missingCta"/u);
     assert.match(html, /id="setDefault"/u);
     assert.match(html, /--vscode-editor-background/u);
@@ -146,7 +153,36 @@ describe('auth-manager-html', () => {
     assert.doesNotMatch(serialized, /sekrit|password-value|token-value/iu);
     assert.match(serialized, /"status":"missing"/u);
   });
+
+  test('auth manager HTML wires search, duplicate, and preview controls', () => {
+    const html = renderAuthManagerHtml('authNonce');
+    const bearerPreview = buildAuthenticationPresentationPreview({
+      providerId: 'bearer',
+      secretFields: [{ field: 'token', label: 'Token', status: 'set' }],
+    }).preview;
+    assert.match(html, /id="profileSearch"/u);
+    assert.match(html, /id="duplicateProfile"/u);
+    assert.match(html, /id="authPreview"/u);
+    assert.match(html, /id="validationHint"/u);
+    assert.match(html, /function buildAuthPreview/u);
+    assert.match(html, /duplicateProfile'\)\.addEventListener/u);
+    assert.match(html, /profileSearch'\)\.addEventListener/u);
+    assert.match(html, new RegExp(escapeRegExp(bearerPreview), 'u'));
+    assert.match(
+      html,
+      new RegExp(
+        `const MASK = ${JSON.stringify(AUTHENTICATION_PRESENTATION_MASK)}`,
+        'u',
+      ),
+    );
+    assert.match(html, /const SECRET_META =/u);
+    assert.match(html, /"field":"token"/u);
+  });
 });
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+}
 
 function sampleState(): AuthManagerState {
   return {

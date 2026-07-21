@@ -10,9 +10,9 @@ export const SECRET_STORAGE_KEYS = {
   authentication: 'authentication',
 } as const;
 
-/** An API Runner persistent storage key. */
+/** An API Hero persistent storage key. */
 export type StorageKey = (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS];
 
-/** An API Runner secret storage key. */
+/** An API Hero secret storage key. */
 export type SecretStorageKey =
   (typeof SECRET_STORAGE_KEYS)[keyof typeof SECRET_STORAGE_KEYS];

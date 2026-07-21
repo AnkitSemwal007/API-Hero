@@ -72,7 +72,7 @@ function createRunRequestExecutor(
     }
     if (editor === undefined) {
       await window.showErrorMessage(
-        'Open an API Runner request file and try again.',
+        'Open an API Hero request file and try again.',
       );
       return;
     }

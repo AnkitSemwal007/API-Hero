@@ -3,6 +3,7 @@ import { test } from 'node:test';
 
 import { validateAuthenticationProfiles } from '../../auth';
 import { parseApiDocument } from '../../parser';
+import { LANGUAGE_DIAGNOSTIC_SOURCE } from '../constants';
 import {
   createAuthenticationAvailabilityDiagnostics,
   createAuthenticationDiagnostics,
@@ -23,6 +24,7 @@ test('authentication diagnostics identify profiles without secret values', () =>
   });
   assert.equal(diagnostics.length, 1);
   assert.equal(diagnostics[0]?.code, 'authentication.missing-profile');
+  assert.equal(diagnostics[0]?.source, LANGUAGE_DIAGNOSTIC_SOURCE);
   assert.equal(JSON.stringify(diagnostics).includes('must-not-leak'), false);
 });
 

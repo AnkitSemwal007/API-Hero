@@ -34,6 +34,8 @@ const QUICK_ACTION_COMMANDS: Readonly<
   [OverviewQuickAction.ManageEnvironments]: COMMAND_IDS.manageEnvironments,
   [OverviewQuickAction.ManageAuthProfiles]: COMMAND_IDS.manageAuthProfiles,
   [OverviewQuickAction.FocusCollections]: COMMAND_IDS.focusCollections,
+  [OverviewQuickAction.RecentRequests]: COMMAND_IDS.recentRequests,
+  [OverviewQuickAction.OpenSettings]: COMMAND_IDS.openSettings,
 };
 
 export interface OverviewPanelOptions {
