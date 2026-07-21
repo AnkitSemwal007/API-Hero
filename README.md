@@ -26,7 +26,7 @@ _Screenshots and banner art are not included in this release package yet._ Captu
 ```bash
 npm install
 npm run package
-code --install-extension api-hero-0.6.1.vsix
+code --install-extension api-hero-0.6.2.vsix
 ```
 
 ### From Marketplace
