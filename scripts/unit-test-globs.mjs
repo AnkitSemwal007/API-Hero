@@ -4,6 +4,7 @@
  */
 export const UNIT_TEST_GLOBS = Object.freeze([
   'dist/auth/*.test.js',
+  'dist/auth/vscode/*.test.js',
   'dist/assertions/*.test.js',
   'dist/commands/*.test.js',
   'dist/collections/*.test.js',

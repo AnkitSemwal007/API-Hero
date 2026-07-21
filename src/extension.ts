@@ -67,6 +67,7 @@ import {
   extractDocumentVariables,
 } from './variables';
 import { registerEnvironments } from './variables/vscode';
+import { registerAuth } from './auth/vscode';
 
 /** Composes infrastructure adapters and registers extension entry points. */
 export function activate(context: ExtensionContext): void {
@@ -245,6 +246,11 @@ export function activate(context: ExtensionContext): void {
   registerEnvironments({
     context,
     environmentManager,
+  });
+  registerAuth({
+    context,
+    profileManager: authenticationProfiles,
+    secrets: authenticationSecrets,
   });
 
   context.subscriptions.push(

@@ -32,7 +32,7 @@ export function renderRequestEditorHtml(nonce: string): string {
   </div>
   <div class="actions">
     <button type="button" id="envShortcut" class="ghost" title="Switch Environment" aria-label="Switch Environment">Environment</button>
-    <button type="button" id="authShortcut" class="ghost" title="Select Authentication" aria-label="Select Authentication">Auth</button>
+    <button type="button" id="authShortcut" class="ghost" title="Manage Auth Profiles" aria-label="Manage Auth Profiles">Auth</button>
     <span class="toolbar-sep" aria-hidden="true"></span>
     <button type="button" id="openText" class="secondary" title="Open With Text Editor">Open Text</button>
     <button type="button" id="run" class="primary">Run</button>
@@ -134,6 +134,10 @@ export function renderRequestEditorHtml(nonce: string): string {
       </select>
     </label>
     <p class="hint">Writes <code>@auth &lt;id&gt;</code>. Secrets stay in Secret Storage — never in the webview.</p>
+    <div class="table-toolbar">
+      <button type="button" id="manageAuthProfiles" class="secondary">Manage Auth Profiles</button>
+      <button type="button" id="selectAuthentication" class="ghost">Session default…</button>
+    </div>
   </section>
   <section id="tab-variables" class="panel" role="tabpanel" hidden>
     <div class="table-toolbar">
@@ -824,6 +828,8 @@ const EDITOR_SCRIPT = `
     const run = el('run');
     const envShortcut = el('envShortcut');
     const authShortcut = el('authShortcut');
+    const manageAuthProfiles = el('manageAuthProfiles');
+    const selectAuthentication = el('selectAuthentication');
 
     if (next.mode === 'multi') {
       banner.hidden = false;
@@ -834,6 +840,8 @@ const EDITOR_SCRIPT = `
       run.disabled = true;
       envShortcut.disabled = true;
       authShortcut.disabled = true;
+      manageAuthProfiles.disabled = true;
+      selectAuthentication.disabled = true;
       applying = false;
       refreshPreview();
       return;
@@ -847,6 +855,8 @@ const EDITOR_SCRIPT = `
       run.disabled = true;
       envShortcut.disabled = true;
       authShortcut.disabled = true;
+      manageAuthProfiles.disabled = true;
+      selectAuthentication.disabled = true;
       applying = false;
       refreshPreview();
       return;
@@ -857,6 +867,8 @@ const EDITOR_SCRIPT = `
     run.disabled = false;
     envShortcut.disabled = false;
     authShortcut.disabled = false;
+    manageAuthProfiles.disabled = false;
+    selectAuthentication.disabled = false;
 
     const model = next.model || defaultModel();
     el('name').value = model.name || '';
@@ -977,7 +989,9 @@ const EDITOR_SCRIPT = `
   el('run').addEventListener('click', () => post({ type: 'run' }));
   el('openText').addEventListener('click', () => post({ type: 'openTextEditor' }));
   el('envShortcut').addEventListener('click', () => post({ type: 'switchEnvironment' }));
-  el('authShortcut').addEventListener('click', () => post({ type: 'selectAuthentication' }));
+  el('authShortcut').addEventListener('click', () => post({ type: 'manageAuthProfiles' }));
+  el('manageAuthProfiles').addEventListener('click', () => post({ type: 'manageAuthProfiles' }));
+  el('selectAuthentication').addEventListener('click', () => post({ type: 'selectAuthentication' }));
 
   window.addEventListener('message', (event) => {
     const message = event.data;
