@@ -281,6 +281,11 @@
         "command": "apiRunner.openRequestEditor",
         "title": "API Hero: Open Request Editor",
         "enablement": "editorLangId == api"
+      },
+      {
+        "command": "apiRunner.openOverview",
+        "title": "API Hero: Open Overview",
+        "icon": "$(home)"
       }
     ],
     "customEditors": [
@@ -562,11 +567,11 @@
     "viewsWelcome": [
       {
         "view": "apiRunner.collections",
-        "contents": "No collections yet.\nCreate a collection, start a new request, or import an OpenAPI specification.\n\n[Create Collection](command:apiRunner.createCollection)\n[New Request](command:apiRunner.createRequest)\n[Import OpenAPI](command:apiRunner.importOpenApi)\n[Open Workspace](command:apiRunner.openWorkspace)"
+        "contents": "No collections yet.\nCreate a request, start a collection, or import an OpenAPI specification.\n\n[New Request](command:apiRunner.createRequest)\n[New Collection](command:apiRunner.createCollection)\n[Import OpenAPI](command:apiRunner.importOpenApi)\n[Open Workspace](command:apiRunner.openWorkspace)"
       },
       {
         "view": "apiRunner.history",
-        "contents": "No request history yet.\nRun a request to start building history.\n\n[Focus Collections](command:apiRunner.focusCollections)\n[Refresh History](command:apiRunner.refreshHistory)"
+        "contents": "No recent runs yet.\nRun a request from Collections or the editor to start building history.\n\n[Focus Collections](command:apiRunner.focusCollections)\n[Open Overview](command:apiRunner.openOverview)\n[Refresh History](command:apiRunner.refreshHistory)"
       }
     ],
     "keybindings": [
