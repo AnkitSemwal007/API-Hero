@@ -37,6 +37,8 @@ describe('request editor webview helpers', () => {
     assert.match(html, /id="openText"/u);
     assert.match(html, /id="envShortcut"/u);
     assert.match(html, /id="authShortcut"/u);
+    assert.match(html, /id="manageAuthProfiles"/u);
+    assert.match(html, /Manage Auth Profiles/u);
     assert.match(html, /--vscode-editor-background/u);
     assert.match(html, /--vscode-button-background/u);
     assert.doesNotMatch(html, /connect-src [^']*https/u);
@@ -66,6 +68,10 @@ describe('request editor webview helpers', () => {
     assert.deepEqual(
       parseRequestEditorMessage({ type: 'selectAuthentication' }),
       { type: 'selectAuthentication' },
+    );
+    assert.deepEqual(
+      parseRequestEditorMessage({ type: 'manageAuthProfiles' }),
+      { type: 'manageAuthProfiles' },
     );
   });
 

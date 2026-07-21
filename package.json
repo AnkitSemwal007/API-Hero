@@ -105,6 +105,11 @@
         "icon": "$(globe)"
       },
       {
+        "command": "apiRunner.manageAuthProfiles",
+        "title": "API Hero: Manage Auth Profiles",
+        "icon": "$(key)"
+      },
+      {
         "command": "apiRunner.selectAuthentication",
         "title": "API Hero: Select Authentication Profile"
       },
@@ -286,6 +291,16 @@
       }
     ],
     "menus": {
+      "commandPalette": [
+        {
+          "command": "apiRunner.login",
+          "when": "false"
+        },
+        {
+          "command": "apiRunner.logout",
+          "when": "false"
+        }
+      ],
       "editor/context": [
         {
           "command": "apiRunner.runRequest",

@@ -43,7 +43,8 @@ export type RequestEditorInboundMessage =
   | { readonly type: 'run' }
   | { readonly type: 'openTextEditor' }
   | { readonly type: 'switchEnvironment' }
-  | { readonly type: 'selectAuthentication' };
+  | { readonly type: 'selectAuthentication' }
+  | { readonly type: 'manageAuthProfiles' };
 
 export type RequestEditorOutboundMessage =
   | { readonly type: 'init'; readonly state: RequestEditorState }
@@ -67,7 +68,8 @@ export function parseRequestEditorMessage(
     record.type === 'run' ||
     record.type === 'openTextEditor' ||
     record.type === 'switchEnvironment' ||
-    record.type === 'selectAuthentication'
+    record.type === 'selectAuthentication' ||
+    record.type === 'manageAuthProfiles'
   ) {
     return { type: record.type };
   }

@@ -148,6 +148,10 @@ class RequestEditorDocumentSync implements Disposable {
       await commands.executeCommand(COMMAND_IDS.selectAuthentication);
       return;
     }
+    if (message.type === 'manageAuthProfiles') {
+      await commands.executeCommand(COMMAND_IDS.manageAuthProfiles);
+      return;
+    }
     if (message.type === 'run') {
       try {
         await this.options.runDocument(this.document);
