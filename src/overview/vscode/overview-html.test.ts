@@ -25,8 +25,16 @@ describe('overview-html', () => {
     assert.match(html, /--vscode-editor-background/u);
     assert.match(html, /--vscode-button-background/u);
     assert.doesNotMatch(html, /connect-src [^']*https/u);
-    assert.match(html, /Create Request/u);
+    assert.match(html, /New Request/u);
     assert.match(html, /Focus Collections/u);
+    assert.match(html, /Recent Requests/u);
+    assert.match(html, /Tips/u);
+    assert.match(html, /Recent Activity/u);
+    assert.match(html, /activity-summary/u);
+    assert.match(html, /Open History/u);
+    assert.doesNotMatch(html, /activity-line/u);
+    assert.match(html, /openSettings/u);
+    assert.match(html, /recentRequests/u);
   });
 
   test('parseOverviewMessage accepts allowlisted actions only', () => {
@@ -45,6 +53,27 @@ describe('overview-html', () => {
         action: OverviewQuickAction.CreateRequest,
       }),
       { type: 'runAction', action: 'createRequest' },
+    );
+    assert.deepEqual(
+      parseOverviewMessage({
+        type: 'runAction',
+        action: OverviewQuickAction.RecentRequests,
+      }),
+      { type: 'runAction', action: 'recentRequests' },
+    );
+    assert.deepEqual(
+      parseOverviewMessage({
+        type: 'runAction',
+        action: OverviewQuickAction.OpenSettings,
+      }),
+      { type: 'runAction', action: 'openSettings' },
+    );
+    assert.deepEqual(
+      parseOverviewMessage({
+        type: 'runAction',
+        action: OverviewQuickAction.ManageEnvironments,
+      }),
+      { type: 'runAction', action: 'manageEnvironments' },
     );
     assert.deepEqual(
       parseOverviewMessage({ type: 'openHistory', id: 'hist_1' }),

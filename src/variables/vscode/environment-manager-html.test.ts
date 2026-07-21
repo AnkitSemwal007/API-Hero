@@ -22,6 +22,8 @@ describe('environment-manager-html', () => {
     assert.match(html, /default-src 'none'/u);
     assert.match(html, /id="addEnv"/u);
     assert.match(html, /id="save"/u);
+    assert.match(html, /id="duplicateEnv"/u);
+    assert.match(html, /id="envSearch"/u);
     assert.match(html, /Global variables/u);
     assert.match(html, /Workspace variables/u);
   });
@@ -147,6 +149,16 @@ describe('environment-manager-html', () => {
         ?.value,
       'rotated',
     );
+  });
+
+  test('environment manager HTML wires search and duplicate controls', () => {
+    const html = renderEnvironmentManagerHtml('envNonce');
+    assert.match(html, /id="envSearch"/u);
+    assert.match(html, /id="duplicateEnv"/u);
+    assert.match(html, /envSearch'\)\.addEventListener/u);
+    assert.match(html, /duplicateEnv'\)\.addEventListener/u);
+    assert.match(html, /envFilter/u);
+    assert.match(html, / Copy'/u);
   });
 });
 

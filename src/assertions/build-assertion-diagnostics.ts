@@ -12,7 +12,7 @@ export interface AssertionDiagnosticDescriptor {
   readonly message: string;
   readonly severity: 'error';
   readonly code: 'assertion.failed' | 'assertion.malformed';
-  readonly source: 'API Runner Assertions';
+  readonly source: 'API Hero Assertions';
 }
 
 export type BuildAssertionDiagnosticsResult =
@@ -56,7 +56,7 @@ export function buildAssertionDiagnostics(
       message: `${failure.assertionText}: ${message}`,
       severity: 'error',
       code: failure.malformed ? 'assertion.malformed' : 'assertion.failed',
-      source: 'API Runner Assertions',
+      source: 'API Hero Assertions',
     });
   }
   return { kind: 'set', diagnostics };

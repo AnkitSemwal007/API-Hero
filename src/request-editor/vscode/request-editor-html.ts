@@ -33,16 +33,27 @@ export function renderRequestEditorHtml(nonce: string): string {
 <body>
 <div id="banner" class="banner" hidden></div>
 <header class="toolbar">
-  <div class="identity">
-    <input id="name" type="text" placeholder="Request name" aria-label="Request name" />
-    <input id="description" type="text" placeholder="Description (optional)" aria-label="Description" />
-  </div>
-  <div class="actions">
+  <div class="run-row" role="group" aria-label="Request execution">
+    <label class="field method">
+      <span class="sr-only">Method</span>
+      <select id="method" aria-label="HTTP method">${methodOptions}</select>
+    </label>
+    <label class="field grow">
+      <span class="sr-only">URL</span>
+      <input id="url" type="text" placeholder="https://api.example.com/resource" autocomplete="off" aria-label="URL" />
+    </label>
     <button type="button" id="envShortcut" class="ghost" title="Switch Environment" aria-label="Switch Environment">Environment</button>
-    <button type="button" id="authShortcut" class="ghost" title="Manage Auth Profiles" aria-label="Manage Auth Profiles">Auth</button>
-    <span class="toolbar-sep" aria-hidden="true"></span>
-    <button type="button" id="openText" class="secondary" title="Open With Text Editor">Open Text</button>
+    <button type="button" id="authShortcut" class="ghost" title="Select Authentication" aria-label="Select Authentication">Authentication</button>
     <button type="button" id="run" class="primary">Run</button>
+  </div>
+  <div class="identity-row">
+    <div class="identity">
+      <input id="name" type="text" placeholder="Request name" aria-label="Request name" />
+      <input id="description" type="text" placeholder="Description (optional)" aria-label="Description" />
+    </div>
+    <div class="actions">
+      <button type="button" id="openText" class="secondary" title="Open With Text Editor">Open Text</button>
+    </div>
   </div>
 </header>
 <nav class="tabs" role="tablist" aria-label="Request sections">
@@ -50,32 +61,22 @@ export function renderRequestEditorHtml(nonce: string): string {
 </nav>
 <div id="formRoot" class="panels">
   <section id="tab-request" class="panel active" role="tabpanel">
-    <div class="row">
-      <label class="field method">
-        <span>Method</span>
-        <select id="method">${methodOptions}</select>
-      </label>
-      <label class="field grow">
-        <span>URL</span>
-        <input id="url" type="text" placeholder="https://api.example.com/resource" autocomplete="off" />
-      </label>
-    </div>
-    <p class="hint">Query parameters are edited on the Params tab and encoded into the URL.</p>
-  </section>
-  <section id="tab-params" class="panel" role="tabpanel" hidden>
-    <div class="table-toolbar">
-      <button type="button" data-add="params" class="secondary">Add param</button>
-    </div>
-    <table class="kv" id="paramsTable">
-      <thead><tr><th>Key</th><th>Value</th><th>Enabled</th><th></th></tr></thead>
-      <tbody></tbody>
-    </table>
+    <p class="hint">Method and URL are edited in the top bar. Query parameters are edited on the Params tab and encoded into the URL.</p>
   </section>
   <section id="tab-headers" class="panel" role="tabpanel" hidden>
     <div class="table-toolbar">
       <button type="button" data-add="headers" class="secondary">Add header</button>
     </div>
     <table class="kv" id="headersTable">
+      <thead><tr><th>Key</th><th>Value</th><th>Enabled</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </section>
+  <section id="tab-params" class="panel" role="tabpanel" hidden>
+    <div class="table-toolbar">
+      <button type="button" data-add="params" class="secondary">Add param</button>
+    </div>
+    <table class="kv" id="paramsTable">
       <thead><tr><th>Key</th><th>Value</th><th>Enabled</th><th></th></tr></thead>
       <tbody></tbody>
     </table>
@@ -142,13 +143,14 @@ export function renderRequestEditorHtml(nonce: string): string {
     </label>
     <p class="hint">Writes <code>@auth &lt;id&gt;</code>. Secrets stay in Secret Storage — never in the webview.</p>
     <div class="table-toolbar">
-      <button type="button" id="manageAuthProfiles" class="secondary">Manage Auth Profiles</button>
+      <button type="button" id="manageAuthProfiles" class="secondary">Manage Authentication</button>
       <button type="button" id="selectAuthentication" class="ghost">Session default…</button>
     </div>
   </section>
   <section id="tab-variables" class="panel" role="tabpanel" hidden>
     <div class="table-toolbar">
       <button type="button" data-add="variables" class="secondary">Add variable</button>
+      <button type="button" id="manageEnvironments" class="ghost">Manage Environments</button>
     </div>
     <table class="kv" id="variablesTable">
       <thead><tr><th>Name</th><th>Value</th><th>Insert</th><th></th></tr></thead>
@@ -200,8 +202,8 @@ export function renderRequestEditorHtml(nonce: string): string {
 
 const TAB_BUTTONS = [
   'request',
-  'params',
   'headers',
+  'params',
   'body',
   'auth',
   'variables',
@@ -256,12 +258,26 @@ body {
 }
 .toolbar {
   display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--vscode-panel-border, var(--vscode-contrastBorder));
+}
+.run-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.run-row .field { margin: 0; }
+.run-row .field.method { width: 104px; flex: 0 0 104px; }
+.run-row .field.grow { flex: 1 1 220px; min-width: 140px; }
+.identity-row {
+  display: flex;
   flex-wrap: wrap;
   gap: 8px 12px;
   align-items: flex-start;
   justify-content: space-between;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--vscode-panel-border, var(--vscode-contrastBorder));
 }
 .identity {
   flex: 1 1 220px;
@@ -277,12 +293,16 @@ body {
   flex: 0 1 auto;
   justify-content: flex-end;
 }
-.toolbar-sep {
+.sr-only {
+  position: absolute;
   width: 1px;
-  height: 18px;
-  margin: 0 4px;
-  background: var(--vscode-panel-border, var(--vscode-contrastBorder));
-  flex-shrink: 0;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 .tabs {
   display: flex;
@@ -471,16 +491,19 @@ h3 {
   color: var(--vscode-foreground);
 }
 @media (max-width: 560px) {
-  .toolbar { flex-direction: column; align-items: stretch; }
+  .run-row { flex-direction: column; align-items: stretch; }
+  .run-row .field.method { width: 100%; flex: 1; }
+  .identity-row { flex-direction: column; align-items: stretch; }
   .actions { justify-content: flex-start; }
-  .toolbar-sep { display: none; }
   .row { flex-direction: column; align-items: stretch; }
   .field.method { width: 100%; flex: 1; }
+}
+@media (prefers-contrast: more) {
+  .tab.active { border-bottom-width: 3px; }
 }
 @media (forced-colors: active) {
   .tab.active { border-bottom: 2px solid CanvasText; }
   button, input, select, textarea { border: 1px solid CanvasText; }
-  .toolbar-sep { background: CanvasText; }
 }
 `;
 
@@ -816,6 +839,7 @@ const EDITOR_SCRIPT = `
     const authShortcut = el('authShortcut');
     const manageAuthProfiles = el('manageAuthProfiles');
     const selectAuthentication = el('selectAuthentication');
+    const manageEnvironments = el('manageEnvironments');
 
     if (next.mode === 'multi') {
       banner.hidden = false;
@@ -828,6 +852,7 @@ const EDITOR_SCRIPT = `
       authShortcut.disabled = true;
       manageAuthProfiles.disabled = true;
       selectAuthentication.disabled = true;
+      manageEnvironments.disabled = true;
       applying = false;
       refreshPreview();
       return;
@@ -843,6 +868,7 @@ const EDITOR_SCRIPT = `
       authShortcut.disabled = true;
       manageAuthProfiles.disabled = true;
       selectAuthentication.disabled = true;
+      manageEnvironments.disabled = true;
       applying = false;
       refreshPreview();
       return;
@@ -855,6 +881,7 @@ const EDITOR_SCRIPT = `
     authShortcut.disabled = false;
     manageAuthProfiles.disabled = false;
     selectAuthentication.disabled = false;
+    manageEnvironments.disabled = false;
 
     const model = next.model || defaultModel();
     el('name').value = model.name || '';
@@ -975,9 +1002,10 @@ const EDITOR_SCRIPT = `
   el('run').addEventListener('click', () => post({ type: 'run' }));
   el('openText').addEventListener('click', () => post({ type: 'openTextEditor' }));
   el('envShortcut').addEventListener('click', () => post({ type: 'switchEnvironment' }));
-  el('authShortcut').addEventListener('click', () => post({ type: 'manageAuthProfiles' }));
+  el('authShortcut').addEventListener('click', () => post({ type: 'selectAuthentication' }));
   el('manageAuthProfiles').addEventListener('click', () => post({ type: 'manageAuthProfiles' }));
   el('selectAuthentication').addEventListener('click', () => post({ type: 'selectAuthentication' }));
+  el('manageEnvironments').addEventListener('click', () => post({ type: 'manageEnvironments' }));
 
   window.addEventListener('message', (event) => {
     const message = event.data;

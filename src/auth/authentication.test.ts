@@ -20,6 +20,8 @@ import {
   NoneAuthenticationProvider,
   authenticationSecretKey,
   AuthenticationProfileManager,
+  AUTHENTICATION_PRESENTATION_MASK,
+  buildAuthenticationPresentationPreview,
   isValidAuthenticationProfileId,
   secretFieldNamesForProvider,
   secretFieldsForProvider,
@@ -413,6 +415,119 @@ test('secret field helpers are the single source for built-in providers', () => 
   assert.deepEqual(secretFieldNamesForProvider('oauth2'), []);
   assert.equal(secretFieldsForProvider('bearer')[0]?.label, 'Token');
   assert.equal(secretFieldsForProvider('apiKey')[0]?.field, 'value');
+});
+
+test('buildAuthenticationPresentationPreview covers all Auth Manager providers', () => {
+  const mask = AUTHENTICATION_PRESENTATION_MASK;
+  assert.deepEqual(
+    buildAuthenticationPresentationPreview({ providerId: 'none' }),
+    {
+      preview: 'No authentication headers will be added.',
+      validation: '',
+    },
+  );
+  assert.deepEqual(
+    buildAuthenticationPresentationPreview({
+      providerId: 'bearer',
+      secretFields: [{ field: 'token', label: 'Token', status: 'missing' }],
+    }),
+    {
+      preview: `Authorization: Bearer ${mask}`,
+      validation: 'Token secret is missing.',
+    },
+  );
+  assert.deepEqual(
+    buildAuthenticationPresentationPreview({
+      providerId: 'bearer',
+      secretFields: [{ field: 'token', label: 'Token', status: 'set' }],
+    }),
+    {
+      preview: `Authorization: Bearer ${mask}`,
+      validation: 'Ready — token is set.',
+    },
+  );
+  assert.deepEqual(
+    buildAuthenticationPresentationPreview({
+      providerId: 'basic',
+      secretFields: [
+        { field: 'username', label: 'Username', status: 'missing' },
+        { field: 'password', label: 'Password', status: 'missing' },
+      ],
+    }),
+    {
+      preview: `Authorization: Basic ${mask}`,
+      validation: 'Missing: Username, Password.',
+    },
+  );
+  assert.deepEqual(
+    buildAuthenticationPresentationPreview({
+      providerId: 'basic',
+      secretFields: [
+        { field: 'username', label: 'Username', status: 'set' },
+        { field: 'password', label: 'Password', status: 'set' },
+      ],
+    }),
+    {
+      preview: `Authorization: Basic ${mask}`,
+      validation: 'Ready — username and password are set.',
+    },
+  );
+  assert.deepEqual(
+    buildAuthenticationPresentationPreview({
+      providerId: 'apiKey',
+      apiKeyName: 'X-API-Key',
+      apiKeyLocation: 'header',
+      secretFields: [{ field: 'value', label: 'API key value', status: 'missing' }],
+    }),
+    {
+      preview: `X-API-Key: ${mask}`,
+      validation: 'API key secret is missing.',
+    },
+  );
+  assert.deepEqual(
+    buildAuthenticationPresentationPreview({
+      providerId: 'apiKey',
+      apiKeyName: '',
+      apiKeyLocation: 'header',
+      secretFields: [{ field: 'value', label: 'API key value', status: 'set' }],
+    }),
+    {
+      preview: `X-API-Key: ${mask}`,
+      validation:
+        'Key name is empty — set a header or query parameter name.',
+    },
+  );
+  assert.deepEqual(
+    buildAuthenticationPresentationPreview({
+      providerId: 'apiKey',
+      apiKeyName: 'X-API-Key',
+      apiKeyLocation: 'header',
+      secretFields: [{ field: 'value', label: 'API key value', status: 'set' }],
+    }),
+    {
+      preview: `X-API-Key: ${mask}`,
+      validation: 'Ready — API key secret is set.',
+    },
+  );
+  assert.deepEqual(
+    buildAuthenticationPresentationPreview({
+      providerId: 'apiKey',
+      apiKeyName: 'api_key',
+      apiKeyLocation: 'query',
+      secretFields: [{ field: 'value', label: 'API key value', status: 'set' }],
+    }),
+    {
+      preview: `Query: api_key=${mask}`,
+      validation: 'Ready — API key secret is set.',
+    },
+  );
+  assert.deepEqual(
+    buildAuthenticationPresentationPreview({ providerId: 'oauth2' }),
+    {
+      preview: 'Unknown provider.',
+      validation: 'Unsupported provider.',
+    },
+  );
 });
 
 test('load-time validation stays lenient for pattern and apiKey shape', () => {

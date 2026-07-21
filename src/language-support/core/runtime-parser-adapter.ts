@@ -379,7 +379,7 @@ function createVariableDiagnostics(
       severity: 'error',
       range: node.range,
       location: node.location,
-      source: 'API Runner Variables',
+      source: 'API Hero Variables',
     });
   }
   const seen = new Map<string, DirectiveNode>();
@@ -398,7 +398,7 @@ function createVariableDiagnostics(
         severity: 'error',
         range: directive.range,
         location: directive.location,
-        source: 'API Runner Variables',
+        source: 'API Hero Variables',
         relatedInformation: [{
           message: 'The first definition is here.',
           location: first.location,

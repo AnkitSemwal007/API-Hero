@@ -1,28 +1,35 @@
 import { promises as fs } from 'node:fs';
 import * as path from 'node:path';
 import {
+  FileType,
   RelativePattern,
   Uri,
   workspace,
 } from 'vscode';
 
+import {
+  COLLECTIONS_DIRECTORY_NAME,
+  COLLECTION_MARKER_FILENAME,
+} from '../constants';
 import type {
   ApiFileReader,
   DiscoveredApiFile,
+  DiscoveredCollectionRoot,
   WorkspaceFolderDescriptor,
   WorkspaceScanResult,
   WorkspaceScanner,
 } from '../scanner';
 
 /**
- * Scans VS Code workspace folders for `.api` files (recursive glob) using the
- * workspace file-search API. Falls back gracefully when no folder is open.
+ * Scans VS Code workspace folders for collection roots and `.api` files
+ * (recursive glob) using the workspace file-search API. Falls back gracefully
+ * when no folder is open.
  */
 export class VsCodeWorkspaceScanner implements WorkspaceScanner {
   public async scan(): Promise<WorkspaceScanResult> {
     const folders = workspace.workspaceFolders;
     if (folders === undefined || folders.length === 0) {
-      return { folders: [], apiFiles: [], issues: [] };
+      return { folders: [], apiFiles: [], collectionRoots: [], issues: [] };
     }
 
     const descriptors: WorkspaceFolderDescriptor[] = folders.map((folder) => ({
@@ -31,9 +38,26 @@ export class VsCodeWorkspaceScanner implements WorkspaceScanner {
     }));
 
     const apiFiles: DiscoveredApiFile[] = [];
+    const collectionRoots: DiscoveredCollectionRoot[] = [];
     const issues: Array<WorkspaceScanResult['issues'][number]> = [];
 
     for (const folder of folders) {
+      try {
+        collectionRoots.push(
+          ...(await discoverCollectionRoots(folder.uri, folder.uri.toString())),
+        );
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : 'Collection root scan failed.';
+        issues.push({
+          code: 'UNREADABLE',
+          message,
+          path: folder.uri.toString(),
+        });
+      }
+
       try {
         const found = await workspace.findFiles(
           new RelativePattern(folder, '**/*.api'),
@@ -74,8 +98,47 @@ export class VsCodeWorkspaceScanner implements WorkspaceScanner {
       }
     }
 
-    return { folders: descriptors, apiFiles, issues };
+    return { folders: descriptors, apiFiles, collectionRoots, issues };
   }
+}
+
+async function discoverCollectionRoots(
+  workspaceUri: Uri,
+  workspaceRootPath: string,
+): Promise<DiscoveredCollectionRoot[]> {
+  const collectionsUri = Uri.joinPath(workspaceUri, COLLECTIONS_DIRECTORY_NAME);
+  let entries: [string, FileType][];
+  try {
+    entries = await workspace.fs.readDirectory(collectionsUri);
+  } catch {
+    return [];
+  }
+
+  const roots: DiscoveredCollectionRoot[] = [];
+  for (const [name, type] of entries) {
+    if (type !== FileType.Directory || name.startsWith('.')) {
+      continue;
+    }
+    const rootUri = Uri.joinPath(collectionsUri, name);
+    const markerUri = Uri.joinPath(rootUri, COLLECTION_MARKER_FILENAME);
+    let markerPath: string | undefined;
+    let markerMtimeMs: number | undefined;
+    try {
+      const stat = await workspace.fs.stat(markerUri);
+      markerPath = markerUri.toString();
+      markerMtimeMs = stat.mtime;
+    } catch {
+      // Marker is optional — directory alone defines a native collection.
+    }
+    roots.push({
+      path: rootUri.toString(),
+      name,
+      workspaceRootPath,
+      relativePath: `${COLLECTIONS_DIRECTORY_NAME}/${name}`,
+      ...(markerPath !== undefined ? { markerPath, markerMtimeMs } : {}),
+    });
+  }
+  return roots;
 }
 
 /** Reads `.api` text through VS Code's filesystem provider. */

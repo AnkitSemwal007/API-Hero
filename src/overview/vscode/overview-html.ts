@@ -30,6 +30,8 @@ export const OverviewQuickAction = {
   ManageEnvironments: 'manageEnvironments',
   ManageAuthProfiles: 'manageAuthProfiles',
   FocusCollections: 'focusCollections',
+  RecentRequests: 'recentRequests',
+  OpenSettings: 'openSettings',
 } as const;
 
 export type OverviewQuickAction =
@@ -422,6 +424,38 @@ button.secondary:hover {
   color: var(--vscode-errorForeground, var(--vscode-foreground));
 }
 #error.visible { display: block; }
+.activity-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 2px;
+  background: var(--vscode-sideBar-background);
+}
+.activity-summary p { margin: 0; }
+.activity-summary .action { align-self: flex-start; }
+.tips {
+  list-style: none; margin: 0; padding: 0;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.tip {
+  margin: 0;
+  padding: 8px 10px;
+  border-left: 3px solid var(--vscode-focusBorder);
+  background: var(--vscode-sideBar-background);
+  color: var(--vscode-descriptionForeground);
+  font-size: .92em;
+  line-height: 1.4;
+}
+.tip strong { color: var(--vscode-foreground); font-weight: 600; }
+button.action.secondary-action {
+  background: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+}
+button.action.secondary-action:hover {
+  background: var(--vscode-button-secondaryHoverBackground);
+}
 `;
 
 const OVERVIEW_SCRIPT = `
@@ -481,11 +515,11 @@ const OVERVIEW_SCRIPT = `
     ]);
 
     const historySection = el('section', { className: 'panel' }, [
-      el('h2', { text: 'Recent runs' }),
+      el('h2', { text: 'Recent Requests' }),
       model.historyEmpty
         ? el('p', {
             className: 'empty',
-            text: 'No recent runs yet. Run a request from Collections or the editor to start building history.',
+            text: 'No recent requests yet. Run a request from Collections or the editor to start building history.',
           })
         : el(
             'ul',
@@ -516,10 +550,47 @@ const OVERVIEW_SCRIPT = `
               ]);
             }),
           ),
+      el('h2', { text: 'Recent Activity', style: 'margin-top:16px' }),
+      model.historyEmpty
+        ? el('p', {
+            className: 'empty',
+            text: 'No recent request activity yet.',
+          })
+        : el('div', { className: 'activity-summary' }, [
+            el('p', {
+              className: 'muted',
+              text:
+                model.history.length === 1
+                  ? '1 recent request shown above.'
+                  : model.history.length + ' recent requests shown above.',
+            }),
+            el('p', {
+              text:
+                'Last run: ' +
+                model.history[0].method +
+                ' · ' +
+                model.history[0].title +
+                ' · ' +
+                model.history[0].statusBadgeText +
+                ' · ' +
+                model.history[0].timestampLabel,
+            }),
+            el('button', {
+              type: 'button',
+              className: 'action secondary-action',
+              text: 'Open History',
+              onClick: function () {
+                vscode.postMessage({
+                  type: 'runAction',
+                  action: 'recentRequests',
+                });
+              },
+            }),
+          ]),
     ]);
 
     const collectionSection = el('section', { className: 'panel' }, [
-      el('h2', { text: 'Recent collections' }),
+      el('h2', { text: 'Recent Collections' }),
       !model.hasWorkspace
         ? el('p', {
             className: 'banner',
@@ -559,14 +630,35 @@ const OVERVIEW_SCRIPT = `
               ]);
             }),
           ),
-      el('h2', { text: 'Quick actions', style: 'margin-top:16px' }),
+      el('h2', { text: 'Quick Actions', style: 'margin-top:16px' }),
       el('div', { className: 'actions' }, [
-        actionButton('Create Request', 'createRequest'),
-        actionButton('Create Collection', 'createCollection'),
-        actionButton('Import OpenAPI', 'importOpenApi'),
-        actionButton('Manage Environments', 'manageEnvironments'),
-        actionButton('Manage Auth Profiles', 'manageAuthProfiles'),
-        actionButton('Focus Collections', 'focusCollections'),
+        actionButton('New Request', 'createRequest', false),
+        actionButton('New Collection', 'createCollection', false),
+        actionButton('Import OpenAPI', 'importOpenApi', true),
+        actionButton('Manage Environments', 'manageEnvironments', true),
+        actionButton('Manage Authentication', 'manageAuthProfiles', true),
+        actionButton('Recent Requests', 'recentRequests', true),
+        actionButton('Settings', 'openSettings', true),
+        actionButton('Focus Collections', 'focusCollections', true),
+      ]),
+      el('h2', { text: 'Tips', style: 'margin-top:16px' }),
+      el('ul', { className: 'tips' }, [
+        tip(
+          'Collections is home base',
+          'Create requests and collections from the Collections view toolbar — no Command Palette needed.',
+        ),
+        tip(
+          'Run from the Request Editor',
+          'Use Method, URL, Environment, Authentication, and Run in the top bar of the Request Editor.',
+        ),
+        tip(
+          'Environments without Settings JSON',
+          'Open Manage Environments to create, activate, and edit variables visually.',
+        ),
+        tip(
+          'Auth secrets stay protected',
+          'Manage Authentication stores secrets in VS Code Secret Storage — never in .api files.',
+        ),
       ]),
     ]);
 
@@ -574,10 +666,19 @@ const OVERVIEW_SCRIPT = `
     root.appendChild(el('div', { className: 'layout' }, [historySection, collectionSection]));
   }
 
-  function actionButton(label, action) {
+  function tip(title, body) {
+    const node = el('li', { className: 'tip' });
+    const strong = document.createElement('strong');
+    strong.textContent = title;
+    node.appendChild(strong);
+    node.appendChild(document.createTextNode(' — ' + body));
+    return node;
+  }
+
+  function actionButton(label, action, secondary) {
     return el('button', {
       type: 'button',
-      className: 'action',
+      className: secondary ? 'action secondary-action' : 'action',
       text: label,
       onClick: function () {
         vscode.postMessage({ type: 'runAction', action: action });

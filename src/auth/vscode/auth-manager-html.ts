@@ -5,6 +5,12 @@
  */
 
 import {
+  AUTHENTICATION_PRESENTATION_MASK,
+  BASIC_MISSING_VALIDATION_PREFIX,
+  BASIC_MISSING_VALIDATION_SUFFIX,
+  buildAuthenticationPresentationPreview,
+} from '../authentication-presentation-preview';
+import {
   AUTH_PROVIDER_IDS as CORE_AUTH_PROVIDER_IDS,
   isAuthenticationCommitProviderId,
   isValidAuthenticationProfileId,
@@ -186,6 +192,10 @@ export function renderAuthManagerHtml(nonce: string): string {
       <h1>Auth Profiles</h1>
       <button type="button" id="addProfile" class="primary" title="Add profile">Add</button>
     </div>
+    <label class="search-field">
+      <span class="sr-only">Search profiles</span>
+      <input id="profileSearch" type="search" placeholder="Search profiles" autocomplete="off" />
+    </label>
     <ul id="profileList" class="profile-list" role="listbox" aria-label="Authentication profiles"></ul>
   </aside>
   <main>
@@ -193,6 +203,7 @@ export function renderAuthManagerHtml(nonce: string): string {
       <div class="title-row">
         <input id="profileLabel" type="text" autocomplete="off" placeholder="Profile label" aria-label="Profile label" />
         <button type="button" id="setDefault" class="secondary">Set Default</button>
+        <button type="button" id="duplicateProfile" class="secondary">Duplicate</button>
         <button type="button" id="deleteProfile" class="danger">Delete</button>
       </div>
       <p id="defaultBadge" class="badge" hidden>Session default</p>
@@ -236,6 +247,13 @@ export function renderAuthManagerHtml(nonce: string): string {
           <span id="missingCtaText"></span>
           <button type="button" id="missingCtaButton" class="primary">Set secret</button>
         </p>
+      </section>
+      <section class="preview">
+        <div class="section-header">
+          <h2>Preview</h2>
+        </div>
+        <pre id="authPreview" class="preview-box" aria-live="polite">Select a profile to preview.</pre>
+        <p id="validationHint" class="hint" hidden></p>
       </section>
     </section>
     <p id="error" class="error" hidden></p>
@@ -589,6 +607,37 @@ button:disabled {
   opacity: .55;
   cursor: default;
 }
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}
+.search-field input {
+  width: 100%;
+  color: var(--vscode-input-foreground);
+  background: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
+  border-radius: 2px;
+  padding: 4px 8px;
+  font: inherit;
+}
+.preview { margin-top: 16px; }
+.preview-box {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--vscode-panel-border, var(--vscode-contrastBorder));
+  border-radius: 2px;
+  background: var(--vscode-textCodeBlock-background, var(--vscode-input-background));
+  font-family: var(--vscode-editor-font-family);
+  font-size: var(--vscode-editor-font-size);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
 @media (max-width: 720px) {
   #app { grid-template-columns: 1fr; }
   aside { border-right: none; border-bottom: 1px solid var(--vscode-panel-border, var(--vscode-contrastBorder)); }
@@ -596,8 +645,67 @@ button:disabled {
 }
 `;
 
+/** Secret field catalogs injected from {@link coreSecretFieldsForProvider}. */
+const AUTH_MANAGER_SECRET_META = {
+  none: coreSecretFieldsForProvider('none'),
+  bearer: coreSecretFieldsForProvider('bearer'),
+  basic: coreSecretFieldsForProvider('basic'),
+  apiKey: coreSecretFieldsForProvider('apiKey'),
+} as const;
+
+/** Static preview copy derived from the core helper so webview strings cannot drift. */
+const AUTH_MANAGER_PREVIEW_COPY = {
+  none: buildAuthenticationPresentationPreview({ providerId: 'none' }),
+  bearerReady: buildAuthenticationPresentationPreview({
+    providerId: 'bearer',
+    secretFields: [{ field: 'token', label: 'Token', status: 'set' }],
+  }),
+  bearerMissing: buildAuthenticationPresentationPreview({
+    providerId: 'bearer',
+    secretFields: [{ field: 'token', label: 'Token', status: 'missing' }],
+  }),
+  basicPreview: buildAuthenticationPresentationPreview({
+    providerId: 'basic',
+    secretFields: [
+      { field: 'username', label: 'Username', status: 'set' },
+      { field: 'password', label: 'Password', status: 'set' },
+    ],
+  }).preview,
+  basicMissingPrefix: BASIC_MISSING_VALIDATION_PREFIX,
+  basicMissingSuffix: BASIC_MISSING_VALIDATION_SUFFIX,
+  basicReadyValidation: buildAuthenticationPresentationPreview({
+    providerId: 'basic',
+    secretFields: [
+      { field: 'username', label: 'Username', status: 'set' },
+      { field: 'password', label: 'Password', status: 'set' },
+    ],
+  }).validation,
+  apiKeySecretMissing: buildAuthenticationPresentationPreview({
+    providerId: 'apiKey',
+    apiKeyName: 'X-API-Key',
+    apiKeyLocation: 'header',
+    secretFields: [{ field: 'value', label: 'API key value', status: 'missing' }],
+  }).validation,
+  apiKeyNameEmpty: buildAuthenticationPresentationPreview({
+    providerId: 'apiKey',
+    apiKeyName: '',
+    apiKeyLocation: 'header',
+    secretFields: [{ field: 'value', label: 'API key value', status: 'set' }],
+  }).validation,
+  apiKeyReady: buildAuthenticationPresentationPreview({
+    providerId: 'apiKey',
+    apiKeyName: 'X-API-Key',
+    apiKeyLocation: 'header',
+    secretFields: [{ field: 'value', label: 'API key value', status: 'set' }],
+  }).validation,
+  unknown: buildAuthenticationPresentationPreview({ providerId: 'oauth2' }),
+} as const;
+
 const MANAGER_SCRIPT = `
 const vscode = acquireVsCodeApi();
+const MASK = ${JSON.stringify(AUTHENTICATION_PRESENTATION_MASK)};
+const SECRET_META = ${JSON.stringify(AUTH_MANAGER_SECRET_META)};
+const PREVIEW_COPY = ${JSON.stringify(AUTH_MANAGER_PREVIEW_COPY)};
 
 /** @type {any} */
 let state = {
@@ -606,6 +714,7 @@ let state = {
   selectedId: undefined,
 };
 let dirty = false;
+let profileFilter = '';
 /** @type {string | undefined} */
 let originalSelectedId;
 
@@ -636,19 +745,7 @@ function setDirty(value) {
 }
 
 function secretMeta(providerId) {
-  if (providerId === 'basic') {
-    return [
-      { field: 'username', label: 'Username' },
-      { field: 'password', label: 'Password' },
-    ];
-  }
-  if (providerId === 'bearer') {
-    return [{ field: 'token', label: 'Token' }];
-  }
-  if (providerId === 'apiKey') {
-    return [{ field: 'value', label: 'API key value' }];
-  }
-  return [];
+  return SECRET_META[providerId] || [];
 }
 
 function allocateId(name) {
@@ -684,7 +781,10 @@ function syncSecretFields(profile) {
 function renderList() {
   const list = el('profileList');
   list.innerHTML = '';
+  const query = profileFilter.trim().toLowerCase();
   for (const profile of state.profiles) {
+    const haystack = ((profile.label || '') + ' ' + (profile.id || '') + ' ' + (profile.providerId || '')).toLowerCase();
+    if (query && !haystack.includes(query)) continue;
     const item = document.createElement('button');
     item.type = 'button';
     item.className = 'profile-item' + (state.selectedId === profile.id ? ' active' : '');
@@ -706,6 +806,40 @@ function renderList() {
     });
     list.appendChild(item);
   }
+}
+
+/** Thin adapter: static copy from core; dynamic apiKey name/location use injected MASK. */
+function buildAuthPreview(profile) {
+  const missing = (profile.secretFields || []).filter((field) => field.status === 'missing');
+  if (profile.providerId === 'none') {
+    return PREVIEW_COPY.none;
+  }
+  if (profile.providerId === 'bearer') {
+    return missing.length > 0 ? PREVIEW_COPY.bearerMissing : PREVIEW_COPY.bearerReady;
+  }
+  if (profile.providerId === 'basic') {
+    return {
+      preview: PREVIEW_COPY.basicPreview,
+      validation: missing.length > 0
+        ? PREVIEW_COPY.basicMissingPrefix + missing.map((field) => field.label).join(', ') + PREVIEW_COPY.basicMissingSuffix
+        : PREVIEW_COPY.basicReadyValidation,
+    };
+  }
+  if (profile.providerId === 'apiKey') {
+    const name = (profile.apiKeyName || 'X-API-Key').trim() || 'X-API-Key';
+    const location = profile.apiKeyLocation === 'query' ? 'query' : 'header';
+    return {
+      preview: location === 'query'
+        ? 'Query: ' + name + '=' + MASK
+        : name + ': ' + MASK,
+      validation: missing.length > 0
+        ? PREVIEW_COPY.apiKeySecretMissing
+        : (!profile.apiKeyName || !profile.apiKeyName.trim()
+          ? PREVIEW_COPY.apiKeyNameEmpty
+          : PREVIEW_COPY.apiKeyReady),
+    };
+  }
+  return PREVIEW_COPY.unknown;
 }
 
 function renderSecrets(profile) {
@@ -795,10 +929,13 @@ function renderEditor() {
   el('emptyHint').hidden = state.profiles.length > 0;
   el('setDefault').disabled = !hasSelection;
   el('deleteProfile').disabled = !hasSelection;
+  el('duplicateProfile').disabled = !hasSelection;
   el('profileLabel').disabled = !hasSelection;
   if (!profile) {
     el('defaultBadge').hidden = true;
     el('missingCta').hidden = true;
+    el('authPreview').textContent = 'Select a profile to preview.';
+    el('validationHint').hidden = true;
     return;
   }
   originalSelectedId = profile.id;
@@ -811,6 +948,15 @@ function renderEditor() {
   el('apiKeyLocation').value = profile.apiKeyLocation || 'header';
   el('defaultBadge').hidden = state.defaultProfileId !== profile.id;
   renderSecrets(profile);
+  const preview = buildAuthPreview(profile);
+  el('authPreview').textContent = preview.preview;
+  const hint = el('validationHint');
+  if (preview.validation) {
+    hint.hidden = false;
+    hint.textContent = preview.validation;
+  } else {
+    hint.hidden = true;
+  }
 }
 
 function render() {
@@ -833,6 +979,35 @@ el('addProfile').addEventListener('click', () => {
     secretFields: secretMeta('bearer').map((entry) => ({
       field: entry.field,
       label: entry.label,
+      status: 'missing',
+    })),
+  };
+  state = {
+    ...state,
+    profiles: state.profiles.concat([profile]),
+    selectedId: id,
+  };
+  setDirty(true);
+  render();
+});
+
+el('profileSearch').addEventListener('input', () => {
+  profileFilter = el('profileSearch').value;
+  renderList();
+});
+
+el('duplicateProfile').addEventListener('click', () => {
+  readEditorIntoState();
+  const source = selectedProfile();
+  if (!source) return;
+  const label = (source.label || source.id) + ' Copy';
+  const id = allocateId(label);
+  const profile = {
+    ...source,
+    id,
+    label,
+    secretFields: (source.secretFields || []).map((field) => ({
+      ...field,
       status: 'missing',
     })),
   };
@@ -894,6 +1069,9 @@ el('save').addEventListener('click', () => {
         };
         render();
       }
+    } else if (id === 'apiKeyName' || id === 'apiKeyLocation') {
+      readEditorIntoState();
+      render();
     }
     setDirty(true);
   });

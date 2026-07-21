@@ -51,3 +51,15 @@ export {
   validateAuthenticationProfiles,
   validateAuthenticationProfilesForCommit,
 } from './authentication-profile-validation';
+export type {
+  AuthenticationPresentationPreview,
+  AuthenticationPresentationPreviewInput,
+  AuthenticationPresentationSecretField,
+} from './authentication-presentation-preview';
+export {
+  AUTHENTICATION_PRESENTATION_MASK,
+  BASIC_MISSING_VALIDATION_PREFIX,
+  BASIC_MISSING_VALIDATION_SUFFIX,
+  buildAuthenticationPresentationPreview,
+  formatBasicMissingValidation,
+} from './authentication-presentation-preview';

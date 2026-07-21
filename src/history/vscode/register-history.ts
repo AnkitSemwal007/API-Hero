@@ -168,6 +168,13 @@ export function registerHistory(
     commands.registerCommand(COMMAND_IDS.focusHistory, async () => {
       await commands.executeCommand(`${VIEW_IDS.history}.focus`);
     }),
+    /**
+     * Intentional IA alias for menus/Overview Quick Actions.
+     * Same behavior as focusHistory — not a separate Activity Bar view.
+     */
+    commands.registerCommand(COMMAND_IDS.recentRequests, async () => {
+      await commands.executeCommand(COMMAND_IDS.focusHistory);
+    }),
     commands.registerCommand(
       COMMAND_IDS.openHistoryEntry,
       async (target?: unknown) => {

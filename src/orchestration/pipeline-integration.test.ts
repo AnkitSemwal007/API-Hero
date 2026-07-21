@@ -239,6 +239,7 @@ test('pipeline integration: collection-runner single item through orchestrator p
     id: collectionId,
     rootPath: 'file:///ws',
     workspaceRootPath: 'file:///ws',
+    kind: 'legacy',
     metadata: {
       name: 'ws',
       workspacePath: 'file:///ws',

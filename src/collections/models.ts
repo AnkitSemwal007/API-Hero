@@ -16,6 +16,14 @@ export interface DisplayMetadata {
 }
 
 /**
+ * How a collection was discovered on disk.
+ *
+ * - `native` — directory under `Collections/<Name>/` (marker optional)
+ * - `legacy` — synthetic catch-all for `.api` files outside any collection root
+ */
+export type CollectionKind = 'native' | 'legacy';
+
+/**
  * Extensible collection summary. Unknown future keys belong in {@link ExtensionBag}
  * bags rather than widening required fields.
  */
@@ -24,6 +32,8 @@ export interface CollectionMetadata {
   readonly description?: string;
   /** Absolute filesystem or URI path of the collection root. */
   readonly workspacePath: string;
+  /** Optional sibling order among `Collections/*` from the marker. */
+  readonly order?: number;
   readonly lastModified?: number;
   readonly requestCount: number;
   readonly folderCount: number;
@@ -77,13 +87,21 @@ export interface Folder {
   readonly extensions?: ExtensionBag;
 }
 
-/** One collection: currently 1:1 with a workspace folder root. */
+/**
+ * One collection under a workspace folder.
+ *
+ * Native collections are rooted at `Collections/<Name>/`. Legacy collections
+ * use the workspace folder as {@link rootPath} for relative-path math but a
+ * distinct id (`legacyCollectionIdForWorkspace`) so they never collide with a
+ * native root.
+ */
 export interface Collection {
   readonly id: CollectionIdentifier;
-  /** Absolute URI/path of the collection root (workspace folder). */
+  /** Absolute URI/path of the collection root. */
   readonly rootPath: string;
   /** Owning workspace folder absolute URI/path. */
   readonly workspaceRootPath: string;
+  readonly kind: CollectionKind;
   readonly metadata: CollectionMetadata;
   readonly display: DisplayMetadata;
   readonly rootFolderIds: readonly string[];
@@ -132,14 +150,86 @@ export function freezeWorkspaceCollections(
   return deepFreeze(cloneDetached(value));
 }
 
-/** Builds a stable collection id from the collection root path. */
+/**
+ * Builds a stable collection id from the collection root path.
+ *
+ * Native collections use the absolute path of `Collections/<Name>/`.
+ * Prefer {@link legacyCollectionIdForWorkspace} for Legacy synthetic roots so
+ * the id stays distinct from any native collection path key.
+ */
 export function collectionIdForRoot(rootPath: string): CollectionIdentifier {
   return `collection:${normalizePathKey(rootPath)}`;
+}
+
+/**
+ * Builds a stable id for the Legacy synthetic collection of a workspace folder.
+ *
+ * Path-key note: this is **not** `collectionIdForRoot(workspaceRootPath)`.
+ * Request identity (`requestIdFor`) remains file-path + index and is unchanged.
+ */
+export function legacyCollectionIdForWorkspace(
+  workspaceRootPath: string,
+): CollectionIdentifier {
+  return `collection:legacy:${normalizePathKey(workspaceRootPath)}`;
 }
 
 /** Builds a stable workspace-root id. */
 export function workspaceRootIdForPath(rootPath: string): string {
   return `workspace:${normalizePathKey(rootPath)}`;
+}
+
+/**
+ * Joins an absolute path/URI base with relative segments using `/`.
+ * Preserves URI schemes (does not introduce `path` / Node dependencies).
+ */
+export function joinPathKey(base: string, ...segments: string[]): string {
+  const normalizedBase = base.replace(/\/+$/, '');
+  const tail = segments
+    .flatMap((segment) => segment.replace(/\\/g, '/').split('/'))
+    .filter(
+      (segment) =>
+        segment.length > 0 && segment !== '.' && segment !== '..',
+    )
+    .join('/');
+  return tail.length === 0 ? normalizedBase : `${normalizedBase}/${tail}`;
+}
+
+/**
+ * Returns true when `relativePath` is the collection root or a descendant.
+ * Uses `/`-normalized relative paths (workspace- or collection-relative).
+ */
+export function isUnderRelativeRoot(
+  relativePath: string,
+  collectionRelativeRoot: string,
+): boolean {
+  const file = normalizeRelativePath(relativePath);
+  const root = normalizeRelativePath(collectionRelativeRoot);
+  if (root.length === 0) {
+    return true;
+  }
+  return file === root || file.startsWith(`${root}/`);
+}
+
+/**
+ * Strips a collection's workspace-relative root prefix from a file path,
+ * yielding a path relative to the collection root.
+ */
+export function relativePathUnderCollection(
+  fileRelativePath: string,
+  collectionRelativeRoot: string,
+): string {
+  const file = normalizeRelativePath(fileRelativePath);
+  const root = normalizeRelativePath(collectionRelativeRoot);
+  if (root.length === 0) {
+    return file;
+  }
+  if (file === root) {
+    return '';
+  }
+  if (file.startsWith(`${root}/`)) {
+    return file.slice(root.length + 1);
+  }
+  return file;
 }
 
 /** Builds a stable folder id under a collection. */
@@ -160,10 +250,19 @@ export function normalizePathKey(path: string): string {
   return path.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
 }
 
-/** Normalizes relative folder paths to `/`-separated form without leading `/`. */
+/**
+ * Normalizes relative folder paths to `/`-separated form without leading `/`.
+ * Strips `.` and `..` segments so paths cannot escape a collection root.
+ */
 export function normalizeRelativePath(relativePath: string): string {
   return relativePath
     .replace(/\\/g, '/')
     .replace(/^\/+/, '')
-    .replace(/\/+$/, '');
+    .replace(/\/+$/, '')
+    .split('/')
+    .filter(
+      (segment) =>
+        segment.length > 0 && segment !== '.' && segment !== '..',
+    )
+    .join('/');
 }

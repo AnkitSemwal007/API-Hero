@@ -12,5 +12,5 @@ export type { ConfigurationKey } from './configuration';
 export { EXTENSION_ID, EXTENSION_NAME } from './extension';
 export { SECRET_STORAGE_KEYS, STORAGE_KEYS } from './storage';
 export type { SecretStorageKey, StorageKey } from './storage';
-export { VIEW_IDS } from './views';
+export { REQUEST_EDITOR_VIEW_TYPE, VIEW_IDS } from './views';
 export type { ViewId } from './views';

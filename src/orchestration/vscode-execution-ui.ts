@@ -26,7 +26,7 @@ export class VsCodeExecutionProgressRunner implements ExecutionProgressRunner {
     return Promise.resolve(window.withProgress(
       {
         location: ProgressLocation.Notification,
-        title: 'API Runner',
+        title: 'API Hero',
         cancellable: true,
       },
       async (progress, token) => {
@@ -66,7 +66,7 @@ implements ExecutionStatusPresenter {
 
   public constructor() {
     this.item = window.createStatusBarItem(StatusBarAlignment.Left, 100);
-    this.item.name = 'API Runner Request Status';
+    this.item.name = 'API Hero Request Status';
   }
 
   public update(status: ExecutionStatus): void {
@@ -80,23 +80,23 @@ implements ExecutionStatusPresenter {
         this.item.hide();
         return;
       case 'running':
-        this.item.text = '$(sync~spin) API Runner: Running…';
-        this.item.tooltip = 'API Runner is executing the selected request.';
+        this.item.text = '$(sync~spin) API Hero: Running…';
+        this.item.tooltip = 'API Hero is executing the selected request.';
         this.item.show();
         return;
       case 'success':
-        this.item.text = `$(check) API Runner: Success (${status.statusCode})`;
+        this.item.text = `$(check) API Hero: Success (${status.statusCode})`;
         this.item.tooltip = `Request completed with HTTP status ${status.statusCode}.`;
         break;
       case 'failed':
-        this.item.text = '$(error) API Runner: Failed';
+        this.item.text = '$(error) API Hero: Failed';
         this.item.tooltip = 'The selected request failed.';
         this.item.backgroundColor = new ThemeColor(
           'statusBarItem.errorBackground',
         );
         break;
       case 'cancelled':
-        this.item.text = '$(circle-slash) API Runner: Cancelled';
+        this.item.text = '$(circle-slash) API Hero: Cancelled';
         this.item.tooltip = 'The selected request was cancelled.';
         break;
     }

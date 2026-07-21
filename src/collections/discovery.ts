@@ -1,16 +1,33 @@
 import {
+  COLLECTIONS_DIRECTORY_NAME,
+  COLLECTION_MARKER_FILENAME,
+  LEGACY_COLLECTION_LABEL,
+} from './constants';
+import {
   ApiFileParseCache,
   type ApiFileParseResult,
 } from './api-file-parse-cache';
 import {
+  MARKER_ROOT_ORDER_KEY,
+  normalizeOrderMap,
+  orderIdsByNames,
+  parseCollectionMarker,
+  type CollectionMarkerDocument,
+} from './marker';
+import {
   collectionIdForRoot,
   folderIdFor,
   freezeWorkspaceCollections,
+  isUnderRelativeRoot,
+  joinPathKey,
+  legacyCollectionIdForWorkspace,
   normalizeRelativePath,
+  relativePathUnderCollection,
   requestIdFor,
   workspaceRootIdForPath,
   type Collection,
   type CollectionDiscoveryIssue,
+  type CollectionKind,
   type Folder,
   type RequestReference,
   type WorkspaceCollections,
@@ -20,8 +37,12 @@ import type { CollectionRepository } from './repository';
 import type {
   ApiFileReader,
   DiscoveredApiFile,
+  DiscoveredCollectionRoot,
   WorkspaceScanner,
 } from './scanner';
+
+export type { CollectionMarkerDocument } from './marker';
+export { parseCollectionMarker } from './marker';
 
 export interface CollectionDiscoveryOptions {
   readonly scanner: WorkspaceScanner;
@@ -38,20 +59,26 @@ export interface CollectionDiscoveryOptions {
  * ## Discovery rule
  *
  * 1. Each workspace folder is one {@link WorkspaceRoot}.
- * 2. Each workspace folder is currently one {@link Collection} rooted at that
- *    folder (1:1). Future collection markers can add siblings without changing
- *    identity helpers.
- * 3. Directories that contain `.api` files (directly) appear as {@link Folder}
- *    nodes under the collection; nested paths create parent folders as needed.
- * 4. Each `.api` file is a request source — not a tree node. Parsed requests
+ * 2. Each immediate subdirectory of `Collections/` is a **native**
+ *    {@link Collection} (marker `api-hero.collection.json` optional).
+ * 3. `.api` files not under any native collection root join one **Legacy**
+ *    synthetic collection per workspace folder (omitted when empty).
+ * 4. Directories that contain `.api` files (directly) appear as {@link Folder}
+ *    nodes under the owning collection; nested paths create parents as needed.
+ * 5. Each `.api` file is a request source — not a tree node. Parsed requests
  *    become {@link RequestReference} children of the containing folder (or the
  *    collection root when the file sits at the collection root).
- * 5. Request labels and ranges come from `parseApiDocument` via
+ * 6. Request labels and ranges come from `parseApiDocument` via
  *    {@link ApiFileParseCache} keyed by path + mtime.
+ *
+ * Refresh is single-flight with a trailing re-run when invalidate/refresh
+ * arrives while a scan is in progress (avoids out-of-order last-write-wins).
  */
 export class CollectionDiscoveryService {
   private readonly parseCache: ApiFileParseCache;
   private readonly listeners = new Set<() => void>();
+  private refreshInFlight: Promise<WorkspaceCollections> | undefined;
+  private refreshQueued = false;
 
   public constructor(private readonly options: CollectionDiscoveryOptions) {
     this.parseCache = options.parseCache ?? new ApiFileParseCache();
@@ -70,8 +97,47 @@ export class CollectionDiscoveryService {
     };
   }
 
-  /** Full rescan of workspace folders and `.api` files. */
+  /** Full rescan of workspace folders, collection roots, and `.api` files. */
   public async refresh(): Promise<WorkspaceCollections> {
+    this.refreshQueued = true;
+    if (this.refreshInFlight !== undefined) {
+      return this.refreshInFlight.then((result) =>
+        this.refreshQueued ? this.refresh() : result,
+      );
+    }
+
+    this.refreshInFlight = this.drainRefreshQueue();
+    try {
+      return await this.refreshInFlight;
+    } finally {
+      this.refreshInFlight = undefined;
+    }
+  }
+
+  /**
+   * Invalidates cached parse results for a file and refreshes the aggregate.
+   * Missing paths still trigger a refresh so deletions disappear from the tree.
+   */
+  public async invalidateFile(path: string): Promise<WorkspaceCollections> {
+    this.parseCache.invalidate(path);
+    return this.refresh();
+  }
+
+  public async invalidateAll(): Promise<WorkspaceCollections> {
+    this.parseCache.invalidateAll();
+    return this.refresh();
+  }
+
+  private async drainRefreshQueue(): Promise<WorkspaceCollections> {
+    let latest!: WorkspaceCollections;
+    do {
+      this.refreshQueued = false;
+      latest = await this.performRefresh();
+    } while (this.refreshQueued);
+    return latest;
+  }
+
+  private async performRefresh(): Promise<WorkspaceCollections> {
     const scanned = await Promise.resolve(this.options.scanner.scan());
     const issues: CollectionDiscoveryIssue[] = scanned.issues.map((issue) => ({
       code:
@@ -104,18 +170,78 @@ export class CollectionDiscoveryService {
 
     const collections: Record<string, Collection> = {};
     const workspaceRoots: WorkspaceRoot[] = [];
+    const collectionRoots = scanned.collectionRoots ?? [];
 
     for (const folder of scanned.folders) {
       const files = scanned.apiFiles.filter(
         (file) => file.workspaceRootPath === folder.path,
       );
-      const collection = await this.buildCollection(folder.path, folder.name, files, issues);
-      collections[collection.id] = collection;
+      const rootsForFolder = collectionRoots.filter(
+        (root) => root.workspaceRootPath === folder.path,
+      );
+      const collectionIds: string[] = [];
+
+      const claimed = new Set<string>();
+      const nativeBuilt: Collection[] = [];
+
+      for (const root of rootsForFolder) {
+        const marker = await this.readMarker(root, issues);
+        const ownedFiles = files.filter((file) =>
+          isUnderRelativeRoot(file.relativePath, root.relativePath),
+        );
+        for (const file of ownedFiles) {
+          claimed.add(file.path);
+        }
+        const relativeFiles = ownedFiles.map((file) => ({
+          ...file,
+          relativePath: relativePathUnderCollection(
+            file.relativePath,
+            root.relativePath,
+          ),
+        }));
+        const collection = await this.buildCollection({
+          collectionId: collectionIdForRoot(root.path),
+          rootPath: root.path,
+          workspaceRootPath: folder.path,
+          kind: 'native',
+          name: marker?.name?.trim() || root.name,
+          description: marker?.description,
+          order: marker?.order,
+          folderOrder: marker?.folderOrder,
+          requestOrder: marker?.requestOrder,
+          files: relativeFiles,
+          issues,
+        });
+        nativeBuilt.push(collection);
+      }
+
+      nativeBuilt.sort(compareCollections);
+      for (const collection of nativeBuilt) {
+        collections[collection.id] = collection;
+        collectionIds.push(collection.id);
+      }
+
+      const legacyFiles = files.filter((file) => !claimed.has(file.path));
+      if (legacyFiles.length > 0) {
+        const legacy = await this.buildCollection({
+          collectionId: legacyCollectionIdForWorkspace(folder.path),
+          rootPath: folder.path,
+          workspaceRootPath: folder.path,
+          kind: 'legacy',
+          name: LEGACY_COLLECTION_LABEL,
+          description: `Files outside ${COLLECTIONS_DIRECTORY_NAME}/`,
+          files: legacyFiles,
+          issues,
+        });
+        collections[legacy.id] = legacy;
+        collectionIds.push(legacy.id);
+      }
+
       workspaceRoots.push({
         id: workspaceRootIdForPath(folder.path),
         path: folder.path,
         display: { label: folder.name },
-        collectionIds: [collection.id],
+        collectionIds,
       });
     }
 
@@ -130,32 +256,88 @@ export class CollectionDiscoveryService {
     return aggregate;
   }
 
-  /**
-   * Invalidates cached parse results for a file and refreshes the aggregate.
-   * Missing paths still trigger a refresh so deletions disappear from the tree.
-   */
-  public async invalidateFile(path: string): Promise<WorkspaceCollections> {
-    this.parseCache.invalidate(path);
-    return this.refresh();
-  }
-
-  public async invalidateAll(): Promise<WorkspaceCollections> {
-    this.parseCache.invalidateAll();
-    return this.refresh();
-  }
-
-  private async buildCollection(
-    rootPath: string,
-    name: string,
-    files: readonly DiscoveredApiFile[],
+  private async readMarker(
+    root: DiscoveredCollectionRoot,
     issues: CollectionDiscoveryIssue[],
-  ): Promise<Collection> {
-    const collectionId = collectionIdForRoot(rootPath);
+  ): Promise<CollectionMarkerDocument | undefined> {
+    if (root.markerPath === undefined) {
+      return undefined;
+    }
+    try {
+      const text = await Promise.resolve(
+        this.options.reader.readText(root.markerPath),
+      );
+      const parsed = parseCollectionMarker(text);
+      if (parsed === undefined) {
+        issues.push({
+          code: 'INVALID_STRUCTURE',
+          message: `Invalid ${COLLECTION_MARKER_FILENAME} (expected a JSON object).`,
+          path: root.markerPath,
+        });
+      }
+      return parsed;
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Unable to read collection marker.';
+      issues.push({
+        code: 'UNREADABLE_FILE',
+        message,
+        path: root.markerPath,
+      });
+      return undefined;
+    }
+  }
+
+  private async buildCollection(input: {
+    readonly collectionId: string;
+    readonly rootPath: string;
+    readonly workspaceRootPath: string;
+    readonly kind: CollectionKind;
+    readonly name: string;
+    readonly description?: string;
+    readonly order?: number;
+    readonly folderOrder?: CollectionMarkerDocument['folderOrder'];
+    readonly requestOrder?: CollectionMarkerDocument['requestOrder'];
+    readonly files: readonly DiscoveredApiFile[];
+    readonly issues: CollectionDiscoveryIssue[];
+  }): Promise<Collection> {
+    const {
+      collectionId,
+      rootPath,
+      workspaceRootPath,
+      kind,
+      name,
+      description,
+      order,
+      folderOrder,
+      requestOrder,
+      files,
+      issues,
+    } = input;
     const folders: Record<string, Folder> = {};
     const requests: Record<string, RequestReference> = {};
     const rootFolderIds = new Set<string>();
     const rootRequestIds: string[] = [];
     let lastModified: number | undefined;
+
+    const folderOrderMap = normalizeOrderMap(folderOrder);
+    const requestOrderMap = normalizeOrderMap(requestOrder);
+
+    // Materialize empty folders declared in the marker (UI-created folders).
+    for (const [parentKey, names] of Object.entries(folderOrderMap)) {
+      for (const folderName of names) {
+        const relative =
+          parentKey === MARKER_ROOT_ORDER_KEY
+            ? folderName
+            : `${parentKey}/${folderName}`;
+        this.ensureFolderChain(
+          collectionId,
+          relative,
+          folders,
+          rootFolderIds,
+        );
+      }
+    }
 
     for (const file of files) {
       if (file.mtimeMs !== undefined) {
@@ -231,14 +413,23 @@ export class CollectionDiscoveryService {
       }
     }
 
-    sortIds(rootRequestIds, requests);
+    const sortedRootRequests = orderRequestIds(
+      rootRequestIds,
+      requests,
+      requestOrderMap[MARKER_ROOT_ORDER_KEY],
+    );
+
     for (const folder of Object.values(folders)) {
-      const sortedRequests = [...folder.requestIds];
-      sortIds(sortedRequests, requests);
-      const sortedFolders = [...folder.folderIds].sort((left, right) =>
-        (folders[left]?.display.label ?? left).localeCompare(
-          folders[right]?.display.label ?? right,
-        ),
+      const parentKey = normalizeRelativePath(folder.relativePath);
+      const sortedRequests = orderRequestIds(
+        folder.requestIds,
+        requests,
+        requestOrderMap[parentKey],
+      );
+      const sortedFolders = orderIdsByNames(
+        folder.folderIds,
+        (id) => folders[id]?.display.label ?? id,
+        folderOrderMap[parentKey],
       );
       folders[folder.id] = {
         ...folder,
@@ -247,29 +438,32 @@ export class CollectionDiscoveryService {
       };
     }
 
-    const sortedRootFolders = [...rootFolderIds].sort((left, right) =>
-      (folders[left]?.display.label ?? left).localeCompare(
-        folders[right]?.display.label ?? right,
-      ),
+    const sortedRootFolders = orderIdsByNames(
+      [...rootFolderIds],
+      (id) => folders[id]?.display.label ?? id,
+      folderOrderMap[MARKER_ROOT_ORDER_KEY],
     );
 
     return {
       id: collectionId,
       rootPath,
-      workspaceRootPath: rootPath,
+      workspaceRootPath,
+      kind,
       metadata: {
         name,
+        ...(description !== undefined ? { description } : {}),
         workspacePath: rootPath,
+        ...(order !== undefined ? { order } : {}),
         lastModified,
         requestCount: Object.keys(requests).length,
         folderCount: Object.keys(folders).length,
       },
       display: {
         label: name,
-        description: rootPath,
+        description: description ?? rootPath,
       },
       rootFolderIds: sortedRootFolders,
-      rootRequestIds,
+      rootRequestIds: sortedRootRequests,
       folders,
       requests,
     };
@@ -325,6 +519,29 @@ export class CollectionDiscoveryService {
   }
 }
 
+/**
+ * Builds a workspace-relative `Collections/<Name>` path for a collection name.
+ * Pure helper for tests and mutation.
+ */
+export function collectionRelativeRootForName(collectionName: string): string {
+  return joinPathKey(COLLECTIONS_DIRECTORY_NAME, collectionName);
+}
+
+function compareCollections(left: Collection, right: Collection): number {
+  const leftOrder = left.metadata.order;
+  const rightOrder = right.metadata.order;
+  if (leftOrder !== undefined && rightOrder !== undefined && leftOrder !== rightOrder) {
+    return leftOrder - rightOrder;
+  }
+  if (leftOrder !== undefined && rightOrder === undefined) {
+    return -1;
+  }
+  if (leftOrder === undefined && rightOrder !== undefined) {
+    return 1;
+  }
+  return left.display.label.localeCompare(right.display.label);
+}
+
 function parentDirectory(relativeFilePath: string): string {
   const normalized = normalizeRelativePath(relativeFilePath);
   const index = normalized.lastIndexOf('/');
@@ -334,11 +551,16 @@ function parentDirectory(relativeFilePath: string): string {
   return normalized.slice(0, index);
 }
 
-function sortIds(
-  ids: string[],
+/**
+ * Orders request ids by marker file-name lists, then locale path + index.
+ * Multi-request `.api` files stay grouped; index order within a file is kept.
+ */
+function orderRequestIds(
+  ids: readonly string[],
   requests: Readonly<Record<string, RequestReference>>,
-): void {
-  ids.sort((left, right) => {
+  orderedFileNames: readonly string[] | undefined,
+): string[] {
+  const byPathThenIndex = (left: string, right: string): number => {
     const a = requests[left];
     const b = requests[right];
     if (a === undefined || b === undefined) {
@@ -349,5 +571,44 @@ function sortIds(
       return pathOrder;
     }
     return a.requestIndex - b.requestIndex;
-  });
+  };
+
+  const sorted = [...ids].sort(byPathThenIndex);
+  if (orderedFileNames === undefined || orderedFileNames.length === 0) {
+    return sorted;
+  }
+
+  const groups = new Map<string, string[]>();
+  for (const id of sorted) {
+    const request = requests[id];
+    const base = fileBasename(request?.filePath ?? id);
+    const group = groups.get(base);
+    if (group === undefined) {
+      groups.set(base, [id]);
+    } else {
+      group.push(id);
+    }
+  }
+
+  const result: string[] = [];
+  const used = new Set<string>();
+  for (const name of orderedFileNames) {
+    const group = groups.get(name);
+    if (group !== undefined && !used.has(name)) {
+      result.push(...group);
+      used.add(name);
+    }
+  }
+  for (const [name, group] of groups) {
+    if (!used.has(name)) {
+      result.push(...group);
+    }
+  }
+  return result;
+}
+
+function fileBasename(filePath: string): string {
+  const normalized = filePath.replace(/\\/g, '/');
+  const index = normalized.lastIndexOf('/');
+  return index < 0 ? normalized : normalized.slice(index + 1);
 }

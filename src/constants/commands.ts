@@ -46,6 +46,9 @@ export const COMMAND_IDS = {
   openWorkspace: 'apiRunner.openWorkspace',
   openRequestEditor: 'apiRunner.openRequestEditor',
   openOverview: 'apiRunner.openOverview',
+  openSettings: 'apiRunner.openSettings',
+  /** Stable IA alias: focuses History (same as focusHistory), not a separate view. */
+  recentRequests: 'apiRunner.recentRequests',
 } as const;
 
 /** A command identifier contributed by API Hero. */

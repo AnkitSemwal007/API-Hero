@@ -174,7 +174,8 @@ in competing unused modules:
 - AI-assisted features
 - Placeholder commands still contributed but not implemented:
   `apiRunner.runFile`, `apiRunner.login`, `apiRunner.logout`
-  (thin stubs only; no unused service scaffolding)
+  (thin stubs show an information message that the feature is not
+  available in this release; no unused service scaffolding)
 
 Collection Runner (sequential batch execution via the orchestrator) is
 implemented — see [collection-runner.md](./collection-runner.md). Request History

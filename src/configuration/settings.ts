@@ -1,4 +1,4 @@
-/** Log severities accepted by API Runner configuration. */
+/** Log severities accepted by API Hero configuration. */
 export type LogLevel = 'debug' | 'info' | 'warning' | 'error';
 
 /** Strongly typed extension settings consumed by core services. */

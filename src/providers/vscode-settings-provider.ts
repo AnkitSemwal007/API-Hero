@@ -58,7 +58,7 @@ export class VsCodeSettingsProvider implements SettingsProvider {
     };
   }
 
-  /** Notifies a listener when API Runner configuration changes. */
+  /** Notifies a listener when API Hero configuration changes. */
   public onDidChange(
     listener: (settings: ExtensionSettings) => void,
   ): Disposable {
