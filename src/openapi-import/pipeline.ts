@@ -50,6 +50,11 @@ export interface ImportPipelineOptions {
   readonly cancellation?: ImportCancellation;
   readonly onProgress?: (event: ImportProgressEvent) => void;
   readonly writer: WorkspaceFileWriter;
+  /**
+   * When true, stop after artifact generation (no filesystem writes, no
+   * settings patch). Used by the import wizard preview step.
+   */
+  readonly skipWrite?: boolean;
   /** When set, only this provider is used; otherwise auto-detect. */
   readonly provider?: SpecificationImportProvider;
   readonly registry?: SpecificationImportProviderRegistry;
@@ -186,6 +191,32 @@ export async function runImportPipeline(
     return {
       summary: cancelledSummary(options.targetRoot, diagnostics, artifacts),
       artifacts,
+    };
+  }
+
+  if (options.skipWrite === true) {
+    const variableCount = artifacts.environments.reduce(
+      (sum, environment) => sum + environment.variables.length,
+      0,
+    );
+    report('completed', 'Preview ready');
+    return {
+      artifacts,
+      summary: {
+        apiName: artifacts.apiName,
+        apiVersion: artifacts.apiVersion,
+        openapiVersion: artifacts.openapiVersion,
+        targetDirectory: options.targetRoot,
+        folderCount: artifacts.folderCount,
+        requestCount: artifacts.requestCount,
+        variableCount,
+        authProfileCount: artifacts.authProfiles.length,
+        environmentCount: artifacts.environments.length,
+        writtenFiles: [],
+        diagnostics: maskDiagnostics(diagnostics),
+        cancelled: false,
+        success: true,
+      },
     };
   }
 

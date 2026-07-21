@@ -17,7 +17,7 @@ export interface WorkspaceFileWriter {
 
 export interface WriteArtifactsOptions {
   readonly targetRoot: string;
-  /** Directory under targetRoot, e.g. `imported/petstore`. */
+  /** Directory under targetRoot, e.g. `Collections/petstore`. */
   readonly outputDirectoryName: string;
   readonly files: readonly GeneratedApiFile[];
   readonly writer: WorkspaceFileWriter;

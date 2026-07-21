@@ -17,6 +17,7 @@ export const UNIT_TEST_GLOBS = Object.freeze([
   'dist/history/vscode/*.test.js',
   'dist/language-support/core/*.test.js',
   'dist/openapi-import/*.test.js',
+  'dist/openapi-import/vscode/*.test.js',
   'dist/parser/ast/*.test.js',
   'dist/parser/tokenizer/*.test.js',
   'dist/parser/lexer/*.test.js',
