@@ -45,6 +45,7 @@ export const COMMAND_IDS = {
   moveRequest: 'apiRunner.moveRequest',
   openWorkspace: 'apiRunner.openWorkspace',
   openRequestEditor: 'apiRunner.openRequestEditor',
+  openOverview: 'apiRunner.openOverview',
 } as const;
 
 /** A command identifier contributed by API Hero. */
