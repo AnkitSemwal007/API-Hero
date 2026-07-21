@@ -1,14 +1,19 @@
 /**
  * Generates a single `.api` request source string from an OpenAPI operation.
  *
- * Layout (hand-written feel):
- * - `#` comments for operationId / summary / response metadata
- * - `@name`, `@description`, optional `@auth`
- * - METHOD {{baseUrl}}/path/{{pathParam}}
- * - headers and query as realistic lines
- * - body from examples or schema-derived JSON (stubs for other media types)
+ * Maps the operation to a {@link RequestSourceDocument}, then serializes via
+ * shared `serializeRequestDocument` (blank line before METHOD, query-in-URL,
+ * headers, body). Scrubbing and import diagnostics stay in this module.
  */
 
+import {
+  serializeRequestDocument,
+  type RequestSourceBody,
+  type RequestSourceDocument,
+  type RequestSourceHeader,
+  type RequestSourceMethod,
+  type RequestSourceQueryParam,
+} from '../../request-source';
 import type { ImportDiagnostic, ImportLimits } from '../models';
 import { DEFAULT_IMPORT_LIMITS } from '../models';
 import type { OpenApiRefResolver } from '../openapi/resolve';
@@ -62,35 +67,22 @@ export function generateRequestSource(
     operation.summary?.trim() ||
     `${method.toUpperCase()} ${pathKey}`;
 
-  const lines: string[] = [];
+  const comments: string[] = [];
 
   if (operation.operationId) {
-    lines.push(`# operationId: ${sanitizeComment(operation.operationId)}`);
+    comments.push(`operationId: ${sanitizeComment(operation.operationId)}`);
   }
   if (operation.summary && operation.summary !== operation.operationId) {
-    lines.push(`# summary: ${sanitizeComment(operation.summary)}`);
+    comments.push(`summary: ${sanitizeComment(operation.summary)}`);
   }
   if (operation.deprecated === true) {
-    lines.push('# deprecated: true');
+    comments.push('deprecated: true');
   }
   if (operation.externalDocs?.url) {
-    lines.push(`# externalDocs: ${sanitizeComment(operation.externalDocs.url)}`);
+    comments.push(`externalDocs: ${sanitizeComment(operation.externalDocs.url)}`);
   }
 
-  appendResponseComments(operation, resolver, lines, diagnostics);
-
-  lines.push(`@name ${singleLine(requestName)}`);
-  if (operation.description) {
-    lines.push(`@description ${singleLine(operation.description)}`);
-  }
-
-  const authProfileId = pickAuthProfile(
-    operation.security ?? input.document.security,
-    schemeToProfileId,
-  );
-  if (authProfileId !== undefined) {
-    lines.push(`@auth ${authProfileId}`);
-  }
+  appendResponseComments(operation, resolver, comments, diagnostics);
 
   const parameters = collectParameters(
     input.pathItem,
@@ -99,54 +91,96 @@ export function generateRequestSource(
     diagnostics,
   );
 
-  const url = buildUrl(pathKey, parameters);
-  lines.push(`${method.toUpperCase()} ${url}`);
-
-  for (const header of parameters.filter((item) => item.in === 'header')) {
-    const value = parameterValue(header);
-    lines.push(`${header.name}: ${value}`);
-  }
-
   for (const cookie of parameters.filter((item) => item.in === 'cookie')) {
-    lines.push(`# cookie ${cookie.name}={{${cookieVarName(cookie.name)}}}`);
+    comments.push(
+      `cookie ${cookie.name}={{${cookieVarName(cookie.name)}}}`,
+    );
   }
+
+  const headers: RequestSourceHeader[] = [];
+  for (const header of parameters.filter((item) => item.in === 'header')) {
+    headers.push({
+      name: header.name,
+      value: parameterValue(header),
+      enabled: true,
+    });
+  }
+
+  const queryParams: RequestSourceQueryParam[] = parameters
+    .filter((item) => item.in === 'query')
+    .map((item) => ({
+      name: item.name,
+      value: parameterValue(item),
+      enabled: true,
+    }));
 
   const bodyResult = generateBody(operation, resolver, limits, diagnostics);
-  if (bodyResult.contentType !== undefined) {
-    const hasContentType = parameters.some(
-      (item) =>
-        item.in === 'header' && item.name.toLowerCase() === 'content-type',
+
+  // Content-Type is owned by serializeRequestDocument. Only override when the
+  // OpenAPI media type differs from the serializer default (e.g. problem+json).
+  if (
+    bodyResult.body?.type === 'json' &&
+    bodyResult.contentType !== undefined &&
+    bodyResult.contentType !== 'application/json'
+  ) {
+    const hasContentType = headers.some(
+      (item) => item.name.toLowerCase() === 'content-type',
     );
     if (!hasContentType) {
-      lines.push(`Content-Type: ${bodyResult.contentType}`);
+      headers.push({
+        name: 'Content-Type',
+        value: bodyResult.contentType,
+        enabled: true,
+      });
     }
   }
   if (bodyResult.accept !== undefined) {
-    const hasAccept = parameters.some(
-      (item) => item.in === 'header' && item.name.toLowerCase() === 'accept',
+    const hasAccept = headers.some(
+      (item) => item.name.toLowerCase() === 'accept',
     );
     if (!hasAccept) {
-      lines.push(`Accept: ${bodyResult.accept}`);
+      headers.push({
+        name: 'Accept',
+        value: bodyResult.accept,
+        enabled: true,
+      });
     }
   }
 
-  if (bodyResult.bodyLines.length > 0) {
-    lines.push('');
-    lines.push(...bodyResult.bodyLines);
-  }
+  const authProfileId = pickAuthProfile(
+    operation.security ?? input.document.security,
+    schemeToProfileId,
+  );
 
-  lines.push('');
+  const document: RequestSourceDocument = {
+    name: singleLine(requestName),
+    method: toRequestSourceMethod(method),
+    url: buildPathUrl(pathKey),
+    ...(operation.description
+      ? { description: singleLine(operation.description) }
+      : {}),
+    ...(authProfileId !== undefined ? { authProfileId } : {}),
+    ...(comments.length > 0 ? { comments } : {}),
+    ...(headers.length > 0 ? { headers } : {}),
+    ...(queryParams.length > 0 ? { queryParams } : {}),
+    ...(bodyResult.body !== undefined ? { body: bodyResult.body } : {}),
+  };
+
   return {
-    content: lines.join('\n'),
+    content: serializeRequestDocument(document),
     requestName,
     diagnostics,
   };
 }
 
+function toRequestSourceMethod(method: OpenApiHttpMethod): RequestSourceMethod {
+  return method.toUpperCase() as RequestSourceMethod;
+}
+
 function appendResponseComments(
   operation: OpenApiOperation,
   resolver: OpenApiRefResolver,
-  lines: string[],
+  comments: string[],
   diagnostics: ImportDiagnostic[],
 ): void {
   const responses = operation.responses;
@@ -174,7 +208,7 @@ function appendResponseComments(
       description.length > 0 ? description : undefined,
       contentTypes.length > 0 ? `content: ${contentTypes}` : undefined,
     ].filter((part): part is string => part !== undefined);
-    lines.push(`# ${sanitizeComment(parts.join(' — '))}`);
+    comments.push(sanitizeComment(parts.join(' — ')));
   }
 }
 
@@ -212,24 +246,12 @@ function collectParameters(
   return [...merged.values()];
 }
 
-function buildUrl(
-  pathKey: string,
-  parameters: readonly OpenApiParameter[],
-): string {
-  let path = pathKey.replace(
+/** Path URL with `{{baseUrl}}` and path-param templates (query applied by serialize). */
+function buildPathUrl(pathKey: string): string {
+  const path = pathKey.replace(
     /\{([^}]+)\}/gu,
     (_match, name: string) => `{{${pathVarName(name)}}}`,
   );
-
-  const query = parameters.filter((item) => item.in === 'query');
-  if (query.length > 0) {
-    const parts = query.map((item) => {
-      const value = parameterValue(item);
-      return `${encodeURIComponent(item.name)}=${value.startsWith('{{') ? value : encodeURIComponent(value)}`;
-    });
-    path = `${path}?${parts.join('&')}`;
-  }
-
   return `{{baseUrl}}${path.startsWith('/') ? path : `/${path}`}`;
 }
 
@@ -287,13 +309,12 @@ function generateBody(
 ): {
   readonly contentType?: string;
   readonly accept?: string;
-  readonly bodyLines: readonly string[];
+  readonly body?: RequestSourceBody;
 } {
   const accept = pickPreferredResponseContentType(operation, resolver);
   if (operation.requestBody === undefined) {
     return {
       ...(accept === undefined ? {} : { accept }),
-      bodyLines: [],
     };
   }
 
@@ -311,7 +332,6 @@ function generateBody(
   if (requestBody?.content === undefined) {
     return {
       ...(accept === undefined ? {} : { accept }),
-      bodyLines: [],
     };
   }
 
@@ -319,16 +339,21 @@ function generateBody(
   if (media === undefined) {
     return {
       ...(accept === undefined ? {} : { accept }),
-      bodyLines: [],
     };
   }
 
   const [contentType, mediaType] = media;
-  const bodyLines = mediaTypeToBody(contentType, mediaType, resolver, limits, diagnostics);
+  const body = mediaTypeToBody(
+    contentType,
+    mediaType,
+    resolver,
+    limits,
+    diagnostics,
+  );
   return {
     contentType,
     ...(accept === undefined ? {} : { accept }),
-    bodyLines,
+    body,
   };
 }
 
@@ -362,7 +387,7 @@ function mediaTypeToBody(
   resolver: OpenApiRefResolver,
   limits: ImportLimits,
   diagnostics: ImportDiagnostic[],
-): readonly string[] {
+): RequestSourceBody {
   if (media.example !== undefined) {
     return formatBody(contentType, scrubSensitiveExampleValue(media.example));
   }
@@ -380,43 +405,56 @@ function mediaTypeToBody(
   }
 
   if (contentType.includes('xml')) {
-    return [
-      '<!-- TODO: replace with a real XML body from the OpenAPI schema -->',
-      '<request />',
-    ];
+    return {
+      type: 'raw',
+      contentType,
+      text: [
+        '<!-- TODO: replace with a real XML body from the OpenAPI schema -->',
+        '<request />',
+      ].join('\n'),
+    };
   }
 
   if (contentType.includes('urlencoded')) {
-    return ['field={{fieldValue}}'];
+    return {
+      type: 'form',
+      fields: [{ name: 'field', value: '{{fieldValue}}' }],
+    };
   }
 
   if (contentType.includes('multipart')) {
-    return [
-      '# multipart/form-data body stub — replace parts as needed',
-      '--boundary',
-      'Content-Disposition: form-data; name="field"',
-      '',
-      'value',
-      '--boundary--',
-    ];
+    return {
+      type: 'multipart',
+      boundary: 'boundary',
+      fields: [{ name: 'field', value: 'value' }],
+    };
   }
 
   if (contentType.startsWith('text/')) {
-    return ['text body'];
+    return { type: 'text', text: 'text body' };
   }
 
-  return ['# binary or unsupported media type — add body manually'];
+  return {
+    type: 'binary',
+    note: 'unsupported media type — add body manually',
+  };
 }
 
-function formatBody(contentType: string, value: unknown): readonly string[] {
+function formatBody(contentType: string, value: unknown): RequestSourceBody {
   if (contentType.includes('json')) {
+    let text: string;
     try {
-      return JSON.stringify(value, null, 2).split('\n');
+      text = JSON.stringify(value, null, 2);
     } catch {
-      return ['{}'];
+      text = '{}';
     }
+    return { type: 'json', text };
   }
-  return [String(value)];
+  return {
+    type: 'raw',
+    contentType,
+    text: String(value),
+  };
 }
 
 function pickPreferredResponseContentType(
