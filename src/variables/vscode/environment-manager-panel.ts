@@ -2,8 +2,6 @@
  * Command-opened WebviewPanel host for the Environment Manager.
  */
 
-import { randomBytes } from 'node:crypto';
-
 import {
   ViewColumn,
   window,
@@ -12,6 +10,7 @@ import {
 } from 'vscode';
 
 import type { Environment, VariableDefinition } from '../../models';
+import { createWebviewNonce } from '../../ui/webview';
 import type { EnvironmentManager } from '../environment-manager';
 import {
   maskEnvironmentManagerState,
@@ -63,7 +62,7 @@ export class EnvironmentManagerPanel implements Disposable {
     );
     this.panel = panel;
 
-    const nonce = randomBytes(18).toString('base64url');
+    const nonce = createWebviewNonce();
     panel.webview.html = renderEnvironmentManagerHtml(nonce);
     this.baseline = snapshotFromManager(this.manager);
 

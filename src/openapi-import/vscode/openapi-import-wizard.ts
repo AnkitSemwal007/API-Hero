@@ -3,8 +3,6 @@
  * Wraps the existing import pipeline — no duplicate parsers/writers.
  */
 
-import { randomBytes } from 'node:crypto';
-
 import {
   commands,
   Uri,
@@ -23,6 +21,7 @@ import {
 } from '../../constants';
 import type { AuthenticationProfile, Environment } from '../../models';
 import type { Logger } from '../../shared';
+import { createWebviewNonce } from '../../ui/webview';
 import {
   evaluateImportSourceSize,
   runImportPipeline,
@@ -109,7 +108,7 @@ export async function openOpenApiImportWizard(
       resolve(success);
     };
 
-    const nonce = randomBytes(18).toString('base64url');
+    const nonce = createWebviewNonce();
     panel.webview.html = renderOpenApiImportWizardHtml(nonce);
 
     const initialState = (): OpenApiImportWizardState => ({

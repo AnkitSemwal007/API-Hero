@@ -2,8 +2,6 @@
  * Command-opened WebviewPanel host for History Detail (metadata only).
  */
 
-import { randomBytes } from 'node:crypto';
-
 import {
   env,
   ViewColumn,
@@ -12,6 +10,7 @@ import {
   type WebviewPanel,
 } from 'vscode';
 
+import { createWebviewNonce } from '../../ui/webview';
 import type { HistoryEntry } from '../models';
 import {
   buildHistoryDetailModel,
@@ -58,7 +57,7 @@ export class HistoryDetailPanel implements Disposable {
     );
     this.panel = panel;
 
-    const nonce = randomBytes(18).toString('base64url');
+    const nonce = createWebviewNonce();
     panel.webview.html = renderHistoryDetailHtml(nonce);
 
     const panelDisposables: Disposable[] = [

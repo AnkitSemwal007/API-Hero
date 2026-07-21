@@ -12,6 +12,14 @@ import {
   type RunSummary,
 } from '../models';
 import { listFailurePolicies } from '../failure-policies';
+import {
+  buildNonceOnlyCsp,
+  escapeAttribute,
+  escapeHtml,
+  isWebviewMessageRecord,
+} from '../../ui/webview';
+
+export { escapeAttribute, escapeHtml };
 
 /** Serializable row posted to the Collection Run Report webview. */
 export interface CollectionRunReportRow {
@@ -186,10 +194,10 @@ export async function resolveFailurePolicyForRun(
 export function parseCollectionRunReportMessage(
   value: unknown,
 ): CollectionRunReportInboundMessage | undefined {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+  if (!isWebviewMessageRecord(value)) {
     return undefined;
   }
-  const record = value as Record<string, unknown>;
+  const record = value;
   if (typeof record.type !== 'string' || !INBOUND_TYPES.has(record.type)) {
     return undefined;
   }
@@ -221,7 +229,7 @@ export function renderCollectionRunReportHtml(nonce: string): string {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'nonce-${safeNonce}'; script-src 'nonce-${safeNonce}'; font-src 'none'; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="${buildNonceOnlyCsp(nonce, { allowDataImages: true })}">
 <title>Collection Run Report</title>
 <style nonce="${safeNonce}">${REPORT_CSS}</style>
 </head>
@@ -242,19 +250,6 @@ export function formatDuration(durationMs: number | undefined): string {
     return `${Math.round(durationMs)} ms`;
   }
   return `${(durationMs / 1000).toFixed(2)} s`;
-}
-
-export function escapeHtml(value: string): string {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
-}
-
-export function escapeAttribute(value: string): string {
-  return escapeHtml(value).replaceAll('`', '&#96;');
 }
 
 function formatAssertions(

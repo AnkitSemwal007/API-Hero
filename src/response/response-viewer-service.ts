@@ -1,7 +1,6 @@
-import { randomBytes } from 'node:crypto';
-
 import type { TestReport } from '../assertions';
 import type { ExecutionResult } from '../execution';
+import { createWebviewNonce } from '../ui/webview';
 import {
   presentExecutionResult,
   type ResponseBodyPresentation,
@@ -59,7 +58,7 @@ export class ResponseViewerService implements ResponseViewerDisposable {
   public constructor(
     private readonly panelFactory: ResponseViewerPanelFactory,
     private readonly createNonce: ResponseViewerNonceFactory = () =>
-      randomBytes(18).toString('base64url'),
+      createWebviewNonce(),
     private readonly hostActions: ResponseViewerHostActions = NOOP_HOST_ACTIONS,
   ) {}
 

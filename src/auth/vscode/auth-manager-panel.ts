@@ -2,8 +2,6 @@
  * Command-opened WebviewPanel host for the Auth Profiles Manager.
  */
 
-import { randomBytes } from 'node:crypto';
-
 import {
   ViewColumn,
   window,
@@ -11,6 +9,7 @@ import {
   type WebviewPanel,
 } from 'vscode';
 
+import { createWebviewNonce } from '../../ui/webview';
 import type { AuthenticationProfileManager } from '../authentication-profile-manager';
 import type { AuthenticationSecretRepository } from '../authentication-resolver';
 import type { AuthenticationProfile } from '../../models';
@@ -73,7 +72,7 @@ export class AuthManagerPanel implements Disposable {
     );
     this.panel = panel;
 
-    const nonce = randomBytes(18).toString('base64url');
+    const nonce = createWebviewNonce();
     panel.webview.html = renderAuthManagerHtml(nonce);
     this.baselineProfiles = this.options.profileManager.list();
 

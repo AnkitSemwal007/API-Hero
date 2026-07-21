@@ -4,6 +4,13 @@
  */
 
 import { MASKED_VARIABLE_VALUE } from '../variable-resolver';
+import {
+  buildNonceOnlyCsp,
+  escapeAttribute,
+  isWebviewMessageRecord,
+} from '../../ui/webview';
+
+export { escapeAttribute };
 
 const VARIABLE_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_.-]*$/u;
 
@@ -45,10 +52,10 @@ export type EnvironmentManagerOutboundMessage =
 export function parseEnvironmentManagerMessage(
   value: unknown,
 ): EnvironmentManagerInboundMessage | undefined {
-  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+  if (!isWebviewMessageRecord(value)) {
     return undefined;
   }
-  const record = value as Record<string, unknown>;
+  const record = value;
   if (record.type === 'ready') {
     return { type: 'ready' };
   }
@@ -181,7 +188,7 @@ export function renderEnvironmentManagerHtml(nonce: string): string {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'nonce-${safeNonce}'; script-src 'nonce-${safeNonce}'; font-src 'none'; connect-src 'none'; img-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="${buildNonceOnlyCsp(nonce)}">
 <title>Environment Manager</title>
 <style nonce="${safeNonce}">${MANAGER_CSS}</style>
 </head>
@@ -240,21 +247,11 @@ export function renderEnvironmentManagerHtml(nonce: string): string {
 </html>`;
 }
 
-export function escapeAttribute(value: string): string {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;')
-    .replaceAll('`', '&#96;');
-}
-
 function parseState(value: unknown): EnvironmentManagerState | undefined {
-  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+  if (!isWebviewMessageRecord(value)) {
     return undefined;
   }
-  const record = value as Record<string, unknown>;
+  const record = value;
   const environments = parseEnvironments(record.environments);
   const globalVariables = parseVariables(record.globalVariables);
   const workspaceVariables = parseVariables(record.workspaceVariables);

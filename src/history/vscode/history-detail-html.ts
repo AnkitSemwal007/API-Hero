@@ -9,6 +9,14 @@ import {
   type HistoryEntry,
   type HistoryExecutionStatus as HistoryStatus,
 } from '../models';
+import {
+  buildNonceOnlyCsp,
+  escapeAttribute,
+  escapeHtml,
+  isWebviewMessageRecord,
+} from '../../ui/webview';
+
+export { escapeAttribute, escapeHtml };
 
 /** Serializable view model posted to the History Detail webview. */
 export interface HistoryDetailModel {
@@ -163,10 +171,10 @@ export function formatHistorySummaryText(entry: HistoryEntry): string {
 export function parseHistoryDetailMessage(
   value: unknown,
 ): HistoryDetailInboundMessage | undefined {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+  if (!isWebviewMessageRecord(value)) {
     return undefined;
   }
-  const record = value as Record<string, unknown>;
+  const record = value;
   const keys = Object.keys(record);
   if (keys.length !== 1 || typeof record.type !== 'string') {
     return undefined;
@@ -185,7 +193,7 @@ export function renderHistoryDetailHtml(nonce: string): string {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'nonce-${safeNonce}'; script-src 'nonce-${safeNonce}'; font-src 'none'; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="${buildNonceOnlyCsp(nonce, { allowDataImages: true })}">
 <title>History Detail</title>
 <style nonce="${safeNonce}">${DETAIL_CSS}</style>
 </head>
@@ -219,19 +227,6 @@ export function formatBytes(bytes: number): string {
     return `${(bytes / 1024).toFixed(1)} KiB`;
   }
   return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
-}
-
-export function escapeHtml(value: string): string {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
-}
-
-export function escapeAttribute(value: string): string {
-  return escapeHtml(value).replaceAll('`', '&#96;');
 }
 
 function outcomeLabel(status: HistoryStatus): string {

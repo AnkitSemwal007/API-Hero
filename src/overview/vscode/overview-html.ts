@@ -9,11 +9,15 @@ import {
   type HistoryEntry,
   type HistoryExecutionStatus as HistoryStatus,
 } from '../../history/models';
+import { formatDuration } from '../../history/vscode/history-detail-html';
 import {
+  buildNonceOnlyCsp,
   escapeAttribute,
   escapeHtml,
-  formatDuration,
-} from '../../history/vscode/history-detail-html';
+  isWebviewMessageRecord,
+} from '../../ui/webview';
+
+export { escapeAttribute, escapeHtml, formatDuration };
 
 const RECENT_HISTORY_LIMIT = 8;
 const RECENT_COLLECTION_LIMIT = 8;
@@ -110,10 +114,10 @@ export function buildOverviewModel(
 export function parseOverviewMessage(
   value: unknown,
 ): OverviewInboundMessage | undefined {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+  if (!isWebviewMessageRecord(value)) {
     return undefined;
   }
-  const record = value as Record<string, unknown>;
+  const record = value;
   const type = record.type;
   if (typeof type !== 'string') {
     return undefined;
@@ -162,7 +166,7 @@ export function renderOverviewHtml(nonce: string): string {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'nonce-${safeNonce}'; script-src 'nonce-${safeNonce}'; font-src 'none'; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="${buildNonceOnlyCsp(nonce, { allowDataImages: true })}">
 <title>API Hero Overview</title>
 <style nonce="${safeNonce}">${OVERVIEW_CSS}</style>
 </head>
@@ -174,8 +178,6 @@ export function renderOverviewHtml(nonce: string): string {
 </body>
 </html>`;
 }
-
-export { escapeAttribute, escapeHtml, formatDuration };
 
 function toHistoryItem(entry: HistoryEntry): OverviewHistoryItem {
   const { summary, metadata } = entry;
