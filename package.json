@@ -1032,6 +1032,23 @@
           "maximum": 52428800,
           "description": "Maximum OpenAPI specification file size in bytes accepted by Import OpenAPI Specification. Larger files are rejected with a clear error."
         },
+        "apiRunner.collectionRunner.failurePolicy": {
+          "type": "string",
+          "enum": [
+            "ask",
+            "stop-on-first-error",
+            "continue-on-error",
+            "skip-invalid-requests"
+          ],
+          "enumDescriptions": [
+            "Prompt for a failure policy before each collection, folder, or selected-requests run.",
+            "Stop the run after the first failed or invalid request; remaining requests are skipped.",
+            "Continue running remaining requests after failures.",
+            "Skip unread or invalid requests and continue; execution failures also continue."
+          ],
+          "default": "ask",
+          "description": "Default failure policy for collection, folder, and selected-request runs. When set to ask, API Hero prompts before each run; otherwise the chosen policy is used without a QuickPick."
+        },
         "apiRunner.languageFeatures.hover": {
           "type": "boolean",
           "default": true,

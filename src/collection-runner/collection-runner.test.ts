@@ -61,6 +61,7 @@ function sampleAggregate(): WorkspaceCollections {
     id: collectionId,
     rootPath: 'file:///ws',
     workspaceRootPath: 'file:///ws',
+    kind: 'legacy',
     metadata: {
       name: 'ws',
       workspacePath: 'file:///ws',
@@ -241,6 +242,7 @@ test('large plan ordering stays stable across many nested folders', () => {
         id: collectionId,
         rootPath: 'file:///big',
         workspaceRootPath: 'file:///big',
+        kind: 'legacy',
         metadata: {
           name: 'big',
           workspacePath: 'file:///big',
