@@ -4,7 +4,14 @@
  */
 
 import { HTTP_METHODS } from '../../types';
+import {
+  buildNonceOnlyCsp,
+  escapeAttribute,
+  escapeHtml,
+} from '../../ui/webview';
 import type { RequestEditorState } from './request-editor-messages';
+
+export { escapeAttribute, escapeHtml };
 
 /** Builds the request editor document for a Custom Text Editor webview. */
 export function renderRequestEditorHtml(nonce: string): string {
@@ -19,7 +26,7 @@ export function renderRequestEditorHtml(nonce: string): string {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'nonce-${safeNonce}'; script-src 'nonce-${safeNonce}'; font-src 'none'; connect-src 'none'; img-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="${buildNonceOnlyCsp(nonce)}">
 <title>Request Editor</title>
 <style nonce="${safeNonce}">${EDITOR_CSS}</style>
 </head>
@@ -210,27 +217,6 @@ const TAB_BUTTONS = [
 
 function labelForTab(id: string): string {
   return id.charAt(0).toUpperCase() + id.slice(1);
-}
-
-/** Escapes a value for use inside an HTML attribute. */
-export function escapeAttribute(value: string): string {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;')
-    .replaceAll('`', '&#96;');
-}
-
-/** Escapes text for HTML body content. */
-export function escapeHtml(value: string): string {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
 }
 
 /** Builds a stable empty form model for the webview. */

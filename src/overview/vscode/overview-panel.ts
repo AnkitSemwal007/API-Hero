@@ -2,8 +2,6 @@
  * Command-opened WebviewPanel host for the API Hero Overview.
  */
 
-import { randomBytes } from 'node:crypto';
-
 import {
   commands,
   ViewColumn,
@@ -15,6 +13,7 @@ import {
 import type { CollectionDiscoveryService } from '../../collections/discovery';
 import { COMMAND_IDS } from '../../constants';
 import type { HistoryRepository } from '../../history/repository';
+import { createWebviewNonce } from '../../ui/webview';
 import {
   buildOverviewModel,
   OverviewQuickAction,
@@ -75,7 +74,7 @@ export class OverviewPanel implements Disposable {
     );
     this.panel = panel;
 
-    const nonce = randomBytes(18).toString('base64url');
+    const nonce = createWebviewNonce();
     panel.webview.html = renderOverviewHtml(nonce);
 
     const panelDisposables: Disposable[] = [

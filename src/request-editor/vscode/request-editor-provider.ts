@@ -2,8 +2,6 @@
  * Custom Text Editor provider for single-request `.api` files.
  */
 
-import { randomBytes } from 'node:crypto';
-
 import {
   commands,
   Range,
@@ -17,6 +15,7 @@ import {
 } from 'vscode';
 
 import { COMMAND_IDS, REQUEST_EDITOR_VIEW_TYPE } from '../../constants';
+import { createWebviewNonce } from '../../ui/webview';
 import {
   parseSourceToRequestDocument,
   serializeRequestDocument,
@@ -83,7 +82,7 @@ class RequestEditorDocumentSync implements Disposable {
   ) {}
 
   public async initialize(): Promise<void> {
-    const nonce = randomBytes(18).toString('base64url');
+    const nonce = createWebviewNonce();
     this.panel.webview.options = {
       enableScripts: true,
       localResourceRoots: [],

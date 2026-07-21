@@ -2,8 +2,6 @@
  * Command-opened WebviewPanel host for Collection Run Report.
  */
 
-import { randomBytes } from 'node:crypto';
-
 import {
   commands,
   ViewColumn,
@@ -12,6 +10,7 @@ import {
   type WebviewPanel,
 } from 'vscode';
 
+import { createWebviewNonce } from '../../ui/webview';
 import { COMMAND_IDS } from '../../constants';
 import type { RunSummary } from '../index';
 import {
@@ -65,7 +64,7 @@ export class CollectionRunReportPanel implements Disposable {
     );
     this.panel = panel;
 
-    const nonce = randomBytes(18).toString('base64url');
+    const nonce = createWebviewNonce();
     panel.webview.html = renderCollectionRunReportHtml(nonce);
 
     const panelDisposables: Disposable[] = [
