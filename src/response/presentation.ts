@@ -19,6 +19,28 @@ export interface PresentedHeader {
   readonly masked: boolean;
 }
 
+export interface PresentedCookie {
+  readonly name: string;
+  readonly value: string;
+  readonly domain?: string;
+  readonly path?: string;
+}
+
+/**
+ * Cookie jar data for the response viewer. Until a jar exists, presentation
+ * always emits `{ available: false }` so the Cookies tab stays hidden.
+ */
+export type PresentedCookies =
+  | {
+      readonly available: false;
+      readonly setCookieHeaderCount: number;
+    }
+  | {
+      readonly available: true;
+      readonly entries: readonly PresentedCookie[];
+      readonly setCookieHeaderCount: number;
+    };
+
 export interface ResponseBodyPresentation {
   readonly language: ResponseBodyLanguage;
   readonly raw: string;
@@ -96,11 +118,11 @@ export interface ResponsePresentation {
     readonly text: string;
   };
   readonly headers: readonly PresentedHeader[];
-  /** Display-only placeholder. Cookie parsing/storage is intentionally absent. */
-  readonly cookies: {
-    readonly available: false;
-    readonly setCookieHeaderCount: number;
-  };
+  /**
+   * Cookie jar projection. When `available` is false the viewer hides the
+   * Cookies tab entirely — Set-Cookie values remain masked in headers only.
+   */
+  readonly cookies: PresentedCookies;
   readonly statistics: ResponseStatistics;
   readonly body?: ResponseBodyPresentation;
   readonly failure?: ResponseFailurePresentation;

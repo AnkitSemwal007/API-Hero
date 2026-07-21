@@ -14,7 +14,7 @@ treated as untrusted. Export, Swagger 2.0, Postman, Insomnia, and GraphQL are
 out of scope.
 
 Command: `apiRunner.importOpenApi`  
-Title: **API Runner: Import OpenAPI Specification**
+Title: **API Hero: Import OpenAPI Specification**
 
 ## Pipeline
 
@@ -67,14 +67,21 @@ apply. Prefer fixing `$ref` / validation errors in the spec before re-importing.
 
 ### Output location
 
-Files are written under the **selected workspace folder**:
+Files are written under the **selected workspace folder** as a native
+collection:
 
 ```text
-imported/<api-slug>/<folder>/<method>-<operation>.api
+Collections/<api-slug>/<folder>/<method>-<operation>.api
+Collections/<api-slug>/api-hero.collection.json
 ```
 
-Collections continue to map **1 workspace folder → 1 Collection**; the import
-directory is ordinary folder/request tree content discovered from `.api` files.
+The directory name is a sanitized slug of the API title. The marker uses the
+OpenAPI `info.title` as the collection display name. Re-importing the same slug
+overwrites files in that collection folder.
+
+`collectionsImportOutputDirectory(apiSlug)` in
+`src/openapi-import/output-paths.ts` is the shared path helper used by the
+OpenAPI provider.
 
 ### Folders
 
@@ -84,15 +91,17 @@ directory is ordinary folder/request tree content discovered from `.api` files.
 
 ### Requests
 
-**One `.api` file per operation** (not one file per tag). Generated content
-includes:
+**One `.api` file per operation** (not one file per tag). Each operation is
+mapped to a `RequestSourceDocument` and emitted via shared
+`serializeRequestDocument` (see [request-source.md](./request-source.md)).
+Generated content includes:
 
 - `#` comments for `operationId`, summary, deprecated, externalDocs, response
   status metadata (description / content types only — **no** response
-  validation)
+  validation), and cookie stubs
 - `@name`, optional `@description`, optional `@auth <profileId>`
 - `METHOD {{baseUrl}}/path/{{pathParam}}` with query parameters on the URL
-- Headers / cookie stubs as realistic lines. Literal examples are **never**
+- Headers as realistic lines. Literal examples are **never**
   emitted for `Authorization`, `Cookie`, `Set-Cookie`, `Proxy-Authorization`,
   or header/param names matching `*api-key*`, `*token*`, `*secret*`, or
   `*password*` — placeholders such as `{{token}}` are used instead. Body
@@ -112,7 +121,7 @@ includes:
 
 ### Authentication
 
-| OpenAPI scheme | API Runner profile |
+| OpenAPI scheme | API Hero profile |
 | --- | --- |
 | `http` bearer | `bearer` + `{ kind: 'secret' }` token |
 | `http` basic | `basic` + secret username/password |

@@ -30,10 +30,36 @@ export type {
 } from './authentication-profile-manager';
 export { AuthenticationProfileManager } from './authentication-profile-manager';
 export type {
+  AuthenticationCommitProviderId,
+  AuthenticationProfileCommitDraft,
+  AuthenticationProfileCommitIssue,
+  AuthenticationProfileCommitIssueCode,
+  AuthenticationProfileCommitValidation,
   AuthenticationProfileIssue,
   AuthenticationProfileIssueCode,
   AuthenticationProfileValidation,
+  AuthenticationSecretFieldMeta,
 } from './authentication-profile-validation';
 export {
+  AUTH_PROFILE_ID_PATTERN,
+  AUTH_PROVIDER_IDS,
+  FORBIDDEN_IDS,
+  isAuthenticationCommitProviderId,
+  isValidAuthenticationProfileId,
+  secretFieldNamesForProvider,
+  secretFieldsForProvider,
   validateAuthenticationProfiles,
+  validateAuthenticationProfilesForCommit,
 } from './authentication-profile-validation';
+export type {
+  AuthenticationPresentationPreview,
+  AuthenticationPresentationPreviewInput,
+  AuthenticationPresentationSecretField,
+} from './authentication-presentation-preview';
+export {
+  AUTHENTICATION_PRESENTATION_MASK,
+  BASIC_MISSING_VALIDATION_PREFIX,
+  BASIC_MISSING_VALIDATION_SUFFIX,
+  buildAuthenticationPresentationPreview,
+  formatBasicMissingValidation,
+} from './authentication-presentation-preview';

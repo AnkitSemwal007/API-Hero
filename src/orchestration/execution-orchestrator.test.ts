@@ -435,7 +435,7 @@ test('maps build and viewer exceptions without exposing stack details', async ()
   );
   assert.equal(
     buildHarness.notifications.messages[0],
-    'API Runner could not prepare or execute the selected request.',
+    'API Hero could not prepare or execute the selected request.',
   );
 
   const viewerHarness = harness({

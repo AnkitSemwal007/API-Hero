@@ -308,7 +308,7 @@ function createCompletion(suggestion: RuntimeCompletion): CompletionItem {
     case 'directive': {
       const item = new CompletionItem(suggestion.label, CompletionItemKind.Keyword);
       item.insertText = new SnippetString(`${suggestion.label} \${1:value}`);
-      item.detail = 'API Runner directive';
+      item.detail = 'API Hero directive';
       return item;
     }
     case 'header': {
@@ -328,7 +328,7 @@ function createCompletion(suggestion: RuntimeCompletion): CompletionItem {
         CompletionItemKind.Variable,
       );
       item.insertText = `${suggestion.label}}}`;
-      item.detail = suggestion.detail ?? 'API Runner variable';
+      item.detail = suggestion.detail ?? 'API Hero variable';
       return item;
     }
     case 'variable-template': {
@@ -337,7 +337,7 @@ function createCompletion(suggestion: RuntimeCompletion): CompletionItem {
         CompletionItemKind.Snippet,
       );
       item.insertText = new SnippetString('{{${1:variable}}}');
-      item.detail = 'API Runner variable delimiters';
+      item.detail = 'API Hero variable delimiters';
       return item;
     }
   }

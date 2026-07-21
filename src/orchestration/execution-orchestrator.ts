@@ -269,7 +269,7 @@ export class ExecutionOrchestrator {
 
     if (this.disposed) {
       if (showNotifications) {
-        this.notifications.error('API Runner is no longer active.');
+        this.notifications.error('API Hero is no longer active.');
       }
       return { outcome: 'precondition-failed' };
     }
@@ -476,7 +476,7 @@ export class ExecutionOrchestrator {
               this.status.update({ kind: 'failed' });
               if (showNotifications) {
                 this.notifications.error(
-                  'The request completed, but API Runner could not open the response viewer.',
+                  'The request completed, but API Hero could not open the response viewer.',
                 );
               }
               return {
@@ -660,9 +660,9 @@ function friendlyUnexpectedError(error: unknown): string {
     return error.message;
   }
   if (isRequestBuildError(error)) {
-    return `API Runner could not build the selected request: ${error.message}`;
+    return `API Hero could not build the selected request: ${error.message}`;
   }
-  return 'API Runner could not prepare or execute the selected request.';
+  return 'API Hero could not prepare or execute the selected request.';
 }
 
 function isRequestBuildError(error: unknown): error is RequestBuildError {

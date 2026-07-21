@@ -5,8 +5,11 @@
 .gitignore
 eslint.config.mjs
 src/**
-node_modules/**
+scripts/**
+docs/**
+coverage/**
 tsconfig.json
+package-lock.json
 dist/**/*.test.js
 **/*.map
 **/*.ts

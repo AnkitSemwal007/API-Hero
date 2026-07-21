@@ -16,10 +16,17 @@ import {
   BearerAuthenticationProvider,
   DefaultAuthenticationResolver,
   DefaultAuthenticationSecretRepository,
+  FORBIDDEN_IDS,
   NoneAuthenticationProvider,
   authenticationSecretKey,
   AuthenticationProfileManager,
+  AUTHENTICATION_PRESENTATION_MASK,
+  buildAuthenticationPresentationPreview,
+  isValidAuthenticationProfileId,
+  secretFieldNamesForProvider,
+  secretFieldsForProvider,
   validateAuthenticationProfiles,
+  validateAuthenticationProfilesForCommit,
 } from '.';
 
 class MemorySecrets {
@@ -385,4 +392,244 @@ test('profile manager selection is session-only and refreshes listeners', () => 
   assert.equal(changes, 2);
   registration.dispose();
   assert.equal(repositoryListener, undefined);
+});
+
+test('shared id primitives reject forbidden and pattern-invalid ids', () => {
+  assert.equal(isValidAuthenticationProfileId('bearer-prod'), true);
+  assert.equal(isValidAuthenticationProfileId(''), false);
+  assert.equal(isValidAuthenticationProfileId('1bad'), false);
+  assert.equal(isValidAuthenticationProfileId('team/profile'), false);
+  for (const id of FORBIDDEN_IDS) {
+    assert.equal(isValidAuthenticationProfileId(id), false);
+  }
+});
+
+test('secret field helpers are the single source for built-in providers', () => {
+  assert.deepEqual(secretFieldNamesForProvider('none'), []);
+  assert.deepEqual(secretFieldNamesForProvider('bearer'), ['token']);
+  assert.deepEqual(secretFieldNamesForProvider('basic'), [
+    'username',
+    'password',
+  ]);
+  assert.deepEqual(secretFieldNamesForProvider('apiKey'), ['value']);
+  assert.deepEqual(secretFieldNamesForProvider('oauth2'), []);
+  assert.equal(secretFieldsForProvider('bearer')[0]?.label, 'Token');
+  assert.equal(secretFieldsForProvider('apiKey')[0]?.field, 'value');
+});
+
+test('buildAuthenticationPresentationPreview covers all Auth Manager providers', () => {
+  const mask = AUTHENTICATION_PRESENTATION_MASK;
+  assert.deepEqual(
+    buildAuthenticationPresentationPreview({ providerId: 'none' }),
+    {
+      preview: 'No authentication headers will be added.',
+      validation: '',
+    },
+  );
+  assert.deepEqual(
+    buildAuthenticationPresentationPreview({
+      providerId: 'bearer',
+      secretFields: [{ field: 'token', label: 'Token', status: 'missing' }],
+    }),
+    {
+      preview: `Authorization: Bearer ${mask}`,
+      validation: 'Token secret is missing.',
+    },
+  );
+  assert.deepEqual(
+    buildAuthenticationPresentationPreview({
+      providerId: 'bearer',
+      secretFields: [{ field: 'token', label: 'Token', status: 'set' }],
+    }),
+    {
+      preview: `Authorization: Bearer ${mask}`,
+      validation: 'Ready — token is set.',
+    },
+  );
+  assert.deepEqual(
+    buildAuthenticationPresentationPreview({
+      providerId: 'basic',
+      secretFields: [
+        { field: 'username', label: 'Username', status: 'missing' },
+        { field: 'password', label: 'Password', status: 'missing' },
+      ],
+    }),
+    {
+      preview: `Authorization: Basic ${mask}`,
+      validation: 'Missing: Username, Password.',
+    },
+  );
+  assert.deepEqual(
+    buildAuthenticationPresentationPreview({
+      providerId: 'basic',
+      secretFields: [
+        { field: 'username', label: 'Username', status: 'set' },
+        { field: 'password', label: 'Password', status: 'set' },
+      ],
+    }),
+    {
+      preview: `Authorization: Basic ${mask}`,
+      validation: 'Ready — username and password are set.',
+    },
+  );
+  assert.deepEqual(
+    buildAuthenticationPresentationPreview({
+      providerId: 'apiKey',
+      apiKeyName: 'X-API-Key',
+      apiKeyLocation: 'header',
+      secretFields: [{ field: 'value', label: 'API key value', status: 'missing' }],
+    }),
+    {
+      preview: `X-API-Key: ${mask}`,
+      validation: 'API key secret is missing.',
+    },
+  );
+  assert.deepEqual(
+    buildAuthenticationPresentationPreview({
+      providerId: 'apiKey',
+      apiKeyName: '',
+      apiKeyLocation: 'header',
+      secretFields: [{ field: 'value', label: 'API key value', status: 'set' }],
+    }),
+    {
+      preview: `X-API-Key: ${mask}`,
+      validation:
+        'Key name is empty — set a header or query parameter name.',
+    },
+  );
+  assert.deepEqual(
+    buildAuthenticationPresentationPreview({
+      providerId: 'apiKey',
+      apiKeyName: 'X-API-Key',
+      apiKeyLocation: 'header',
+      secretFields: [{ field: 'value', label: 'API key value', status: 'set' }],
+    }),
+    {
+      preview: `X-API-Key: ${mask}`,
+      validation: 'Ready — API key secret is set.',
+    },
+  );
+  assert.deepEqual(
+    buildAuthenticationPresentationPreview({
+      providerId: 'apiKey',
+      apiKeyName: 'api_key',
+      apiKeyLocation: 'query',
+      secretFields: [{ field: 'value', label: 'API key value', status: 'set' }],
+    }),
+    {
+      preview: `Query: api_key=${mask}`,
+      validation: 'Ready — API key secret is set.',
+    },
+  );
+  assert.deepEqual(
+    buildAuthenticationPresentationPreview({ providerId: 'oauth2' }),
+    {
+      preview: 'Unknown provider.',
+      validation: 'Unsupported provider.',
+    },
+  );
+});
+
+test('load-time validation stays lenient for pattern and apiKey shape', () => {
+  const validation = validateAuthenticationProfiles([
+    {
+      id: '1legacy',
+      providerId: 'bearer',
+      token: { kind: 'secret' },
+    },
+    {
+      id: 'key',
+      providerId: 'apiKey',
+    } as never,
+  ]);
+  assert.deepEqual(
+    validation.profiles.map((profile) => profile.id),
+    ['1legacy', 'key'],
+  );
+  assert.equal(validation.issues.length, 0);
+});
+
+test('commit validation enforces UI rules with stable user-facing messages', () => {
+  assert.deepEqual(
+    validateAuthenticationProfilesForCommit({
+      profiles: [{
+        id: 'prod',
+        label: 'Production',
+        providerId: 'bearer',
+      }],
+      defaultProfileId: 'prod',
+    }).issues,
+    [],
+  );
+
+  assert.equal(
+    validateAuthenticationProfilesForCommit({
+      profiles: [{ id: '  ', label: 'X', providerId: 'none' }],
+    }).issues[0]?.message,
+    'Profile id is required.',
+  );
+  assert.equal(
+    validateAuthenticationProfilesForCommit({
+      profiles: [{ id: '1bad', label: 'X', providerId: 'bearer' }],
+    }).issues[0]?.message,
+    'Invalid profile id "1bad".',
+  );
+  assert.equal(
+    validateAuthenticationProfilesForCommit({
+      profiles: [
+        { id: 'dup', label: 'A', providerId: 'none' },
+        { id: 'dup', label: 'B', providerId: 'none' },
+      ],
+    }).issues[0]?.message,
+    'Duplicate profile id "dup".',
+  );
+  assert.equal(
+    validateAuthenticationProfilesForCommit({
+      profiles: [{ id: 'ok', label: '  ', providerId: 'none' }],
+    }).issues[0]?.message,
+    'Profile label is required.',
+  );
+  assert.equal(
+    validateAuthenticationProfilesForCommit({
+      profiles: [{ id: 'ok', label: 'X', providerId: 'oauth2' }],
+    }).issues[0]?.message,
+    'Unsupported provider "oauth2".',
+  );
+  assert.equal(
+    validateAuthenticationProfilesForCommit({
+      profiles: [{ id: 'key', label: 'Key', providerId: 'apiKey' }],
+    }).issues[0]?.message,
+    'API key profile "key" requires a header or query name.',
+  );
+  assert.equal(
+    validateAuthenticationProfilesForCommit({
+      profiles: [{
+        id: 'key',
+        label: 'Key',
+        providerId: 'apiKey',
+        apiKeyName: 'X-API-Key',
+      }],
+    }).issues[0]?.message,
+    'API key profile "key" requires location header or query.',
+  );
+  assert.equal(
+    validateAuthenticationProfilesForCommit({
+      profiles: [{ id: 'ok', label: 'X', providerId: 'none' }],
+      defaultProfileId: 'missing',
+    }).issues[0]?.message,
+    'Unknown default profile "missing".',
+  );
+  assert.equal(
+    validateAuthenticationProfilesForCommit({
+      profiles: [{
+        id: 'key',
+        label: 'Key',
+        providerId: 'apiKey',
+        apiKeyName: 'X-API-Key',
+        apiKeyLocation: 'header',
+      }],
+      defaultProfileId: 'key',
+    }).issues.length,
+    0,
+  );
 });

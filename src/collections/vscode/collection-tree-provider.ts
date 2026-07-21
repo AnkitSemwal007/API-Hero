@@ -13,7 +13,8 @@ import type { CollectionDiscoveryService } from '../discovery';
 import type { CollectionTreeNode, WorkspaceCollections } from '../index';
 import {
   findTreeNodeByRequestId,
-  getTreeChildren,
+  getFilteredTreeChildren,
+  normalizeFilterQuery,
   treePathToRequest,
 } from '../tree-projection';
 
@@ -33,6 +34,7 @@ export class CollectionTreeDataProvider
   > = this.changeEmitter.event;
 
   private treeView: TreeView<CollectionTreeNode> | undefined;
+  private filterQuery: string | undefined;
 
   public constructor(
     private readonly discovery: CollectionDiscoveryService,
@@ -44,9 +46,32 @@ export class CollectionTreeDataProvider
 
   public attachTreeView(treeView: TreeView<CollectionTreeNode>): void {
     this.treeView = treeView;
+    this.updateFilterMessage();
+  }
+
+  public setFilterQuery(query: string | undefined): void {
+    this.filterQuery = normalizeFilterQuery(query);
+    this.updateFilterMessage();
+    this.changeEmitter.fire(undefined);
+  }
+
+  public getFilterQuery(): string | undefined {
+    return this.filterQuery;
+  }
+
+  private updateFilterMessage(): void {
+    const view = this.treeView;
+    if (view === undefined) {
+      return;
+    }
+    view.message =
+      this.filterQuery !== undefined
+        ? `Filtered: ${this.filterQuery}`
+        : undefined;
   }
 
   public getTreeItem(element: CollectionTreeNode): TreeItem {
+    const aggregate = this.discovery.snapshot;
     const item = new TreeItem(
       element.label,
       element.collapsible
@@ -56,8 +81,12 @@ export class CollectionTreeDataProvider
     item.id = element.id;
     item.description = element.description;
     item.iconPath = iconFor(element);
-    item.contextValue = element.kind;
+    item.contextValue = contextValueFor(element, aggregate);
     if (element.kind === 'request' && element.requestId !== undefined) {
+      item.tooltip =
+        element.description !== undefined && element.description.length > 0
+          ? `${element.label}\n${element.description}`
+          : element.label;
       item.command = {
         command: COMMAND_IDS.openCollectionRequest,
         title: 'Open Request',
@@ -74,7 +103,27 @@ export class CollectionTreeDataProvider
     if (aggregate === undefined) {
       return [];
     }
-    return [...getTreeChildren(aggregate, element)];
+    const children = [
+      ...getFilteredTreeChildren(aggregate, element, this.filterQuery),
+    ];
+    // Avoid viewsWelcome false empty when a filter matches nothing.
+    if (
+      element === undefined &&
+      this.filterQuery !== undefined &&
+      children.length === 0 &&
+      Object.keys(aggregate.collections).length > 0
+    ) {
+      return [
+        {
+          id: '__filter_empty__',
+          kind: 'info',
+          label: 'No matches',
+          description: 'Clear the filter to show all collections',
+          collapsible: false,
+        },
+      ];
+    }
+    return children;
   }
 
   public getParent(
@@ -116,21 +165,7 @@ export class CollectionTreeDataProvider
         collectionId: collection.id,
       };
     }
-    if (element.kind === 'collection') {
-      const root = aggregate.workspaceRoots.find((item) =>
-        item.collectionIds.includes(element.id),
-      );
-      if (root === undefined) {
-        return undefined;
-      }
-      return {
-        id: root.id,
-        kind: 'workspace',
-        label: root.display.label,
-        collapsible: true,
-        workspaceRootId: root.id,
-      };
-    }
+    // Collections are tree roots (Phase 1a); workspace nodes are not projected.
     return undefined;
   }
 
@@ -166,8 +201,62 @@ function iconFor(element: CollectionTreeNode): ThemeIcon {
     case 'folder':
       return new ThemeIcon('folder');
     case 'request':
-      return new ThemeIcon('symbol-method');
+      return iconForMethod(element.method);
+    case 'info':
+      return new ThemeIcon('search');
     default:
       return new ThemeIcon('circle-outline');
   }
 }
+
+/**
+ * Prefer hierarchy-friendly ThemeIcons. Method variants use distinct Codicons
+ * when a clear mapping exists; otherwise fall back to symbol-method.
+ */
+function iconForMethod(method: string | undefined): ThemeIcon {
+  switch ((method ?? '').trim().toUpperCase()) {
+    case 'GET':
+      return new ThemeIcon('arrow-down');
+    case 'POST':
+      return new ThemeIcon('add');
+    case 'PUT':
+    case 'PATCH':
+      return new ThemeIcon('edit');
+    case 'DELETE':
+      return new ThemeIcon('close');
+    case 'HEAD':
+    case 'OPTIONS':
+      return new ThemeIcon('info');
+    default:
+      return new ThemeIcon('symbol-method');
+  }
+}
+
+function contextValueFor(
+  element: CollectionTreeNode,
+  aggregate: WorkspaceCollections | undefined,
+): string {
+  if (element.kind === 'info') {
+    return 'info';
+  }
+  if (element.kind === 'collection') {
+    const collection = aggregate?.collections[element.id];
+    return collection?.kind === 'legacy' ? 'collectionLegacy' : 'collection';
+  }
+  if (element.kind === 'folder') {
+    const collection =
+      element.collectionId !== undefined
+        ? aggregate?.collections[element.collectionId]
+        : undefined;
+    return collection?.kind === 'legacy' ? 'folderLegacy' : 'folder';
+  }
+  if (element.kind === 'request') {
+    const collection =
+      element.collectionId !== undefined
+        ? aggregate?.collections[element.collectionId]
+        : undefined;
+    return collection?.kind === 'legacy' ? 'requestLegacy' : 'request';
+  }
+  return element.kind;
+}
+

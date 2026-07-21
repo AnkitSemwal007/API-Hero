@@ -1,4 +1,4 @@
-/** Stable identifiers reserved for API Runner views. */
+/** Stable identifiers reserved for API Hero views. */
 export const VIEW_IDS = {
   /** Activity Bar collections explorer. */
   collections: 'apiRunner.collections',
@@ -8,5 +8,11 @@ export const VIEW_IDS = {
   explorer: 'apiRunner.explorer',
 } as const;
 
-/** An API Runner view identifier. */
+/** An API Hero view identifier. */
 export type ViewId = (typeof VIEW_IDS)[keyof typeof VIEW_IDS];
+
+/**
+ * Custom Text Editor view type for single-request `.api` files.
+ * Shared so collections navigation can openWith without importing request-editor.
+ */
+export const REQUEST_EDITOR_VIEW_TYPE = 'apiRunner.requestEditor';

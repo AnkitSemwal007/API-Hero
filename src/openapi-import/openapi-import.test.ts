@@ -7,6 +7,7 @@ import { test } from 'node:test';
 
 import {
   OpenApiRefResolver,
+  collectionsImportOutputDirectory,
   detectSpecFormat,
   evaluateImportSourceSize,
   generateAuthProfiles,
@@ -240,6 +241,13 @@ test('sanitizes paths and rejects traversal', () => {
   );
 });
 
+test('collectionsImportOutputDirectory targets Collections/<slug>/', () => {
+  assert.equal(
+    collectionsImportOutputDirectory('petstore'),
+    'Collections/petstore',
+  );
+});
+
 test('imports JSON OpenAPI into .api files, env, and auth profiles', async () => {
   const root = await mkdtemp(join(tmpdir(), 'api-hero-import-'));
   try {
@@ -256,6 +264,16 @@ test('imports JSON OpenAPI into .api files, env, and auth profiles', async () =>
     assert.ok(result.summary.authProfileCount >= 3);
     assert.ok(result.summary.environmentCount >= 1);
     assert.ok(result.summary.writtenFiles.length >= 2);
+    assert.match(
+      result.summary.targetDirectory.replace(/\\/gu, '/'),
+      /\/Collections\/[^/]+$/u,
+    );
+    assert.ok(
+      result.summary.writtenFiles.some((path) =>
+        path.replace(/\\/gu, '/').endsWith('/api-hero.collection.json'),
+      ),
+      'expected api-hero.collection.json marker',
+    );
 
     const samplePath = result.summary.writtenFiles.find((path) =>
       path.replace(/\\/gu, '/').includes('get-getpet.api') ||
@@ -265,9 +283,14 @@ test('imports JSON OpenAPI into .api files, env, and auth profiles', async () =>
     assert.ok(samplePath, 'expected a getPet .api file');
     const content = await readFile(samplePath!, 'utf8');
     assert.match(content, /@name /u);
-    assert.match(content, /GET \{\{baseUrl\}\}\/pets\/\{\{petId\}\}/u);
     assert.match(content, /@auth /u);
     assert.match(content, /# operationId:/u);
+    // serializeRequestDocument inserts a blank line before METHOD.
+    assert.match(
+      content,
+      /\n\nGET \{\{baseUrl\}\}\/pets\/\{\{petId\}\}\?verbose=\{\{verbose\}\}\n/u,
+    );
+    assert.match(content, /Accept:\s*application\/json/u);
 
     const postPath = result.summary.writtenFiles.find((path) =>
       /post-.*\.api$/iu.test(path),
@@ -348,6 +371,35 @@ test('handles cancellation between stages', async () => {
     assert.equal(result.summary.cancelled, true);
     assert.equal(result.summary.success, false);
     assert.equal(result.summary.writtenFiles.length, 0);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('skipWrite previews counts without writing files or settings', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'api-hero-preview-'));
+  try {
+    const writes: string[] = [];
+    const result = await runImportPipeline({
+      sourceText: MINIMAL_JSON,
+      fileName: 'petstore.json',
+      targetRoot: root,
+      skipWrite: true,
+      writer: {
+        async mkdir(): Promise<void> {
+          writes.push('mkdir');
+        },
+        async writeFile(path: string): Promise<void> {
+          writes.push(path);
+        },
+      },
+    });
+    assert.equal(result.summary.success, true);
+    assert.equal(result.summary.writtenFiles.length, 0);
+    assert.equal(result.settingsPatch, undefined);
+    assert.ok((result.summary.requestCount ?? 0) >= 2);
+    assert.ok(result.artifacts?.outputDirectoryName.includes('Collections'));
+    assert.deepEqual(writes, []);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -489,6 +541,8 @@ test('Authorization header examples are scrubbed to placeholders', () => {
   assert.ok(!generated.content.includes('super-secret-key-value'));
   assert.match(generated.content, /Authorization:\s*\{\{token\}\}/u);
   assert.match(generated.content, /X-API-Key:\s*\{\{/u);
+  // Intentional serialize layout: blank line before METHOD.
+  assert.match(generated.content, /@name secureGet\n\nGET \{\{baseUrl\}\}\/secure\n/u);
 });
 
 test('external $ref is rejected without fetching', () => {

@@ -1,4 +1,4 @@
-/** Stable command identifiers contributed by API Runner. */
+/** Stable command identifiers contributed by API Hero. */
 export const COMMAND_IDS = {
   runRequest: 'apiRunner.runRequest',
   runRequestWithAssertions: 'apiRunner.runRequestWithAssertions',
@@ -6,8 +6,11 @@ export const COMMAND_IDS = {
   login: 'apiRunner.login',
   logout: 'apiRunner.logout',
   switchEnvironment: 'apiRunner.switchEnvironment',
+  manageEnvironments: 'apiRunner.manageEnvironments',
+  manageAuthProfiles: 'apiRunner.manageAuthProfiles',
   selectAuthentication: 'apiRunner.selectAuthentication',
   refreshCollections: 'apiRunner.refreshCollections',
+  filterCollections: 'apiRunner.filterCollections',
   revealActiveRequest: 'apiRunner.revealActiveRequest',
   openCollectionRequest: 'apiRunner.openCollectionRequest',
   focusCollections: 'apiRunner.focusCollections',
@@ -23,8 +26,30 @@ export const COMMAND_IDS = {
   searchHistory: 'apiRunner.searchHistory',
   refreshHistory: 'apiRunner.refreshHistory',
   revealHistoryRequest: 'apiRunner.revealHistoryRequest',
+  copyHistorySummary: 'apiRunner.copyHistorySummary',
   importOpenApi: 'apiRunner.importOpenApi',
+  createCollection: 'apiRunner.createCollection',
+  renameCollection: 'apiRunner.renameCollection',
+  deleteCollection: 'apiRunner.deleteCollection',
+  duplicateCollection: 'apiRunner.duplicateCollection',
+  exportCollection: 'apiRunner.exportCollection',
+  importCollection: 'apiRunner.importCollection',
+  createFolder: 'apiRunner.createFolder',
+  renameFolder: 'apiRunner.renameFolder',
+  deleteFolder: 'apiRunner.deleteFolder',
+  duplicateFolder: 'apiRunner.duplicateFolder',
+  createRequest: 'apiRunner.createRequest',
+  renameRequest: 'apiRunner.renameRequest',
+  duplicateRequest: 'apiRunner.duplicateRequest',
+  deleteRequest: 'apiRunner.deleteRequest',
+  moveRequest: 'apiRunner.moveRequest',
+  openWorkspace: 'apiRunner.openWorkspace',
+  openRequestEditor: 'apiRunner.openRequestEditor',
+  openOverview: 'apiRunner.openOverview',
+  openSettings: 'apiRunner.openSettings',
+  /** Stable IA alias: focuses History (same as focusHistory), not a separate view. */
+  recentRequests: 'apiRunner.recentRequests',
 } as const;
 
-/** A command identifier contributed by API Runner. */
+/** A command identifier contributed by API Hero. */
 export type CommandId = (typeof COMMAND_IDS)[keyof typeof COMMAND_IDS];

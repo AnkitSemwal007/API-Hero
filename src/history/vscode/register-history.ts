@@ -1,5 +1,6 @@
 import {
   commands,
+  env,
   Position,
   Range,
   Selection,
@@ -8,6 +9,7 @@ import {
   workspace,
   type Disposable,
   type ExtensionContext,
+  type QuickPickItem,
 } from 'vscode';
 
 import { COMMAND_IDS, VIEW_IDS } from '../../constants';
@@ -17,14 +19,20 @@ import type { EnvironmentManager } from '../../variables';
 import {
   DefaultHistoryRecorder,
   filterHistoryEntries,
+  HistoryExecutionStatus,
   resolveHistoryRerunArgument,
   type HistoryCaptureInput,
   type HistoryEntry,
+  type HistoryExecutionStatus as HistoryStatus,
+  type HistoryFilter,
   type HistoryRecorder,
   type HistoryRepository,
 } from '../index';
+import { formatHistorySummaryText } from './history-detail-html';
+import { HistoryDetailPanel } from './history-detail-panel';
 import { FileHistoryRepository } from './file-history-repository';
 import {
+  describeHistoryFilter,
   HistoryTreeDataProvider,
   type HistoryTreeNode,
 } from './history-tree-provider';
@@ -112,9 +120,29 @@ export function registerHistory(
     showCollapseAll: true,
   });
 
+  let cachedEntries: readonly HistoryEntry[] = [];
+
+  const detailPanel = new HistoryDetailPanel({
+    rerun: (entry) => rerunEntry(orchestrator, entry),
+    reveal: (entry) => revealOriginalRequest(entry),
+    deleteEntry: async (entry) => {
+      const deleted = await repository.delete(entry.id);
+      if (deleted) {
+        await refresh();
+      }
+      return deleted;
+    },
+  });
+
+  const applyFilterBanner = (): void => {
+    treeView.message = describeHistoryFilter(treeProvider.getFilter());
+  };
+
   const refresh = async (): Promise<void> => {
     const entries = await repository.list();
+    cachedEntries = entries;
     treeProvider.setEntries(entries);
+    applyFilterBanner();
   };
 
   infrastructure.setOnRecorded(refresh);
@@ -133,11 +161,19 @@ export function registerHistory(
 
   const disposables: Disposable[] = [
     treeView,
+    detailPanel,
     {
       dispose: () => infrastructure.setOnRecorded(undefined),
     },
     commands.registerCommand(COMMAND_IDS.focusHistory, async () => {
       await commands.executeCommand(`${VIEW_IDS.history}.focus`);
+    }),
+    /**
+     * Intentional IA alias for menus/Overview Quick Actions.
+     * Same behavior as focusHistory — not a separate Activity Bar view.
+     */
+    commands.registerCommand(COMMAND_IDS.recentRequests, async () => {
+      await commands.executeCommand(COMMAND_IDS.focusHistory);
     }),
     commands.registerCommand(
       COMMAND_IDS.openHistoryEntry,
@@ -149,7 +185,7 @@ export function registerHistory(
           );
           return;
         }
-        await showEntryDetails(entry);
+        detailPanel.show(entry);
       },
     ),
     commands.registerCommand(
@@ -179,6 +215,20 @@ export function registerHistory(
       },
     ),
     commands.registerCommand(
+      COMMAND_IDS.copyHistorySummary,
+      async (target?: unknown) => {
+        const entry = await resolveEntry(repository, target);
+        if (entry === undefined) {
+          await window.showInformationMessage(
+            'Select a history entry to copy.',
+          );
+          return;
+        }
+        await env.clipboard.writeText(formatHistorySummaryText(entry));
+        window.setStatusBarMessage('History summary copied to clipboard', 2_000);
+      },
+    ),
+    commands.registerCommand(
       COMMAND_IDS.deleteHistoryEntry,
       async (target?: unknown) => {
         const entry = await resolveEntry(repository, target);
@@ -187,13 +237,14 @@ export function registerHistory(
         }
         const deleted = await repository.delete(entry.id);
         if (deleted) {
+          detailPanel.notifyEntryDeleted(entry.id);
           await refresh();
         }
       },
     ),
     commands.registerCommand(COMMAND_IDS.clearHistory, async () => {
       const confirm = await window.showWarningMessage(
-        'Clear all API Runner request history?',
+        'Clear all API Hero request history?',
         { modal: true },
         'Clear History',
       );
@@ -201,20 +252,20 @@ export function registerHistory(
         return;
       }
       await repository.clear();
+      detailPanel.close();
       await refresh();
       logger.info('Request history cleared');
     }),
     commands.registerCommand(COMMAND_IDS.searchHistory, async () => {
-      const value = await window.showInputBox({
-        title: 'Filter Request History',
-        prompt: 'Filter by method, URL, name, or status',
-        value: treeProvider.getFilterQuery() ?? '',
-        placeHolder: 'GET example.com',
-      });
-      if (value === undefined) {
+      const next = await promptHistoryFilter(
+        treeProvider.getFilter(),
+        cachedEntries,
+      );
+      if (next === undefined) {
         return;
       }
-      treeProvider.setFilterQuery(value.length === 0 ? undefined : value);
+      treeProvider.setFilter(next);
+      applyFilterBanner();
     }),
     commands.registerCommand(COMMAND_IDS.refreshHistory, async () => {
       await refresh();
@@ -259,42 +310,135 @@ async function resolveEntry(
   return undefined;
 }
 
-async function showEntryDetails(entry: HistoryEntry): Promise<void> {
-  const lines = [
-    `${entry.summary.method} ${entry.summary.url}`,
-    `Outcome: ${entry.summary.status}`,
-    entry.summary.statusCode === undefined
-      ? undefined
-      : `HTTP: ${entry.summary.statusCode} ${entry.summary.statusText ?? ''}`.trim(),
-    `Duration: ${entry.summary.durationMs} ms`,
-    `Completed: ${entry.summary.timestamp}`,
-    entry.metadata.requestName === undefined
-      ? undefined
-      : `Name: ${entry.metadata.requestName}`,
-    entry.metadata.environmentName === undefined
-      ? undefined
-      : `Environment: ${entry.metadata.environmentName}`,
-    entry.metadata.collectionName === undefined
-      ? undefined
-      : `Collection: ${entry.metadata.collectionName}`,
-    entry.metadata.contentType === undefined
-      ? undefined
-      : `Content-Type: ${entry.metadata.contentType}`,
-    entry.metadata.responseSizeBytes === undefined
-      ? undefined
-      : `Response size: ${entry.metadata.responseSizeBytes} bytes`,
-    entry.metadata.errorCode === undefined
-      ? undefined
-      : `Error: ${entry.metadata.errorCode} — ${entry.metadata.errorMessage ?? ''}`,
-    entry.metadata.source?.uri === undefined
-      ? undefined
-      : `Source: ${entry.metadata.source.uri}`,
-  ].filter((line): line is string => line !== undefined);
-
-  await window.showInformationMessage(lines[0]!, {
-    detail: lines.slice(1).join('\n'),
-    modal: true,
+/**
+ * Facet filter UX: status → method → optional free-text.
+ * Uses {@link HistoryFilter} / {@link filterHistoryEntries} unchanged.
+ */
+async function promptHistoryFilter(
+  current: HistoryFilter,
+  entries: readonly HistoryEntry[],
+): Promise<HistoryFilter | undefined> {
+  const statusPick = await window.showQuickPick(statusFacetItems(current), {
+    title: 'Filter History — Status',
+    placeHolder: 'Filter by execution outcome',
+    matchOnDescription: true,
   });
+  if (statusPick === undefined) {
+    return undefined;
+  }
+  if (statusPick.id === 'clear') {
+    return {};
+  }
+
+  const status =
+    statusPick.id === 'all'
+      ? undefined
+      : (statusPick.id as HistoryStatus);
+
+  const methodPick = await window.showQuickPick(
+    methodFacetItems(current, entries, status),
+    {
+      title: 'Filter History — Method',
+      placeHolder: 'Filter by HTTP method',
+      matchOnDescription: true,
+    },
+  );
+  if (methodPick === undefined) {
+    return undefined;
+  }
+
+  const method =
+    methodPick.id === 'all' ? undefined : methodPick.id.toUpperCase();
+
+  const text = await window.showInputBox({
+    title: 'Filter History — Text',
+    prompt: 'Optional free-text filter (method, URL, name, status). Leave empty to skip.',
+    value: current.query ?? '',
+    placeHolder: 'example.com',
+  });
+  if (text === undefined) {
+    return undefined;
+  }
+
+  return {
+    ...(status === undefined ? {} : { status }),
+    ...(method === undefined ? {} : { method }),
+    ...(text.trim().length === 0 ? {} : { query: text.trim() }),
+  };
+}
+
+interface FilterPickItem extends QuickPickItem {
+  readonly id: string;
+}
+
+function statusFacetItems(current: HistoryFilter): FilterPickItem[] {
+  const selected =
+    typeof current.status === 'string' ? current.status : undefined;
+  return [
+    {
+      id: 'all',
+      label: 'All statuses',
+      description: selected === undefined ? 'Current' : undefined,
+      picked: selected === undefined,
+    },
+    {
+      id: HistoryExecutionStatus.Success,
+      label: '$(pass) Success',
+      description: selected === HistoryExecutionStatus.Success ? 'Current' : undefined,
+      picked: selected === HistoryExecutionStatus.Success,
+    },
+    {
+      id: HistoryExecutionStatus.Failure,
+      label: '$(error) Failure',
+      description: selected === HistoryExecutionStatus.Failure ? 'Current' : undefined,
+      picked: selected === HistoryExecutionStatus.Failure,
+    },
+    {
+      id: HistoryExecutionStatus.Cancelled,
+      label: '$(circle-slash) Cancelled',
+      description:
+        selected === HistoryExecutionStatus.Cancelled ? 'Current' : undefined,
+      picked: selected === HistoryExecutionStatus.Cancelled,
+    },
+    {
+      id: 'clear',
+      label: '$(clear-all) Clear all filters',
+      description: describeHistoryFilter(current),
+    },
+  ];
+}
+
+function methodFacetItems(
+  current: HistoryFilter,
+  entries: readonly HistoryEntry[],
+  status: HistoryStatus | undefined,
+): FilterPickItem[] {
+  const scoped = filterHistoryEntries(
+    entries,
+    status === undefined ? {} : { status },
+  );
+  const methods = [
+    ...new Set(
+      scoped.map((entry) => entry.summary.method.trim().toUpperCase()).filter(
+        (method) => method.length > 0,
+      ),
+    ),
+  ].sort();
+  const selected = current.method?.trim().toUpperCase();
+  return [
+    {
+      id: 'all',
+      label: 'All methods',
+      description: selected === undefined ? 'Current' : undefined,
+      picked: selected === undefined,
+    },
+    ...methods.map((method) => ({
+      id: method,
+      label: `$(symbol-method) ${method}`,
+      description: selected === method ? 'Current' : undefined,
+      picked: selected === method,
+    })),
+  ];
 }
 
 async function rerunEntry(
@@ -381,10 +525,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 /** Exported for tests — filters a snapshot with the same rules as the tree. */
 export function filterVisibleHistory(
   entries: readonly HistoryEntry[],
-  query: string | undefined,
+  filter: HistoryFilter | string | undefined,
 ): readonly HistoryEntry[] {
-  if (query === undefined || query.trim().length === 0) {
+  if (filter === undefined) {
     return entries;
   }
-  return filterHistoryEntries(entries, { query });
+  if (typeof filter === 'string') {
+    if (filter.trim().length === 0) {
+      return entries;
+    }
+    return filterHistoryEntries(entries, { query: filter });
+  }
+  return filterHistoryEntries(entries, filter);
 }

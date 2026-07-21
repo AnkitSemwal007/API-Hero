@@ -1,6 +1,6 @@
 # Assertions & Testing Framework
 
-Transport-independent Assertion Engine for API Runner. It evaluates completed
+Transport-independent Assertion Engine for API Hero. It evaluates completed
 `ExecutionResult` values only — it **never** executes HTTP.
 
 See [request-execution-pipeline.md](./request-execution-pipeline.md) for the live

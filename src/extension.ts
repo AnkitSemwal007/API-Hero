@@ -27,6 +27,7 @@ import {
   registerHistory,
 } from './history/vscode';
 import { registerOpenApiImport } from './openapi-import/vscode';
+import { registerRequestEditor } from './request-editor/vscode';
 import { EXTENSION_NAME, normalizeHistoryMaxEntries } from './constants';
 import {
   API_LANGUAGE_ID,
@@ -55,16 +56,26 @@ import { SecretStorageService } from './storage';
 import {
   ResponseViewerService,
 } from './response';
-import { VsCodeResponsePanelFactory } from './response/vscode-response-panel';
+import {
+  createVsCodeResponseViewerHostActions,
+  VsCodeResponsePanelFactory,
+} from './response/vscode-response-panel';
 import { Logger } from './shared';
 import {
   DefaultVariableResolver,
   EnvironmentManager,
   extractDocumentVariables,
 } from './variables';
+import { registerEnvironments } from './variables/vscode';
+import { registerAuth } from './auth/vscode';
+import { registerOverview } from './overview/vscode';
 
 /** Composes infrastructure adapters and registers extension entry points. */
 export function activate(context: ExtensionContext): void {
+  // Activation stays eager for correct DI order. Safe future deferred-load
+  // candidates (documented in docs/release/marketplace-readiness.md): response
+  // viewer HTML, OpenAPI import pipeline, and collection-runner UI helpers —
+  // only after first command/view use, without changing registration order.
   const outputChannel = window.createOutputChannel(EXTENSION_NAME);
   const logger = new Logger(new VsCodeLogSink(outputChannel));
   const registrar = new CommandRegistrar(logger);
@@ -103,6 +114,8 @@ export function activate(context: ExtensionContext): void {
   };
   const responseViewer = new ResponseViewerService(
     new VsCodeResponsePanelFactory(),
+    undefined,
+    createVsCodeResponseViewerHostActions(),
   );
   const executor = new DefaultRequestExecutor(new NodeHttpTransport());
   const historyInfrastructure = createHistoryInfrastructure(
@@ -217,6 +230,32 @@ export function activate(context: ExtensionContext): void {
   registerOpenApiImport({
     context,
     logger,
+    discovery: collectionsRegistration.discovery,
+  });
+  registerRequestEditor({
+    context,
+    orchestrator,
+    getAuthProfiles: () =>
+      authenticationProfiles.list().map((profile) => ({
+        id: profile.id,
+        label: profile.label?.trim() || profile.id,
+      })),
+    variableResolver,
+    getExternalVariableDefinitions: () =>
+      externalVariableContext().definitions,
+  });
+  registerEnvironments({
+    context,
+    environmentManager,
+  });
+  registerAuth({
+    context,
+    profileManager: authenticationProfiles,
+    secrets: authenticationSecrets,
+  });
+  registerOverview({
+    context,
+    historyRepository: historyInfrastructure.repository,
     discovery: collectionsRegistration.discovery,
   });
 

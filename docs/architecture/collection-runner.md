@@ -1,6 +1,6 @@
 # Collection Runner
 
-Sequential multi-request execution for API Runner collections. The runner
+Sequential multi-request execution for API Hero collections. The runner
 **reuses** [`ExecutionOrchestrator`](./request-execution-pipeline.md) for every
 attempted request — parse → select → validate → build → variables → auth →
 execute → History. It does **not** duplicate HTTP execution or history append
