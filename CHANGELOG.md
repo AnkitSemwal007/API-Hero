@@ -5,6 +5,21 @@ All notable changes to API Hero are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1] - 2026-07-21
+
+### Changed
+
+- OpenAPI import emits `.api` files through shared `request-source` serialization (same emitter as Request Editor / New Request)
+- Webview panels share `src/ui/webview` helpers (escape, nonce, CSP, message-record)
+- Authentication validation centralized in auth core (soft load + strict commit); Auth Manager and diagnostics are thin projections
+- Version bump to `0.6.1`
+
+### Unchanged
+
+- No UI redesign, workflow, command ID, configuration key, or `.api` grammar changes
+- SecretStorage and auth profile settings format unchanged
+- Activity Bar remains Collections + History only
+
 ## [0.6.0] - 2026-07-21
 
 ### Added
