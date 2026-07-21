@@ -26,6 +26,7 @@ export const COMMAND_IDS = {
   searchHistory: 'apiRunner.searchHistory',
   refreshHistory: 'apiRunner.refreshHistory',
   revealHistoryRequest: 'apiRunner.revealHistoryRequest',
+  copyHistorySummary: 'apiRunner.copyHistorySummary',
   importOpenApi: 'apiRunner.importOpenApi',
   createCollection: 'apiRunner.createCollection',
   renameCollection: 'apiRunner.renameCollection',
