@@ -2,6 +2,11 @@
  * OpenAPI 3.0 / 3.1 specification import provider.
  */
 
+import { COLLECTION_MARKER_FILENAME } from '../../collections/constants';
+import {
+  MARKER_ROOT_ORDER_KEY,
+  serializeCollectionMarker,
+} from '../../collections/marker';
 import {
   generateAuthProfiles,
   generateCollectionFiles,
@@ -16,6 +21,7 @@ import {
   parseOpenApiDocument,
   validateOpenApiDocument,
 } from '../openapi';
+import { collectionsImportOutputDirectory } from '../output-paths';
 import { slugifyIdentifier } from '../sanitize';
 import type {
   SpecificationImportContext,
@@ -117,14 +123,33 @@ export class OpenApiImportProvider implements SpecificationImportProvider {
     diagnostics.push(...collection.diagnostics);
     diagnostics.push(...resolver.getDiagnostics());
 
-    const outputDirectoryName = `imported/${apiSlug}`;
+    const outputDirectoryName = collectionsImportOutputDirectory(apiSlug);
+    const markerName =
+      parsed.document.info.title.trim().length > 0
+        ? parsed.document.info.title.trim()
+        : apiSlug;
+    const files = [
+      ...collection.files,
+      {
+        relativePath: COLLECTION_MARKER_FILENAME,
+        content: serializeCollectionMarker({
+          name: markerName,
+          description:
+            typeof parsed.document.info.description === 'string'
+              ? parsed.document.info.description
+              : '',
+          folderOrder: [],
+          requestOrder: { [MARKER_ROOT_ORDER_KEY]: [] },
+        }),
+      },
+    ];
 
     return {
       apiName: parsed.document.info.title,
       apiVersion: parsed.document.info.version,
       openapiVersion: parsed.document.openapi,
       outputDirectoryName,
-      files: collection.files,
+      files,
       environments: environments.environments,
       authProfiles: auth.profiles,
       diagnostics: dedupeDiagnostics(diagnostics),
@@ -144,7 +169,7 @@ function emptyArtifacts(
     apiName,
     apiVersion,
     openapiVersion,
-    outputDirectoryName: 'imported/unknown',
+    outputDirectoryName: collectionsImportOutputDirectory('unknown'),
     files: [],
     environments: [],
     authProfiles: [],

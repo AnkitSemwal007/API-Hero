@@ -62,6 +62,9 @@ export type {
   WriteArtifactsResult,
 } from './workspace-writer';
 
+/** Native collection output: `Collections/<name>/` (+ marker from the provider). */
+export { collectionsImportOutputDirectory } from './output-paths';
+
 export {
   OpenApiImportProvider,
   SpecificationImportProviderRegistry,

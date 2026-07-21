@@ -1,5 +1,5 @@
 /**
- * Maps OpenAPI securitySchemes to API Runner authentication profiles.
+ * Maps OpenAPI securitySchemes to API Hero authentication profiles.
  *
  * Secrets are never copied from the specification. Profiles use
  * `{ kind: 'secret' }` placeholders. OAuth2 / OpenID Connect are metadata-only
