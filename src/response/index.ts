@@ -20,6 +20,10 @@ export type {
 
   PresentedAssertions,
 
+  PresentedCookie,
+
+  PresentedCookies,
+
   PresentedHeader,
 
   ResponseBodyLanguage,
@@ -39,6 +43,8 @@ export { ResponseViewerService } from './response-viewer-service';
 export type {
 
   ResponseViewerDisposable,
+
+  ResponseViewerHostActions,
 
   ResponseViewerNonceFactory,
 
