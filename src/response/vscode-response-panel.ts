@@ -1,8 +1,9 @@
 import type { WebviewPanel } from 'vscode';
-import { ViewColumn, window } from 'vscode';
+import { env, Uri, ViewColumn, window, workspace } from 'vscode';
 
 import type {
   ResponseViewerDisposable,
+  ResponseViewerHostActions,
   ResponseViewerPanel,
   ResponseViewerPanelFactory,
 } from './response-viewer-service';
@@ -26,6 +27,31 @@ export class VsCodeResponsePanelFactory implements ResponseViewerPanelFactory {
   }
 }
 
+/** Clipboard and save-dialog actions for the response viewer host. */
+export function createVsCodeResponseViewerHostActions(): ResponseViewerHostActions {
+  return {
+    async copyText(text: string): Promise<void> {
+      await env.clipboard.writeText(text);
+      window.setStatusBarMessage('Response copied to clipboard', 2_000);
+    },
+    async saveText(fileName: string, content: string): Promise<void> {
+      const workspaceFolder = workspace.workspaceFolders?.[0]?.uri;
+      const defaultUri = workspaceFolder === undefined
+        ? Uri.file(fileName)
+        : Uri.joinPath(workspaceFolder, fileName);
+      const uri = await window.showSaveDialog({
+        defaultUri,
+        saveLabel: 'Save Response',
+      });
+      if (uri === undefined) {
+        return;
+      }
+      await workspace.fs.writeFile(uri, Buffer.from(content, 'utf8'));
+      window.setStatusBarMessage(`Response saved to ${uri.fsPath}`, 3_000);
+    },
+  };
+}
+
 class VsCodeResponsePanel implements ResponseViewerPanel {
   public constructor(private readonly panel: WebviewPanel) {}
 
@@ -42,7 +68,7 @@ class VsCodeResponsePanel implements ResponseViewerPanel {
   }
 
   public onDidReceiveMessage(
-    listener: (message: unknown) => void,
+    listener: (message: unknown) => void | Promise<void>,
   ): ResponseViewerDisposable {
     return this.panel.webview.onDidReceiveMessage(listener);
   }

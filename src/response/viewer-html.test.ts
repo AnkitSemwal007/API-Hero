@@ -87,6 +87,26 @@ test('renders accessible pretty/raw and JSON expansion controls', () => {
   assert.match(html, /var\(--vscode-editor-background\)/u);
 });
 
+test('renders status card, tabs, copy/save/search without cookies placeholder', () => {
+  const html = renderResponseViewerHtml(
+    presentExecutionResult(result()),
+    'nonce',
+  );
+
+  assert.match(html, /class="status-card"/u);
+  assert.match(html, /class="stats-summary"/u);
+  assert.match(html, /role="tablist"/u);
+  assert.match(html, /data-tab="body"/u);
+  assert.match(html, /data-tab="headers"/u);
+  assert.match(html, /data-action="copyBody"/u);
+  assert.match(html, /data-action="saveBody"/u);
+  assert.match(html, /data-action="copyHeaders"/u);
+  assert.match(html, /id="bodySearch"/u);
+  assert.equal(html.includes('data-tab="cookies"'), false);
+  assert.equal(html.includes('Cookie parsing and storage are not enabled'), false);
+  assert.equal(/Cookies/u.test(html), false);
+});
+
 test('shows HTML and XML as highlighted source instead of markup', () => {
   for (const [contentType, body] of [
     ['text/html', '<main onclick="bad()">Hello</main>'],
@@ -115,6 +135,17 @@ test('shows HTML and XML as highlighted source instead of markup', () => {
 
 test('validates webview messages against a closed schema', () => {
   assert.deepEqual(parseResponseViewerMessage({ type: 'ready' }), { type: 'ready' });
+  assert.deepEqual(parseResponseViewerMessage({ type: 'copyHeaders' }), {
+    type: 'copyHeaders',
+  });
+  assert.deepEqual(
+    parseResponseViewerMessage({ type: 'copyBody', mode: 'raw' }),
+    { type: 'copyBody', mode: 'raw' },
+  );
+  assert.deepEqual(
+    parseResponseViewerMessage({ type: 'saveBody', mode: 'pretty' }),
+    { type: 'saveBody', mode: 'pretty' },
+  );
   for (const value of [
     null,
     'ready',
@@ -122,6 +153,10 @@ test('validates webview messages against a closed schema', () => {
     { type: 'reveal-secret' },
     { command: 'ready' },
     ['ready'],
+    { type: 'copyBody' },
+    { type: 'copyBody', mode: 'hex' },
+    { type: 'saveBody', mode: 'pretty', extra: true },
+    { type: 'copyHeaders', mode: 'pretty' },
   ]) {
     assert.equal(parseResponseViewerMessage(value), undefined);
   }
@@ -133,7 +168,9 @@ class MockPanel implements ResponseViewerPanel {
   public disposeCount = 0;
   public readonly events: ('setHtml' | 'reveal')[] = [];
   private disposeListeners = new Set<() => void>();
-  private messageListeners = new Set<(message: unknown) => void>();
+  private messageListeners = new Set<
+    (message: unknown) => void | Promise<void>
+  >();
 
   public setHtml(html: string): void {
     this.html = html;
@@ -151,7 +188,7 @@ class MockPanel implements ResponseViewerPanel {
   }
 
   public onDidReceiveMessage(
-    listener: (message: unknown) => void,
+    listener: (message: unknown) => void | Promise<void>,
   ): ResponseViewerDisposable {
     this.messageListeners.add(listener);
     return { dispose: () => this.messageListeners.delete(listener) };
@@ -164,6 +201,12 @@ class MockPanel implements ResponseViewerPanel {
 
   public closeFromUser(): void {
     for (const listener of [...this.disposeListeners]) listener();
+  }
+
+  public async emitMessage(message: unknown): Promise<void> {
+    for (const listener of [...this.messageListeners]) {
+      await listener(message);
+    }
   }
 }
 
@@ -214,6 +257,39 @@ test('sets the new response HTML before revealing an existing panel', () => {
   assert.equal(factory.panels.length, 1);
   assert.deepEqual(panel.events, ['setHtml', 'reveal']);
   assert.match(panel.html, /second/u);
+});
+
+test('copies and saves body/headers through host actions from the presentation model', async () => {
+  const factory = new MockPanelFactory();
+  const copied: string[] = [];
+  const saved: { fileName: string; content: string }[] = [];
+  const viewer = new ResponseViewerService(
+    factory,
+    () => 'nonce',
+    {
+      copyText: (text) => {
+        copied.push(text);
+      },
+      saveText: (fileName, content) => {
+        saved.push({ fileName, content });
+      },
+    },
+  );
+
+  viewer.show(result('{"ok":true}'));
+  const panel = factory.panels[0]!;
+
+  await panel.emitMessage({ type: 'copyBody', mode: 'raw' });
+  await panel.emitMessage({ type: 'copyHeaders' });
+  await panel.emitMessage({ type: 'saveBody', mode: 'raw' });
+  await panel.emitMessage({ type: 'reveal-secret' });
+
+  assert.equal(copied.length, 2);
+  assert.equal(copied[0], '{"ok":true}');
+  assert.match(copied[1]!, /X-Unsafe:/u);
+  assert.equal(saved.length, 1);
+  assert.equal(saved[0]?.fileName, 'response.json');
+  assert.equal(saved[0]?.content, '{"ok":true}');
 });
 
 function deeplyNestedResult(depth: number): ExecutionResult {
@@ -317,10 +393,34 @@ test('renders assertion summary and failures in the viewer HTML', () => {
     },
   });
   const html = renderResponseViewerHtml(model, 'nonce');
+  assert.match(html, /data-tab="assertions"/u);
   assert.match(html, /Assertions/u);
   assert.match(html, /1\/2 passed/u);
   assert.match(html, /expect status == 200/u);
   assert.match(html, /expect body\.ok == false/u);
   assert.match(html, /Expected/u);
   assert.equal(html.includes('<script>'), false);
+});
+
+test('renders cookies tab only when cookie jar data is available', () => {
+  const base = presentExecutionResult(result('{"ok":true}'));
+  const withoutJar = renderResponseViewerHtml(base, 'nonce');
+  assert.equal(withoutJar.includes('data-tab="cookies"'), false);
+
+  const withJar = renderResponseViewerHtml(
+    {
+      ...base,
+      cookies: {
+        available: true,
+        setCookieHeaderCount: 1,
+        entries: [
+          { name: 'session', value: '••••••••', domain: 'example.test', path: '/' },
+        ],
+      },
+    },
+    'nonce',
+  );
+  assert.match(withJar, /data-tab="cookies"/u);
+  assert.match(withJar, /session/u);
+  assert.match(withJar, /example\.test/u);
 });
