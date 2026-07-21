@@ -283,9 +283,14 @@ test('imports JSON OpenAPI into .api files, env, and auth profiles', async () =>
     assert.ok(samplePath, 'expected a getPet .api file');
     const content = await readFile(samplePath!, 'utf8');
     assert.match(content, /@name /u);
-    assert.match(content, /GET \{\{baseUrl\}\}\/pets\/\{\{petId\}\}/u);
     assert.match(content, /@auth /u);
     assert.match(content, /# operationId:/u);
+    // serializeRequestDocument inserts a blank line before METHOD.
+    assert.match(
+      content,
+      /\n\nGET \{\{baseUrl\}\}\/pets\/\{\{petId\}\}\?verbose=\{\{verbose\}\}\n/u,
+    );
+    assert.match(content, /Accept:\s*application\/json/u);
 
     const postPath = result.summary.writtenFiles.find((path) =>
       /post-.*\.api$/iu.test(path),
@@ -536,6 +541,8 @@ test('Authorization header examples are scrubbed to placeholders', () => {
   assert.ok(!generated.content.includes('super-secret-key-value'));
   assert.match(generated.content, /Authorization:\s*\{\{token\}\}/u);
   assert.match(generated.content, /X-API-Key:\s*\{\{/u);
+  // Intentional serialize layout: blank line before METHOD.
+  assert.match(generated.content, /@name secureGet\n\nGET \{\{baseUrl\}\}\/secure\n/u);
 });
 
 test('external $ref is rejected without fetching', () => {
