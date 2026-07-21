@@ -1,6 +1,7 @@
 import {
   commands,
   window,
+  workspace,
   type Disposable,
   type ExtensionContext,
   type TreeView,
@@ -8,7 +9,12 @@ import {
 
 import type { CollectionDiscoveryService } from '../../collections';
 import type { CollectionTreeNode } from '../../collections';
-import { COMMAND_IDS } from '../../constants';
+import {
+  COMMAND_IDS,
+  CONFIGURATION_KEYS,
+  CONFIGURATION_SECTION,
+  DEFAULT_CONFIGURATION,
+} from '../../constants';
 import type { ExecutionOrchestrator } from '../../orchestration';
 import type { Logger } from '../../shared';
 import {
@@ -25,6 +31,11 @@ import {
   formatRunSummaryMessage,
   withCollectionRunProgress,
 } from './progress-ui';
+import {
+  normalizeFailurePolicySetting,
+  resolveFailurePolicyForRun,
+} from './run-report-html';
+import { CollectionRunReportPanel } from './run-report-panel';
 
 export interface RegisterCollectionRunnerOptions {
   readonly context: ExtensionContext;
@@ -62,6 +73,7 @@ export function registerCollectionRunner(
     getHistoryCaptureContext,
   } = options;
   const progressUi = new VsCodeCollectionRunProgress();
+  const reportPanel = new CollectionRunReportPanel();
   const runner = new CollectionRunnerService({
     executor: orchestrator,
     sourceReader: new VsCodeCollectionRunSourceReader(),
@@ -81,7 +93,7 @@ export function registerCollectionRunner(
       return;
     }
 
-    const policy = await pickFailurePolicy();
+    const policy = await resolveFailurePolicy();
     if (policy === undefined) {
       return;
     }
@@ -138,7 +150,7 @@ export function registerCollectionRunner(
           }
         },
       );
-      await presentSummary(summary, progressUi);
+      await presentSummary(summary, progressUi, reportPanel);
       logger.info('Collection run finished', {
         runId: summary.runId,
         status: summary.status,
@@ -150,7 +162,7 @@ export function registerCollectionRunner(
         message: error instanceof Error ? error.message : String(error),
       });
       await window.showErrorMessage(
-        'API Runner could not complete the collection run.',
+        'API Hero could not complete the collection run.',
       );
     } finally {
       if (activeRun === controller) {
@@ -162,22 +174,20 @@ export function registerCollectionRunner(
 
   const disposables: Disposable[] = [
     progressUi,
-    commands.registerCommand(
-      COMMAND_IDS.runCollection,
-      async (node?: CollectionTreeNode) => {
-        const collectionId =
-          node?.kind === 'collection'
-            ? node.id
-            : await pickCollectionId(discovery);
-        if (collectionId === undefined) {
-          return;
-        }
-        await runWithTarget(
-          { mode: 'collection', collectionId },
-          'API Runner: Run Collection',
-        );
-      },
-    ),
+    reportPanel,
+    commands.registerCommand(COMMAND_IDS.runCollection, async (node?: CollectionTreeNode) => {
+      const collectionId =
+        node?.kind === 'collection'
+          ? node.id
+          : await pickCollectionId(discovery);
+      if (collectionId === undefined) {
+        return;
+      }
+      await runWithTarget(
+        { mode: 'collection', collectionId },
+        'API Hero: Run Collection',
+      );
+    }),
     commands.registerCommand(
       COMMAND_IDS.runCollectionTests,
       async (node?: CollectionTreeNode) => {
@@ -190,7 +200,7 @@ export function registerCollectionRunner(
         }
         await runWithTarget(
           { mode: 'collection', collectionId },
-          'API Runner: Run Collection Tests',
+          'API Hero: Run Collection Tests',
         );
       },
     ),
@@ -217,7 +227,7 @@ export function registerCollectionRunner(
             collectionId: folderNode.collectionId,
             folderId: folderNode.folderId,
           },
-          'API Runner: Run Folder',
+          'API Hero: Run Folder',
         );
       },
     ),
@@ -240,7 +250,7 @@ export function registerCollectionRunner(
             collectionId: selected.collectionId,
             requestIds: selected.requestIds,
           },
-          'API Runner: Run Selected Requests',
+          'API Hero: Run Selected Requests',
         );
       },
     ),
@@ -253,8 +263,10 @@ export function registerCollectionRunner(
 async function presentSummary(
   summary: RunSummary,
   progressUi: VsCodeCollectionRunProgress,
+  reportPanel: CollectionRunReportPanel,
 ): Promise<void> {
   progressUi.showSummary(summary);
+  reportPanel.show(summary);
   const message = formatRunSummaryMessage(summary);
   if (
     summary.statistics.failed > 0 ||
@@ -267,6 +279,17 @@ async function presentSummary(
   } else {
     await window.showInformationMessage(message);
   }
+}
+
+async function resolveFailurePolicy(): Promise<FailurePolicyKind | undefined> {
+  const configuration = workspace.getConfiguration(CONFIGURATION_SECTION);
+  const setting = normalizeFailurePolicySetting(
+    configuration.get(
+      CONFIGURATION_KEYS.collectionRunnerFailurePolicy,
+      DEFAULT_CONFIGURATION.collectionRunnerFailurePolicy,
+    ),
+  );
+  return resolveFailurePolicyForRun(setting, pickFailurePolicy);
 }
 
 async function pickFailurePolicy(): Promise<FailurePolicyKind | undefined> {

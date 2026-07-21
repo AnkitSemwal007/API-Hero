@@ -7,3 +7,21 @@ export {
   formatRunSummaryMessage,
   withCollectionRunProgress,
 } from './progress-ui';
+export { CollectionRunReportPanel } from './run-report-panel';
+export type { CollectionRunReportPanelActions } from './run-report-panel';
+export {
+  FailurePolicySettingValue,
+  buildCollectionRunReportModel,
+  formatDuration as formatReportDuration,
+  normalizeFailurePolicySetting,
+  parseCollectionRunReportMessage,
+  renderCollectionRunReportHtml,
+  resolveFailurePolicyForRun,
+} from './run-report-html';
+export type {
+  CollectionRunReportInboundMessage,
+  CollectionRunReportModel,
+  CollectionRunReportOutboundMessage,
+  CollectionRunReportRow,
+  FailurePolicySettingValue as FailurePolicySetting,
+} from './run-report-html';

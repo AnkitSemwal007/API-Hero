@@ -1,7 +1,7 @@
-/** Root namespace for all API Runner settings. */
+/** Root namespace for all API Hero settings. */
 export const CONFIGURATION_SECTION = 'apiRunner';
 
-/** Stable keys for settings below the API Runner namespace. */
+/** Stable keys for settings below the API Hero namespace. */
 export const CONFIGURATION_KEYS = {
   logLevel: 'logLevel',
   requestTimeout: 'requestTimeout',
@@ -13,6 +13,7 @@ export const CONFIGURATION_KEYS = {
   authenticationProfiles: 'authentication.profiles',
   historyMaxEntries: 'history.maxEntries',
   importMaxFileBytes: 'import.maxFileBytes',
+  collectionRunnerFailurePolicy: 'collectionRunner.failurePolicy',
   languageFeatures: {
     hover: 'languageFeatures.hover',
     outline: 'languageFeatures.outline',
@@ -38,6 +39,11 @@ export const DEFAULT_CONFIGURATION = {
   importMaxFileBytes: 5 * 1024 * 1024,
   /** Hard upper bound for import file size settings (50 MiB). */
   importMaxFileBytesLimit: 50 * 1024 * 1024,
+  /**
+   * Collection run failure policy. `ask` prompts each run; other values apply
+   * without a QuickPick.
+   */
+  collectionRunnerFailurePolicy: 'ask',
   languageFeatures: {
     hover: true,
     outline: true,
@@ -80,13 +86,14 @@ export function normalizeImportMaxFileBytes(value: unknown): number {
   return DEFAULT_CONFIGURATION.importMaxFileBytes;
 }
 
-/** A configuration key below the API Runner namespace. */
+/** A configuration key below the API Hero namespace. */
 export type ConfigurationKey =
   | typeof CONFIGURATION_KEYS.logLevel
   | typeof CONFIGURATION_KEYS.requestTimeout
   | typeof CONFIGURATION_KEYS.maxResponseBytes
   | typeof CONFIGURATION_KEYS.historyMaxEntries
   | typeof CONFIGURATION_KEYS.importMaxFileBytes
+  | typeof CONFIGURATION_KEYS.collectionRunnerFailurePolicy
   | typeof CONFIGURATION_KEYS.globalVariables
   | typeof CONFIGURATION_KEYS.workspaceVariables
   | typeof CONFIGURATION_KEYS.environments

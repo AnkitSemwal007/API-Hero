@@ -40,7 +40,7 @@ export class VsCodeCollectionRunProgress
 
   public constructor() {
     this.item = window.createStatusBarItem(StatusBarAlignment.Left, 99);
-    this.item.name = 'API Runner Collection Run';
+    this.item.name = 'API Hero Collection Run';
   }
 
   public bindReporter(
@@ -62,7 +62,7 @@ export class VsCodeCollectionRunProgress
           : `${event.completed + 1}/${event.total}: ${label}`;
 
     this.report?.({ message });
-    this.item.text = `$(sync~spin) API Runner: ${message}`;
+    this.item.text = `$(sync~spin) API Hero: ${message}`;
     this.item.tooltip = `Elapsed ${formatDuration(event.elapsedMs)}`;
     this.item.show();
   }
@@ -84,9 +84,12 @@ export class VsCodeCollectionRunProgress
           : `Done — ${stats.passed} passed, ${stats.failed} failed, ${stats.skipped} skipped${assertionPart}`;
     this.item.text =
       stats.failed > 0 || stats.assertionsFailed > 0
-        ? `$(error) API Runner: ${text}`
-        : `$(check) API Runner: ${text}`;
-    this.item.tooltip = `Collection run finished in ${formatDuration(stats.durationMs)}. Average ${formatDuration(stats.averageResponseTimeMs)}.`;
+        ? `$(error) API Hero: ${text}`
+        : `$(check) API Hero: ${text}`;
+    this.item.tooltip =
+      `Collection run finished in ${formatDuration(stats.durationMs)}. ` +
+      `Average ${formatDuration(stats.averageResponseTimeMs)}. ` +
+      'See the Collection Run Report panel for per-request details.';
     this.item.show();
   }
 
