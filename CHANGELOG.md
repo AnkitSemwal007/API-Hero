@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.0.0] - 2026-07-26
+## [0.2.0] - 2026-07-26
 
 Phase 1 complete — response variable extraction and the post-execution extraction pipeline.
 
@@ -24,7 +24,7 @@ Phase 1 complete — response variable extraction and the post-execution extract
 
 ### Changed
 
-- Version pin to `1.0.0` across package manifest, README, SUPPORT, and product docs
+- Version pin to `0.2.0` across package manifest, README, SUPPORT, and product docs
 - Product docs and roadmap updated for Phase 1 shipped scope (collection chaining deferred to Phase 2)
 
 ### Unchanged
