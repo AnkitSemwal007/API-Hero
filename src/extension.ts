@@ -20,6 +20,11 @@ import {
   NoneAuthenticationProvider,
 } from './auth';
 import { registerAssertions } from './assertions/vscode';
+import {
+  InMemoryRuntimeVariableOverlay,
+  requestKeyFor,
+} from './extraction';
+import { registerExtraction } from './extraction/vscode';
 import { registerCollections } from './collections/vscode';
 import { registerCollectionRunner } from './collection-runner/vscode';
 import {
@@ -42,6 +47,7 @@ import {
   ExecutionOrchestrator,
 } from './orchestration';
 import {
+  SuppressibleExecutionStatusPresenter,
   VsCodeExecutionNotificationSink,
   VsCodeExecutionProgressRunner,
   VsCodeExecutionStatusPresenter,
@@ -60,18 +66,20 @@ import {
   createVsCodeResponseViewerHostActions,
   VsCodeResponsePanelFactory,
 } from './response/vscode-response-panel';
-import { Logger } from './shared';
+import { Logger, fireAndForget } from './shared';
 import {
   DefaultVariableResolver,
   EnvironmentManager,
   extractDocumentVariables,
+  InMemoryRunVariableStore,
 } from './variables';
 import { registerEnvironments } from './variables/vscode';
 import { registerAuth } from './auth/vscode';
 import { registerOverview } from './overview/vscode';
+import { registerProjectStore } from './project-store/vscode';
 
 /** Composes infrastructure adapters and registers extension entry points. */
-export function activate(context: ExtensionContext): void {
+export async function activate(context: ExtensionContext): Promise<void> {
   // Activation stays eager for correct DI order. Safe future deferred-load
   // candidates (documented in docs/release/marketplace-readiness.md): response
   // viewer HTML, OpenAPI import pipeline, and collection-runner UI helpers —
@@ -80,10 +88,19 @@ export function activate(context: ExtensionContext): void {
   const logger = new Logger(new VsCodeLogSink(outputChannel));
   const registrar = new CommandRegistrar(logger);
   const settingsProvider = new VsCodeSettingsProvider();
+  // Migrate / load `.apihero` before EnvironmentManager first capture so
+  // dual-read repositories prefer project files when present.
+  const projectStoreRegistration = await registerProjectStore(context, logger);
   const environmentManager = new EnvironmentManager(
     new VsCodeVariableConfigurationRepository(),
   );
+  const projectStoreEnvironmentSync =
+    projectStoreRegistration.coordinator.onDidChange(() => {
+      environmentManager.refresh();
+    });
   const variableResolver = new DefaultVariableResolver();
+  const runtimeOverlay = new InMemoryRuntimeVariableOverlay();
+  const runVariableStore = new InMemoryRunVariableStore();
   const authenticationProfileRepository =
     new VsCodeAuthenticationProfileRepository();
   const authenticationProfiles = new AuthenticationProfileManager(
@@ -102,13 +119,23 @@ export function activate(context: ExtensionContext): void {
   const authenticationSecrets = new DefaultAuthenticationSecretRepository(
     secretStorage,
   );
-  const externalVariableContext = () => {
+  /** Global + workspace + active env (+ optional overlay/run for IntelliSense). */
+  const externalVariableContext = (requestKey?: string) => {
     const snapshot = environmentManager.capture();
+    const key =
+      requestKey ??
+      requestKeyFor(
+        window.activeTextEditor?.document.uri.toString() ?? '',
+        0,
+      );
     return {
       definitions: [
         ...snapshot.globalVariables,
         ...snapshot.workspaceVariables,
+        // collection: empty until Phase 2
         ...(snapshot.active?.variables ?? []),
+        ...runtimeOverlay.getDefinitions({ requestKey: key }),
+        ...runVariableStore.toDefinitions(),
       ],
     };
   };
@@ -123,8 +150,15 @@ export function activate(context: ExtensionContext): void {
     normalizeHistoryMaxEntries(
       settingsProvider.getSettings().historyMaxEntries,
     ),
+    logger,
   );
   const assertionsRegistration = registerAssertions(context);
+  const extractionRegistration = registerExtraction({
+    context,
+    environmentManager,
+    overlay: runtimeOverlay,
+    runStore: runVariableStore,
+  });
   /**
    * Single capture-context provider for history. Filled after
    * {@link registerHistory}; orchestrator invokes it only at commit time.
@@ -133,10 +167,13 @@ export function activate(context: ExtensionContext): void {
     readonly environmentName?: string;
     readonly collectionName?: string;
   } = () => ({});
+  const executionStatusPresenter = new SuppressibleExecutionStatusPresenter(
+    new VsCodeExecutionStatusPresenter(),
+  );
   const orchestrator = new ExecutionOrchestrator(
     executor,
     responseViewer,
-    new VsCodeExecutionStatusPresenter(),
+    executionStatusPresenter,
     new VsCodeExecutionProgressRunner(),
     new VsCodeExecutionNotificationSink(),
     () => {
@@ -148,12 +185,22 @@ export function activate(context: ExtensionContext): void {
     },
     undefined,
     variableResolver,
-    (document) => ({
-      definitions: [
-        ...externalVariableContext().definitions,
-        ...extractDocumentVariables(document).definitions,
-      ],
-    }),
+    (document, requestKey) => {
+      const key =
+        requestKey ?? requestKeyFor(document.sourceId ?? '', 0);
+      const snapshot = environmentManager.capture();
+      return {
+        definitions: [
+          ...snapshot.globalVariables,
+          ...snapshot.workspaceVariables,
+          // collection: empty until Phase 2
+          ...(snapshot.active?.variables ?? []),
+          ...extractDocumentVariables(document).definitions,
+          ...runtimeOverlay.getDefinitions({ requestKey: key }),
+          ...runVariableStore.toDefinitions(),
+        ],
+      };
+    },
     authenticationResolver,
     () => ({
       ...authenticationProfiles.capture(),
@@ -162,6 +209,7 @@ export function activate(context: ExtensionContext): void {
     historyInfrastructure.recorder,
     () => getHistoryCaptureContext(),
     assertionsRegistration.observer,
+    extractionRegistration.observer,
   );
   const registrations = registrar.register([
     createRunRequestCommand(orchestrator),
@@ -201,8 +249,15 @@ export function activate(context: ExtensionContext): void {
   );
   const historyRetentionRegistration = settingsProvider.onDidChange(
     (settings) => {
-      void historyInfrastructure.repository.setMaxEntries(
-        settings.historyMaxEntries,
+      fireAndForget(
+        historyInfrastructure.repository.setMaxEntries(
+          settings.historyMaxEntries,
+        ),
+        (error: unknown) => {
+          logger.warning('Failed to update history retention', {
+            message: error instanceof Error ? error.message : String(error),
+          });
+        },
       );
     },
   );
@@ -226,6 +281,9 @@ export function activate(context: ExtensionContext): void {
     orchestrator,
     collectionsTreeView: collectionsRegistration.treeView,
     getHistoryCaptureContext: () => getHistoryCaptureContext(),
+    setRequestStatusSuppressed: (suppressed) => {
+      executionStatusPresenter.setSuppressed(suppressed);
+    },
   });
   registerOpenApiImport({
     context,
@@ -243,6 +301,15 @@ export function activate(context: ExtensionContext): void {
     variableResolver,
     getExternalVariableDefinitions: () =>
       externalVariableContext().definitions,
+    getActiveEnvironmentLabel: () => {
+      const activeId = environmentManager.activeId;
+      if (activeId === undefined) {
+        return undefined;
+      }
+      return environmentManager.list().find(
+        (environment) => environment.id === activeId,
+      )?.name;
+    },
   });
   registerEnvironments({
     context,
@@ -266,6 +333,7 @@ export function activate(context: ExtensionContext): void {
     codeLensRegistration,
     variableConfigurationRegistration,
     historyRetentionRegistration,
+    projectStoreEnvironmentSync,
     ...registrations,
     ...languageRegistrations,
   );

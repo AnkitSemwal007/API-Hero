@@ -16,6 +16,8 @@ export const DIRECTIVES = [
   '@tag',
   '@variable',
   '@sensitive-variable',
+  '@extract',
+  '@sensitive-extract',
 ] as const;
 
 /** Directives that may occur once in a request block. */
@@ -77,6 +79,10 @@ export const HOVER_DOCUMENTATION: Readonly<Record<string, string>> = {
   '@name': 'Sets the request name shown in the Outline view.',
   '@description': 'Adds descriptive metadata to the request.',
   '@tag': 'Adds a searchable tag to the request.',
-  '@variable': 'Defines a document variable using name=value.',
-  '@sensitive-variable': 'Defines a masked document variable using name=value.',
+  '@variable': 'Defines a Request-scope variable using name=value (highest precedence).',
+  '@sensitive-variable': 'Defines a masked Request-scope variable using name=value (highest precedence).',
+  '@extract':
+    'Extracts a response value into a variable: @extract name from body.path|header Name|status [scope=…] [when=…] [optional]. Default scope is run.',
+  '@sensitive-extract':
+    'Like @extract, but marks the extracted variable as sensitive (masked in UI and reports).',
 };

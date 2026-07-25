@@ -1,5 +1,5 @@
 /**
- * Registers Auth Profiles Manager command, panel, and missing-secret code actions.
+ * Registers Manage Authentication command, panel, and missing-secret code actions.
  */
 
 import {
@@ -39,7 +39,7 @@ export interface AuthRegistration {
 
 const SET_AUTH_SECRET_COMMAND = 'apiRunner.setAuthSecret';
 
-/** Wires Auth Profiles Manager UI into the extension host. */
+/** Wires Manage Authentication UI into the extension host. */
 export function registerAuth(options: RegisterAuthOptions): AuthRegistration {
   const { context, profileManager, secrets } = options;
   const panel = new AuthManagerPanel({ profileManager, secrets });
@@ -109,7 +109,7 @@ class AuthMissingSecretCodeActionProvider implements CodeActionProvider {
       actions.push(action);
 
       const manage = new CodeAction(
-        'Manage Auth Profiles',
+        'Manage Authentication',
         CodeActionKind.QuickFix,
       );
       manage.diagnostics = [diagnostic];

@@ -1,4 +1,9 @@
 /** VS Code adapters for the Native API Request Editor. */
+export {
+  clearActiveRequestEditorDocument,
+  getActiveRequestEditorDocument,
+  setActiveRequestEditorDocument,
+} from './active-request-editor';
 export { REQUEST_EDITOR_VIEW_TYPE } from './constants';
 export {
   emptyRequestEditorModel,
@@ -7,6 +12,8 @@ export {
   renderRequestEditorHtml,
 } from './request-editor-html';
 export {
+  createRequestEditorAck,
+  createRequestEditorResubmit,
   maskSensitiveVariablesForWebview,
   parseRequestEditorMessage,
   parseRequestSourceDocument,
@@ -20,6 +27,7 @@ export type {
   RequestEditorMode,
   RequestEditorOutboundMessage,
   RequestEditorState,
+  RequestEditorVariableCompletion,
 } from './request-editor-messages';
 export {
   openRequestEditor,

@@ -5,7 +5,9 @@ import type {
 } from '../execution';
 import type { TestReport } from '../assertions';
 import { maskAssertionText } from '../assertions';
+import type { ExtractionReport } from '../extraction';
 import { deepFreeze, redactUrlUserinfo } from '../shared';
+import { MASKED_VARIABLE_VALUE } from '../variables';
 
 export const RESPONSE_TEXT_PREVIEW_LIMIT = 256 * 1024;
 export const RESPONSE_BINARY_PREVIEW_LIMIT = 4 * 1024;
@@ -108,6 +110,29 @@ export interface PresentedAssertions {
   readonly assertions: readonly PresentedAssertion[];
 }
 
+export interface PresentedExtractionOutcome {
+  readonly variableName: string;
+  readonly sourceLabel: string;
+  readonly outcome: 'extracted' | 'failed' | 'skipped' | 'malformed';
+  readonly maskedValue?: string;
+  readonly reason?: string;
+}
+
+export interface PresentedExtractionSummary {
+  readonly total: number;
+  readonly extracted: number;
+  readonly failed: number;
+  readonly skipped: number;
+  readonly malformed: number;
+}
+
+export interface PresentedExtraction {
+  readonly summary: PresentedExtractionSummary;
+  readonly outcomes: readonly PresentedExtractionOutcome[];
+  /** Chip label, e.g. `Extracted 2` or `Extract 1 failed`. */
+  readonly chipLabel: string;
+}
+
 export interface ResponsePresentation {
   readonly success: boolean;
   readonly requestId: string;
@@ -127,6 +152,7 @@ export interface ResponsePresentation {
   readonly body?: ResponseBodyPresentation;
   readonly failure?: ResponseFailurePresentation;
   readonly assertions?: PresentedAssertions;
+  readonly extraction?: PresentedExtraction;
   readonly summary: string;
 }
 
@@ -155,12 +181,14 @@ const ERROR_TITLES: Readonly<Record<ExecutionErrorCode, string>> = {
 export function presentExecutionResult(
   result: ExecutionResult,
   assertions?: TestReport,
+  extraction?: ExtractionReport,
 ): ResponsePresentation {
   const method = result.request?.method ?? 'Unknown method';
   const requestUrl = result.request === undefined
     ? 'Unknown URL'
     : redactUrlUserinfo(result.request.url);
   const presentedAssertions = presentAssertions(assertions);
+  const presentedExtraction = presentExtraction(extraction);
   if (!result.success) {
     return deepFreeze({
       success: false,
@@ -189,6 +217,9 @@ export function presentExecutionResult(
       ...(presentedAssertions === undefined
         ? {}
         : { assertions: presentedAssertions }),
+      ...(presentedExtraction === undefined
+        ? {}
+        : { extraction: presentedExtraction }),
       summary: `${ERROR_TITLES[result.error.code]} after ${formatDuration(result.timing.durationMs)}`,
     });
   }
@@ -211,6 +242,10 @@ export function presentExecutionResult(
     presentedAssertions === undefined
       ? ''
       : ` · Assertions ${presentedAssertions.summary.passed}/${presentedAssertions.summary.total}`;
+  const extractionSuffix =
+    presentedExtraction === undefined
+      ? ''
+      : ` · ${presentedExtraction.chipLabel}`;
   return deepFreeze({
     success: true,
     requestId: result.requestId,
@@ -238,7 +273,10 @@ export function presentExecutionResult(
     ...(presentedAssertions === undefined
       ? {}
       : { assertions: presentedAssertions }),
-    summary: `${response.statusCode} ${response.statusText} · ${formatDuration(result.timing.durationMs)} · ${formatBytes(response.bodySizeBytes)}${assertionSuffix}`,
+    ...(presentedExtraction === undefined
+      ? {}
+      : { extraction: presentedExtraction }),
+    summary: `${response.statusCode} ${response.statusText} · ${formatDuration(result.timing.durationMs)} · ${formatBytes(response.bodySizeBytes)}${assertionSuffix}${extractionSuffix}`,
   });
 }
 
@@ -288,6 +326,72 @@ function presentAssertions(
   };
 }
 
+function presentExtraction(
+  report: ExtractionReport | undefined,
+): PresentedExtraction | undefined {
+  if (report === undefined) {
+    return undefined;
+  }
+  const total =
+    report.extractedCount +
+    report.failedCount +
+    report.skippedCount +
+    report.malformedCount;
+  if (total === 0 && report.outcomes.length === 0) {
+    return undefined;
+  }
+  const summary: PresentedExtractionSummary = {
+    total: report.outcomes.length > 0 ? report.outcomes.length : total,
+    extracted: report.extractedCount,
+    failed: report.failedCount,
+    skipped: report.skippedCount,
+    malformed: report.malformedCount,
+  };
+  const failed = summary.failed + summary.malformed;
+  const chipLabel =
+    failed > 0
+      ? `Extract ${failed} failed`
+      : `Extracted ${summary.extracted}`;
+  return {
+    summary,
+    chipLabel,
+    outcomes: report.outcomes.map((outcome) => {
+      const sensitive = outcome.rule.sensitive === true;
+      const maskedValue =
+        outcome.maskedValue !== undefined
+          ? sensitive
+            ? MASKED_VARIABLE_VALUE
+            : outcome.maskedValue
+          : undefined;
+      return {
+        variableName: outcome.rule.variableName,
+        sourceLabel: formatExtractionSourceLabel(outcome.rule),
+        outcome: outcome.kind,
+        ...(maskedValue === undefined ? {} : { maskedValue }),
+        ...(outcome.reason === undefined ? {} : { reason: outcome.reason }),
+      };
+    }),
+  };
+}
+
+function formatExtractionSourceLabel(
+  rule: ExtractionReport['outcomes'][number]['rule'],
+): string {
+  const source = rule.source;
+  switch (source.kind) {
+    case 'json-path':
+      return source.path;
+    case 'header':
+      return `header ${source.name}`;
+    case 'status':
+      return 'status';
+    default: {
+      const _exhaustive: never = source;
+      return _exhaustive;
+    }
+  }
+}
+
 function presentBody(response: RuntimeResponse): ResponseBodyPresentation {
   const language = detectLanguage(response);
   if (response.body.text === undefined) {
@@ -323,6 +427,18 @@ function presentBody(response: RuntimeResponse): ResponseBodyPresentation {
     try {
       const parsed = response.body.json ?? JSON.parse(source) as unknown;
       const pretty = JSON.stringify(parsed, undefined, 2);
+      if (pretty.length > RESPONSE_TEXT_PREVIEW_LIMIT) {
+        return {
+          language,
+          raw,
+          pretty: pretty.slice(0, RESPONSE_TEXT_PREVIEW_LIMIT),
+          prettyAvailable: false,
+          truncated: true,
+          displayedUnits: RESPONSE_TEXT_PREVIEW_LIMIT,
+          totalUnits: pretty.length,
+          unit: 'characters',
+        };
+      }
       return {
         language,
         raw,

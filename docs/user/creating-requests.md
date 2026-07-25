@@ -1,0 +1,56 @@
+# Creating requests
+
+Requests live in `.api` files. The **Request Editor** is the default custom editor for `*.api`. You can also open the plain text editor when you need the raw grammar.
+
+## Create a request
+
+1. **API Hero: New Request** (Collections toolbar or Command Palette).
+2. Choose collection/folder and name when prompted.
+3. Edit method, URL, headers, query, body, variables, and auth in the Request Editor, or edit the text file directly.
+
+## `.api` basics
+
+Separate multiple requests with `###`:
+
+```api
+@name List users
+GET {{baseUrl}}/users
+Accept: application/json
+
+###
+@name Create user
+POST {{baseUrl}}/users
+Content-Type: application/json
+
+{
+  "name": "Ada"
+}
+```
+
+Common directives:
+
+| Directive | Purpose |
+| --- | --- |
+| `@name` | Display name in Collections / Outline |
+| `@variable name=value` | Document-scoped variable |
+| `@sensitive-variable name=value` | Document variable marked sensitive |
+| `@auth profileId` | Authentication profile for the request |
+
+Snippets (`get`, `post`, `separator`, and others) are available in the `api` language.
+
+## Run a request
+
+| Action | How |
+| --- | --- |
+| Run Request | Editor title, context menu, CodeLens, or `Ctrl+Alt+R` / `Cmd+Alt+R` |
+| Run with assertions | **API Hero: Run Request with Assertions** |
+| Open Request Editor | **API Hero: Open Request Editor** (when using the text editor) |
+
+**Run File** is a stub (Coming Soon) and is hidden from the Command Palette.
+
+## Related
+
+- [Variables](./variables.md)
+- [Authentication](./authentication.md)
+- [Assertions](./assertions.md)
+- [Response viewer](./response-viewer.md)

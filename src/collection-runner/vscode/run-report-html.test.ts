@@ -27,7 +27,7 @@ describe('collection-run-report-html', () => {
     assert.match(html, /script-src 'nonce-reportNonce'/u);
     assert.match(html, /default-src 'none'/u);
     assert.match(html, /id="root"/u);
-    assert.match(html, /Loading collection run report/u);
+    assert.match(html, /Loading run report/u);
     assert.match(html, /--vscode-editor-background/u);
     assert.match(html, /Failed only/u);
     assert.doesNotMatch(html, /connect-src [^']*https/u);
@@ -81,6 +81,7 @@ describe('collection-run-report-html', () => {
     assert.equal(model.rows.length, 2);
     assert.equal(model.rows[0]?.outcome, RequestRunOutcomeKind.Passed);
     assert.equal(model.rows[0]?.method, 'GET');
+    assert.equal(model.rows[0]?.methodBadgeClass, 'method-badge method-get');
     assert.equal(model.rows[0]?.durationLabel, '120 ms');
     assert.equal(model.rows[0]?.assertionsLabel, '2/2');
     assert.equal(model.rows[1]?.isFailure, true);

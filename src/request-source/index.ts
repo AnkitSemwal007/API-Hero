@@ -7,6 +7,7 @@
 export type {
   RequestSourceBody,
   RequestSourceDocument,
+  RequestSourceExtractionRule,
   RequestSourceHeader,
   RequestSourceMethod,
   RequestSourceQueryParam,

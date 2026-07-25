@@ -17,6 +17,8 @@ import {
   escapeAttribute,
   escapeHtml,
   isWebviewMessageRecord,
+  methodBadgeClass,
+  WEBVIEW_SHARED_CSS,
 } from '../../ui/webview';
 
 export { escapeAttribute, escapeHtml };
@@ -27,6 +29,7 @@ export interface CollectionRunReportRow {
   readonly ordinal: number;
   readonly label: string;
   readonly method: string;
+  readonly methodBadgeClass: string;
   readonly url: string;
   readonly outcome: OutcomeKind;
   readonly outcomeLabel: string;
@@ -113,6 +116,7 @@ export function buildCollectionRunReportModel(
       ordinal: result.ordinal,
       label: result.label,
       method: planned?.method ?? '—',
+      methodBadgeClass: methodBadgeClass(planned?.method ?? ''),
       url: planned?.url ?? '',
       outcome: result.outcome,
       outcomeLabel: outcomeLabel(result.outcome),
@@ -235,7 +239,7 @@ export function renderCollectionRunReportHtml(nonce: string): string {
 </head>
 <body>
 <main id="root">
-  <p class="muted" id="loading">Loading collection run report…</p>
+  <p class="muted loading" id="loading">Loading run report…</p>
 </main>
 <script nonce="${safeNonce}">${REPORT_SCRIPT}</script>
 </body>
@@ -332,6 +336,7 @@ function resolveOutcomeBadge(
 }
 
 const REPORT_CSS = `
+${WEBVIEW_SHARED_CSS}
 :root { color-scheme: light dark; }
 * { box-sizing: border-box; }
 body {
@@ -340,56 +345,51 @@ body {
   background: var(--vscode-editor-background);
   font-family: var(--vscode-font-family);
   font-size: var(--vscode-font-size);
+  line-height: 1.4;
 }
 main { display: flex; flex-direction: column; min-height: 100vh; }
+.loading { padding: var(--ah-space-4); }
 .toolbar {
-  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-  padding: 10px 16px;
+  display: flex; align-items: center; gap: var(--ah-space-2); flex-wrap: wrap;
+  padding: var(--ah-space-2) var(--ah-space-4);
   border-bottom: 1px solid var(--vscode-panel-border);
   background: var(--vscode-sideBar-background);
 }
 .toolbar label {
   display: inline-flex; align-items: center; gap: 6px;
   color: var(--vscode-descriptionForeground);
-  cursor: pointer; user-select: none;
+  cursor: pointer; user-select: none; font-size: .92em;
 }
 .header {
-  padding: 14px 16px 12px;
+  padding: var(--ah-space-4);
   border-bottom: 1px solid var(--vscode-panel-border);
   background: var(--vscode-sideBar-background);
 }
 .header h1 {
-  margin: 0 0 6px; font-size: 1.1em; font-weight: 600;
+  margin: 0 0 var(--ah-space-1); font-size: 1.05em; font-weight: 600;
 }
-.summary { color: var(--vscode-descriptionForeground); margin: 0 0 10px; }
-.stats-summary { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.stat-chip {
-  display: inline-flex; align-items: baseline; gap: 6px;
-  padding: 3px 8px; border-radius: 2px;
-  border: 1px solid var(--vscode-panel-border);
-  background: var(--vscode-editor-background);
-}
-.stat-chip span {
+.meta-line {
+  margin: 0 0 var(--ah-space-3);
   color: var(--vscode-descriptionForeground);
-  font-size: .8em; text-transform: uppercase; letter-spacing: .02em;
+  font-size: .9em;
 }
-.stat-chip strong { font-weight: 600; }
-.status-badge {
-  display: inline-flex; align-items: center;
-  border-radius: 2px; padding: 2px 8px; font-weight: 600; font-size: .85em;
-  background: var(--vscode-badge-background); color: var(--vscode-badge-foreground);
+.stats-summary {
+  display: flex; align-items: center; gap: var(--ah-space-2); flex-wrap: wrap;
 }
-.status-success { background: var(--vscode-testing-iconPassed); color: var(--vscode-editor-background); }
-.status-error { background: var(--vscode-editorError-foreground); color: var(--vscode-editor-background); }
-.status-cancelled { background: var(--vscode-disabledForeground, var(--vscode-descriptionForeground)); color: var(--vscode-editor-background); }
-.status-neutral { background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); }
-.table-wrap { overflow: auto; padding: 0 0 16px; }
+.stats-summary .stat-chip.primary-metric strong { font-size: 1.05em; }
+.section-label {
+  margin: var(--ah-space-3) var(--ah-space-4) var(--ah-space-2);
+  color: var(--vscode-descriptionForeground);
+  font-size: .75em; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .04em;
+}
+.table-wrap { overflow: auto; padding: 0 0 var(--ah-space-4); }
 table {
   width: 100%; border-collapse: collapse;
   font-variant-numeric: tabular-nums;
 }
 th, td {
-  text-align: left; padding: 8px 12px;
+  text-align: left; padding: 6px 12px;
   border-bottom: 1px solid var(--vscode-panel-border);
   vertical-align: top;
 }
@@ -397,8 +397,8 @@ th {
   position: sticky; top: 0;
   background: var(--vscode-editor-background);
   color: var(--vscode-descriptionForeground);
-  font-weight: 600; font-size: .85em;
-  text-transform: uppercase; letter-spacing: .02em;
+  font-weight: 600; font-size: .75em;
+  text-transform: uppercase; letter-spacing: .03em;
   z-index: 1;
 }
 tbody tr { cursor: pointer; }
@@ -406,35 +406,20 @@ tbody tr:hover { background: var(--vscode-list-hoverBackground); }
 tbody tr:focus-visible {
   outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px;
 }
-tbody tr.hidden { display: none; }
+td.assertions-fail { color: var(--vscode-testing-iconFailed, var(--vscode-errorForeground)); font-weight: 600; }
 .request-cell { min-width: 12rem; }
 .request-cell .label { font-weight: 600; overflow-wrap: anywhere; }
 .request-cell .meta {
   color: var(--vscode-descriptionForeground);
-  font-size: .9em; overflow-wrap: anywhere; margin-top: 2px;
+  font-size: .88em; overflow-wrap: anywhere; margin-top: 2px;
+  font-family: var(--vscode-editor-font-family, var(--vscode-font-family));
 }
-.request-cell .method { color: var(--vscode-textLink-foreground); font-weight: 600; }
 .message {
   color: var(--vscode-descriptionForeground);
-  font-size: .9em; overflow-wrap: anywhere; margin-top: 4px;
+  font-size: .88em; overflow-wrap: anywhere; margin-top: var(--ah-space-1);
 }
-.row-actions { display: flex; gap: 6px; flex-wrap: wrap; white-space: nowrap; }
-.muted { color: var(--vscode-descriptionForeground); padding: 16px; }
-.empty { color: var(--vscode-descriptionForeground); padding: 16px; }
-button {
-  color: var(--vscode-button-secondaryForeground);
-  background: var(--vscode-button-secondaryBackground);
-  border: 1px solid var(--vscode-contrastBorder, transparent);
-  border-radius: 2px; padding: 3px 8px; cursor: pointer; font: inherit;
-}
-button:hover:not(:disabled) { background: var(--vscode-button-secondaryHoverBackground); }
-button.primary {
-  color: var(--vscode-button-foreground);
-  background: var(--vscode-button-background);
-}
-button.primary:hover:not(:disabled) { background: var(--vscode-button-hoverBackground); }
-button:disabled { opacity: .5; cursor: not-allowed; }
-button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: 1px; }
+.row-actions { display: flex; gap: var(--ah-space-1); flex-wrap: wrap; white-space: nowrap; }
+.row-actions button { padding: 2px 8px; font-size: .9em; }
 input[type="checkbox"] { accent-color: var(--vscode-focusBorder); }
 `;
 
@@ -458,8 +443,9 @@ const REPORT_SCRIPT = `
     return escapeHtml(value).replaceAll('\`', '&#96;');
   }
 
-  function statChip(label, value) {
-    return '<div class="stat-chip"><span>' + escapeHtml(label) + '</span><strong>' +
+  function statChip(label, value, emphasis) {
+    return '<div class="stat-chip' + (emphasis ? ' primary-metric emphasis' : '') +
+      '"><span>' + escapeHtml(label) + '</span><strong>' +
       escapeHtml(value) + '</strong></div>';
   }
 
@@ -475,52 +461,54 @@ const REPORT_SCRIPT = `
       return;
     }
     const chips = [
-      statChip('Status', model.statusLabel),
-      statChip('Passed', String(model.passed)),
-      statChip('Failed', String(model.failed)),
-      statChip('Skipped', String(model.skipped)),
-      statChip('Cancelled', String(model.cancelled)),
-      statChip('Duration', model.durationLabel),
-      statChip('Avg', model.averageDurationLabel),
-      statChip('Assertions', model.assertionsLabel),
-      statChip('Policy', model.failurePolicyLabel),
+      statChip('Passed', String(model.passed), model.failed === 0),
+      statChip('Failed', String(model.failed), model.failed > 0),
+      statChip('Skipped', String(model.skipped), false),
+      statChip('Duration', model.durationLabel, false),
+      statChip('Average', model.averageDurationLabel, false),
+      statChip('Assertions', model.assertionsLabel, false),
     ].join('');
 
     const rows = visibleRows();
     const body = rows.length === 0
-      ? '<p class="empty" id="empty">' +
-        (filterFailed ? 'No failed requests in this run.' : 'No requests in this run.') +
-        '</p>'
-      : '<div class="table-wrap"><table aria-label="Collection run results">' +
+      ? '<div class="empty-state" id="empty" role="status">' +
+        '<strong>' + (filterFailed ? 'No failures' : 'No requests') + '</strong>' +
+        (filterFailed
+          ? 'This run has no failed requests. Clear “Failed only” to see the full results.'
+          : 'This collection run did not include any requests.') +
+        '</div>'
+      : '<p class="section-label">Results</p>' +
+        '<div class="table-wrap"><table aria-label="Collection run results">' +
         '<thead><tr>' +
         '<th scope="col">#</th>' +
         '<th scope="col">Status</th>' +
         '<th scope="col">Request</th>' +
         '<th scope="col">Duration</th>' +
         '<th scope="col">Assertions</th>' +
-        '<th scope="col">Actions</th>' +
+        '<th scope="col"><span class="sr-only">Actions</span></th>' +
         '</tr></thead><tbody>' +
         rows.map(function (row) {
           const meta = row.method && row.method !== '—'
-            ? '<div class="meta"><span class="method">' + escapeHtml(row.method) +
-              '</span> ' + escapeHtml(row.url) + '</div>'
+            ? '<div class="meta"><span class="' + escapeAttribute(row.methodBadgeClass) + '">' +
+              escapeHtml(row.method) + '</span> ' + escapeHtml(row.url) + '</div>'
             : '';
           const message = row.message
             ? '<div class="message">' + escapeHtml(row.message) + '</div>'
             : '';
-          return '<tr data-request-id="' + escapeAttribute(row.requestId) + '" tabindex="0">' +
+          return '<tr data-request-id="' + escapeAttribute(row.requestId) + '" tabindex="0"' +
+            (row.isFailure ? ' class="row-fail"' : '') + '>' +
             '<td>' + escapeHtml(String(row.ordinal + 1)) + '</td>' +
             '<td><span class="status-badge ' + escapeAttribute(row.statusBadgeClass) + '">' +
               escapeHtml(row.statusBadgeText) + '</span></td>' +
             '<td class="request-cell"><div class="label">' + escapeHtml(row.label) + '</div>' +
               meta + message + '</td>' +
             '<td>' + escapeHtml(row.durationLabel) + '</td>' +
-            '<td>' + escapeHtml(row.assertionsLabel) + '</td>' +
+            '<td class="' + (row.isFailure && row.assertionsLabel && /fail/i.test(row.assertionsLabel) ? 'assertions-fail' : '') + '">' + escapeHtml(row.assertionsLabel) + '</td>' +
             '<td class="row-actions">' +
               '<button type="button" class="primary open-btn"' +
-                (row.canOpen ? '' : ' disabled') + '>Open</button>' +
+                (row.canOpen ? '' : ' disabled') + ' aria-label="Open request">Open</button>' +
               '<button type="button" class="reveal-btn"' +
-                (row.canOpen ? '' : ' disabled') + '>Reveal</button>' +
+                (row.canOpen ? '' : ' disabled') + ' aria-label="Reveal in Collections">Reveal</button>' +
             '</td></tr>';
         }).join('') +
         '</tbody></table></div>';
@@ -532,7 +520,10 @@ const REPORT_SCRIPT = `
       '</div>' +
       '<header class="header">' +
         '<h1>' + escapeHtml(model.collectionName) + '</h1>' +
-        '<p class="summary">' + escapeHtml(model.summaryLine) + '</p>' +
+        '<p class="meta-line">' + escapeHtml(model.statusLabel) +
+          ' · ' + escapeHtml(model.failurePolicyLabel) +
+          (model.cancelled > 0 ? ' · ' + model.cancelled + ' cancelled' : '') +
+        '</p>' +
         '<div class="stats-summary" aria-label="Run statistics">' + chips + '</div>' +
       '</header>' +
       body;
@@ -591,7 +582,8 @@ const REPORT_SCRIPT = `
       return;
     }
     if (data.type === 'error' && typeof data.message === 'string') {
-      root.innerHTML = '<p class="muted" role="alert">' + escapeHtml(data.message) + '</p>';
+      root.innerHTML = '<div class="empty-state" role="alert"><strong>Unable to load report</strong>' +
+        escapeHtml(data.message) + '</div>';
     }
   });
 

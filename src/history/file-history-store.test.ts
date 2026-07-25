@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -56,6 +56,9 @@ function createNodeHistoryFs(): HistoryStorageFs {
         'code' in error &&
         (error as { code?: string }).code === 'ENOENT'
       );
+    },
+    async rename(fromUri: string, toUri: string): Promise<void> {
+      await rename(fromUri, toUri);
     },
   };
 }
@@ -123,16 +126,27 @@ test('missing file yields an empty document', async () => {
   }
 });
 
-test('corrupt JSON yields an empty document', async () => {
+test('corrupt JSON quarantines the file before treating history as empty', async () => {
   const root = await mkdtemp(join(tmpdir(), 'api-hero-history-corrupt-'));
   try {
+    const warnings: string[] = [];
     const store = createFileHistoryStore({
       storageRoot: root,
       fs: createNodeHistoryFs(),
+      onWarning: (message) => {
+        warnings.push(message);
+      },
     });
     await mkdir(root, { recursive: true });
     await writeFile(store.storageUri, '{not-json');
     assert.equal((await store.list()).length, 0);
+    const backup = await readFile(`${store.storageUri}.bak`, 'utf8');
+    assert.equal(backup, '{not-json');
+    assert.equal(warnings.length, 1);
+    assert.match(warnings[0] ?? '', /quarantined/u);
+    // Second load must not warn again.
+    assert.equal((await store.list()).length, 0);
+    assert.equal(warnings.length, 1);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -200,20 +214,19 @@ test('permission and I/O failures reject without caching empty', async () => {
   assert.equal(readCount, 3);
 });
 
-test('unknown schema version migrates to empty document', async () => {
+test('unknown schema version quarantines the file before emptying', async () => {
   const root = await mkdtemp(join(tmpdir(), 'api-hero-history-migrate-'));
   try {
     const fs = createNodeHistoryFs();
     const store = createFileHistoryStore({ storageRoot: root, fs });
     await mkdir(root, { recursive: true });
-    await writeFile(
-      store.storageUri,
-      JSON.stringify({
-        schemaVersion: 999,
-        entries: [sampleEntry('legacy')],
-      }),
-    );
+    const payload = JSON.stringify({
+      schemaVersion: 999,
+      entries: [sampleEntry('legacy')],
+    });
+    await writeFile(store.storageUri, payload);
     assert.equal((await store.list()).length, 0);
+    assert.equal(await readFile(`${store.storageUri}.bak`, 'utf8'), payload);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

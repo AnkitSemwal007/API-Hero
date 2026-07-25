@@ -1,8 +1,8 @@
 {
   "name": "api-hero",
   "displayName": "API Hero",
-  "description": "API Hero — REST/HTTP client for VS Code: author .api requests, manage collections and environments, authenticate safely, assert responses, import OpenAPI, and review run history.",
-  "version": "0.6.2",
+  "description": "Git-first REST/HTTP client for VS Code. Edit .api requests in a UI Request Editor, run with assertions, manage collections, environments, and auth, import OpenAPI, and inspect History and Run Reports.",
+  "version": "1.0.0",
   "publisher": "ankitsemwal",
   "license": "MIT",
   "homepage": "https://github.com/AnkitSemwal007/API-Hero",
@@ -18,18 +18,23 @@
   },
   "categories": [
     "Testing",
-    "Programming Languages",
-    "Other"
+    "Programming Languages"
   ],
   "keywords": [
     "api hero",
     "rest client",
     "http client",
+    "api client",
     "api testing",
     "openapi",
+    "openapi 3",
     "api collections",
+    "collection runner",
     "http requests",
+    "http file",
+    ".api",
     "assertions",
+    "git",
     "http",
     "rest",
     "api",
@@ -75,228 +80,294 @@
     "commands": [
       {
         "command": "apiRunner.runRequest",
-        "title": "API Hero: Run Request",
+        "title": "Run Request",
         "icon": "$(play)",
-        "enablement": "editorLangId == api"
+        "enablement": "editorLangId == api",
+        "category": "API Hero"
       },
       {
         "command": "apiRunner.runRequestWithAssertions",
-        "title": "API Hero: Run Request with Assertions",
-        "enablement": "editorLangId == api"
+        "title": "Run Request with Assertions",
+        "enablement": "editorLangId == api",
+        "category": "API Hero"
       },
       {
         "command": "apiRunner.runFile",
-        "title": "API Hero: Run File (Coming Soon)"
+        "title": "Run File (Coming Soon)",
+        "category": "API Hero"
       },
       {
         "command": "apiRunner.login",
-        "title": "API Hero: Login (Coming Soon)"
+        "title": "Login (Coming Soon)",
+        "category": "API Hero"
       },
       {
         "command": "apiRunner.logout",
-        "title": "API Hero: Logout (Coming Soon)"
+        "title": "Logout (Coming Soon)",
+        "category": "API Hero"
       },
       {
         "command": "apiRunner.switchEnvironment",
-        "title": "API Hero: Switch Environment"
+        "title": "Switch Environment",
+        "category": "API Hero"
       },
       {
         "command": "apiRunner.manageEnvironments",
-        "title": "API Hero: Manage Environments",
-        "icon": "$(globe)"
+        "title": "Manage Environments",
+        "icon": "$(globe)",
+        "category": "API Hero"
       },
       {
         "command": "apiRunner.manageAuthProfiles",
-        "title": "API Hero: Manage Authentication",
-        "icon": "$(key)"
+        "title": "Manage Authentication",
+        "icon": "$(key)",
+        "category": "API Hero"
+      },
+      {
+        "command": "apiRunner.initializeProjectStore",
+        "title": "Initialize Project Store",
+        "category": "API Hero"
       },
       {
         "command": "apiRunner.selectAuthentication",
-        "title": "API Hero: Select Authentication Profile"
+        "title": "Select Authentication",
+        "category": "API Hero"
       },
       {
         "command": "apiRunner.refreshCollections",
-        "title": "API Hero: Refresh Collections",
-        "icon": "$(refresh)"
+        "title": "Refresh Collections",
+        "icon": "$(refresh)",
+        "category": "API Hero"
       },
       {
         "command": "apiRunner.filterCollections",
-        "title": "API Hero: Filter Collections",
-        "icon": "$(search)"
+        "title": "Filter Collections",
+        "icon": "$(filter)",
+        "category": "API Hero"
       },
       {
         "command": "apiRunner.revealActiveRequest",
-        "title": "API Hero: Reveal Active Request",
-        "icon": "$(target)"
+        "title": "Reveal Active Request",
+        "icon": "$(target)",
+        "category": "API Hero"
       },
       {
         "command": "apiRunner.openCollectionRequest",
-        "title": "API Hero: Open Request"
+        "title": "Open Request",
+        "category": "API Hero"
       },
       {
         "command": "apiRunner.focusCollections",
-        "title": "API Hero: Focus Collections"
+        "title": "Focus Collections",
+        "category": "API Hero"
       },
       {
         "command": "apiRunner.runCollection",
-        "title": "API Hero: Run Collection",
-        "icon": "$(play)"
+        "title": "Run Collection",
+        "icon": "$(play)",
+        "category": "API Hero"
       },
       {
         "command": "apiRunner.runCollectionTests",
-        "title": "API Hero: Run Collection Tests",
-        "icon": "$(beaker)"
+        "title": "Run Collection Tests",
+        "icon": "$(beaker)",
+        "category": "API Hero"
       },
       {
         "command": "apiRunner.runFolder",
-        "title": "API Hero: Run Folder",
-        "icon": "$(play)"
+        "title": "Run Folder",
+        "icon": "$(play)",
+        "category": "API Hero"
       },
       {
         "command": "apiRunner.runSelectedRequests",
-        "title": "API Hero: Run Selected Requests",
-        "icon": "$(play)"
+        "title": "Run Selected Requests",
+        "icon": "$(play)",
+        "category": "API Hero"
       },
       {
         "command": "apiRunner.focusHistory",
-        "title": "API Hero: Focus History"
+        "title": "Focus History",
+        "category": "API Hero"
       },
       {
         "command": "apiRunner.openHistoryEntry",
-        "title": "API Hero: Open History Entry"
+        "title": "Open History Entry",
+        "category": "API Hero"
       },
       {
         "command": "apiRunner.rerunHistoryEntry",
-        "title": "API Hero: Re-run History Entry",
-        "icon": "$(play)"
+        "title": "Re-run History Entry",
+        "icon": "$(play)",
+        "category": "API Hero"
       },
       {
         "command": "apiRunner.revealHistoryRequest",
-        "title": "API Hero: Reveal Original Request",
-        "icon": "$(go-to-file)"
+        "title": "Reveal Original Request",
+        "icon": "$(go-to-file)",
+        "category": "API Hero"
       },
       {
         "command": "apiRunner.copyHistorySummary",
-        "title": "API Hero: Copy History Summary",
-        "icon": "$(copy)"
+        "title": "Copy History Summary",
+        "icon": "$(copy)",
+        "category": "API Hero"
       },
       {
         "command": "apiRunner.deleteHistoryEntry",
-        "title": "API Hero: Delete History Entry",
-        "icon": "$(trash)"
+        "title": "Delete History Entry",
+        "icon": "$(trash)",
+        "category": "API Hero"
       },
       {
         "command": "apiRunner.clearHistory",
-        "title": "API Hero: Clear History",
-        "icon": "$(clear-all)"
+        "title": "Clear History",
+        "icon": "$(clear-all)",
+        "category": "API Hero"
       },
       {
         "command": "apiRunner.searchHistory",
-        "title": "API Hero: Filter History",
-        "icon": "$(filter)"
+        "title": "Filter History",
+        "icon": "$(filter)",
+        "category": "API Hero"
       },
       {
         "command": "apiRunner.refreshHistory",
-        "title": "API Hero: Refresh History",
-        "icon": "$(refresh)"
+        "title": "Refresh History",
+        "icon": "$(refresh)",
+        "category": "API Hero"
       },
       {
         "command": "apiRunner.importOpenApi",
-        "title": "API Hero: Import OpenAPI Specification",
-        "icon": "$(cloud-download)"
+        "title": "Import OpenAPI Specification",
+        "icon": "$(cloud-download)",
+        "category": "API Hero",
+        "shortTitle": "Import OpenAPI"
       },
       {
         "command": "apiRunner.createCollection",
-        "title": "API Hero: New Collection",
-        "icon": "$(new-folder)"
+        "title": "New Collection",
+        "icon": "$(new-folder)",
+        "category": "API Hero"
       },
       {
         "command": "apiRunner.renameCollection",
-        "title": "API Hero: Rename Collection"
+        "title": "Rename Collection",
+        "shortTitle": "Rename",
+        "category": "API Hero"
       },
       {
         "command": "apiRunner.deleteCollection",
-        "title": "API Hero: Delete Collection",
-        "icon": "$(trash)"
+        "title": "Delete Collection",
+        "shortTitle": "Delete",
+        "icon": "$(trash)",
+        "category": "API Hero"
       },
       {
         "command": "apiRunner.duplicateCollection",
-        "title": "API Hero: Duplicate Collection"
+        "title": "Duplicate Collection",
+        "shortTitle": "Duplicate",
+        "category": "API Hero"
       },
       {
         "command": "apiRunner.exportCollection",
-        "title": "API Hero: Export Collection",
-        "icon": "$(export)"
+        "title": "Export Collection",
+        "shortTitle": "Export",
+        "icon": "$(export)",
+        "category": "API Hero"
       },
       {
         "command": "apiRunner.importCollection",
-        "title": "API Hero: Import Collection",
-        "icon": "$(desktop-download)"
+        "title": "Import Collection",
+        "icon": "$(desktop-download)",
+        "category": "API Hero"
       },
       {
         "command": "apiRunner.createFolder",
-        "title": "API Hero: New Folder",
-        "icon": "$(new-folder)"
+        "title": "New Folder",
+        "icon": "$(new-folder)",
+        "category": "API Hero"
       },
       {
         "command": "apiRunner.renameFolder",
-        "title": "API Hero: Rename Folder"
+        "title": "Rename Folder",
+        "shortTitle": "Rename",
+        "category": "API Hero"
       },
       {
         "command": "apiRunner.deleteFolder",
-        "title": "API Hero: Delete Folder",
-        "icon": "$(trash)"
+        "title": "Delete Folder",
+        "shortTitle": "Delete",
+        "icon": "$(trash)",
+        "category": "API Hero"
       },
       {
         "command": "apiRunner.duplicateFolder",
-        "title": "API Hero: Duplicate Folder"
+        "title": "Duplicate Folder",
+        "shortTitle": "Duplicate",
+        "category": "API Hero"
       },
       {
         "command": "apiRunner.createRequest",
-        "title": "API Hero: New Request",
-        "icon": "$(add)"
+        "title": "New Request",
+        "icon": "$(add)",
+        "category": "API Hero"
       },
       {
         "command": "apiRunner.renameRequest",
-        "title": "API Hero: Rename Request"
+        "title": "Rename Request",
+        "shortTitle": "Rename",
+        "category": "API Hero"
       },
       {
         "command": "apiRunner.duplicateRequest",
-        "title": "API Hero: Duplicate Request"
+        "title": "Duplicate Request",
+        "shortTitle": "Duplicate",
+        "category": "API Hero"
       },
       {
         "command": "apiRunner.deleteRequest",
-        "title": "API Hero: Delete Request",
-        "icon": "$(trash)"
+        "title": "Delete Request",
+        "shortTitle": "Delete",
+        "icon": "$(trash)",
+        "category": "API Hero"
       },
       {
         "command": "apiRunner.moveRequest",
-        "title": "API Hero: Move Request"
+        "title": "Move Request",
+        "shortTitle": "Move…",
+        "category": "API Hero"
       },
       {
         "command": "apiRunner.openWorkspace",
-        "title": "API Hero: Open Existing Workspace",
-        "icon": "$(folder-opened)"
+        "title": "Open Existing Workspace",
+        "icon": "$(folder-opened)",
+        "category": "API Hero",
+        "shortTitle": "Open Workspace"
       },
       {
         "command": "apiRunner.openRequestEditor",
-        "title": "API Hero: Open Request Editor",
-        "enablement": "editorLangId == api"
+        "title": "Open Request Editor",
+        "enablement": "editorLangId == api",
+        "category": "API Hero"
       },
       {
         "command": "apiRunner.openOverview",
-        "title": "API Hero: Open Overview",
-        "icon": "$(home)"
+        "title": "Open Overview",
+        "icon": "$(home)",
+        "category": "API Hero"
       },
       {
         "command": "apiRunner.openSettings",
-        "title": "API Hero: Open Settings",
-        "icon": "$(gear)"
+        "title": "Open Settings",
+        "icon": "$(gear)",
+        "category": "API Hero"
       },
       {
         "command": "apiRunner.recentRequests",
-        "title": "API Hero: Recent Requests",
-        "icon": "$(history)"
+        "title": "Open History",
+        "icon": "$(history)",
+        "category": "API Hero"
       }
     ],
     "customEditors": [
@@ -323,6 +394,10 @@
         },
         {
           "command": "apiRunner.runFile",
+          "when": "false"
+        },
+        {
+          "command": "apiRunner.recentRequests",
           "when": "false"
         }
       ],
@@ -351,12 +426,12 @@
       "editor/context": [
         {
           "command": "apiRunner.runRequest",
-          "when": "editorLangId == api && editorTextFocus",
+          "when": "(editorLangId == api && editorTextFocus) || activeCustomEditorId == 'apiRunner.requestEditor'",
           "group": "navigation@10"
         },
         {
           "command": "apiRunner.revealActiveRequest",
-          "when": "editorLangId == api && editorTextFocus",
+          "when": "(editorLangId == api && editorTextFocus) || activeCustomEditorId == 'apiRunner.requestEditor'",
           "group": "navigation@11"
         }
       ],
@@ -372,54 +447,34 @@
           "group": "navigation@2"
         },
         {
-          "command": "apiRunner.importOpenApi",
+          "command": "apiRunner.filterCollections",
           "when": "view == apiRunner.collections",
           "group": "navigation@3"
         },
         {
-          "command": "apiRunner.manageEnvironments",
+          "command": "apiRunner.refreshCollections",
           "when": "view == apiRunner.collections",
-          "group": "1_manage@1"
+          "group": "navigation@4"
         },
         {
-          "command": "apiRunner.manageAuthProfiles",
+          "command": "apiRunner.createFolder",
           "when": "view == apiRunner.collections",
-          "group": "1_manage@2"
-        },
-        {
-          "command": "apiRunner.openSettings",
-          "when": "view == apiRunner.collections",
-          "group": "1_manage@3"
-        },
-        {
-          "command": "apiRunner.recentRequests",
-          "when": "view == apiRunner.collections",
-          "group": "1_manage@4"
-        },
-        {
-          "command": "apiRunner.openOverview",
-          "when": "view == apiRunner.collections",
-          "group": "2_more@1"
+          "group": "1_new@1"
         },
         {
           "command": "apiRunner.importCollection",
           "when": "view == apiRunner.collections",
-          "group": "2_more@2"
+          "group": "1_new@2"
         },
         {
-          "command": "apiRunner.filterCollections",
+          "command": "apiRunner.importOpenApi",
           "when": "view == apiRunner.collections",
-          "group": "2_more@3"
-        },
-        {
-          "command": "apiRunner.refreshCollections",
-          "when": "view == apiRunner.collections",
-          "group": "2_more@4"
+          "group": "1_new@3"
         },
         {
           "command": "apiRunner.revealActiveRequest",
           "when": "view == apiRunner.collections",
-          "group": "2_more@5"
+          "group": "3_more@1"
         },
         {
           "command": "apiRunner.searchHistory",
@@ -521,57 +576,57 @@
         {
           "command": "apiRunner.renameCollection",
           "when": "view == apiRunner.collections && viewItem == collection",
-          "group": "4_modify@1"
+          "group": "4_edit@1"
         },
         {
           "command": "apiRunner.duplicateCollection",
           "when": "view == apiRunner.collections && viewItem == collection",
-          "group": "4_modify@2"
-        },
-        {
-          "command": "apiRunner.exportCollection",
-          "when": "view == apiRunner.collections && viewItem == collection",
-          "group": "4_modify@3"
-        },
-        {
-          "command": "apiRunner.deleteCollection",
-          "when": "view == apiRunner.collections && viewItem == collection",
-          "group": "4_modify@4"
+          "group": "4_edit@2"
         },
         {
           "command": "apiRunner.renameFolder",
           "when": "view == apiRunner.collections && viewItem == folder",
-          "group": "4_modify@1"
+          "group": "4_edit@1"
         },
         {
           "command": "apiRunner.duplicateFolder",
           "when": "view == apiRunner.collections && viewItem == folder",
-          "group": "4_modify@2"
-        },
-        {
-          "command": "apiRunner.deleteFolder",
-          "when": "view == apiRunner.collections && viewItem == folder",
-          "group": "4_modify@3"
-        },
-        {
-          "command": "apiRunner.duplicateRequest",
-          "when": "view == apiRunner.collections && viewItem == request",
-          "group": "4_modify@1"
+          "group": "4_edit@2"
         },
         {
           "command": "apiRunner.renameRequest",
           "when": "view == apiRunner.collections && viewItem == request",
-          "group": "4_modify@2"
+          "group": "4_edit@1"
+        },
+        {
+          "command": "apiRunner.duplicateRequest",
+          "when": "view == apiRunner.collections && viewItem == request",
+          "group": "4_edit@2"
+        },
+        {
+          "command": "apiRunner.exportCollection",
+          "when": "view == apiRunner.collections && viewItem == collection",
+          "group": "5_transfer@1"
         },
         {
           "command": "apiRunner.moveRequest",
           "when": "view == apiRunner.collections && viewItem =~ /^request/",
-          "group": "4_modify@3"
+          "group": "5_transfer@1"
+        },
+        {
+          "command": "apiRunner.deleteCollection",
+          "when": "view == apiRunner.collections && viewItem == collection",
+          "group": "7_modification@1"
+        },
+        {
+          "command": "apiRunner.deleteFolder",
+          "when": "view == apiRunner.collections && viewItem == folder",
+          "group": "7_modification@1"
         },
         {
           "command": "apiRunner.deleteRequest",
           "when": "view == apiRunner.collections && viewItem =~ /^request/",
-          "group": "4_modify@4"
+          "group": "7_modification@1"
         },
         {
           "command": "apiRunner.rerunHistoryEntry",
@@ -582,11 +637,6 @@
           "command": "apiRunner.revealHistoryRequest",
           "when": "view == apiRunner.history && viewItem == historyEntry",
           "group": "inline@2"
-        },
-        {
-          "command": "apiRunner.deleteHistoryEntry",
-          "when": "view == apiRunner.history && viewItem == historyEntry",
-          "group": "inline@3"
         },
         {
           "command": "apiRunner.openHistoryEntry",
@@ -639,11 +689,11 @@
     "viewsWelcome": [
       {
         "view": "apiRunner.collections",
-        "contents": "No collections yet.\nCreate a request, start a collection, or import an OpenAPI specification.\n\n[New Request](command:apiRunner.createRequest)\n[New Collection](command:apiRunner.createCollection)\n[Import OpenAPI](command:apiRunner.importOpenApi)\n[Manage Environments](command:apiRunner.manageEnvironments)\n[Manage Authentication](command:apiRunner.manageAuthProfiles)\n[Open Overview](command:apiRunner.openOverview)\n[Open Workspace](command:apiRunner.openWorkspace)"
+        "contents": "No collections yet.\nOpen a folder workspace, create a collection, then add a request — or import OpenAPI.\n\n[New Collection](command:apiRunner.createCollection)\n[New Request](command:apiRunner.createRequest)\n[Import OpenAPI](command:apiRunner.importOpenApi)\n\n[Open Overview](command:apiRunner.openOverview)"
       },
       {
         "view": "apiRunner.history",
-        "contents": "No recent requests yet.\nRun a request from Collections or the editor to start building history.\n\n[Focus Collections](command:apiRunner.focusCollections)\n[Open Overview](command:apiRunner.openOverview)\n[New Request](command:apiRunner.createRequest)\n[Refresh History](command:apiRunner.refreshHistory)"
+        "contents": "No request history yet.\nAfter you Run a request, results appear here.\n\n[Focus Collections](command:apiRunner.focusCollections)\n[Open Overview](command:apiRunner.openOverview)"
       }
     ],
     "keybindings": [
@@ -651,7 +701,40 @@
         "command": "apiRunner.runRequest",
         "key": "ctrl+alt+r",
         "mac": "cmd+alt+r",
-        "when": "editorLangId == api && editorTextFocus"
+        "when": "(editorLangId == api && editorTextFocus) || activeCustomEditorId == 'apiRunner.requestEditor'"
+      },
+      {
+        "command": "apiRunner.renameCollection",
+        "key": "f2",
+        "when": "focusedView == apiRunner.collections && viewItem == collection"
+      },
+      {
+        "command": "apiRunner.renameFolder",
+        "key": "f2",
+        "when": "focusedView == apiRunner.collections && viewItem == folder"
+      },
+      {
+        "command": "apiRunner.renameRequest",
+        "key": "f2",
+        "when": "focusedView == apiRunner.collections && viewItem == request"
+      },
+      {
+        "command": "apiRunner.deleteCollection",
+        "key": "delete",
+        "mac": "cmd+backspace",
+        "when": "focusedView == apiRunner.collections && viewItem == collection"
+      },
+      {
+        "command": "apiRunner.deleteFolder",
+        "key": "delete",
+        "mac": "cmd+backspace",
+        "when": "focusedView == apiRunner.collections && viewItem == folder"
+      },
+      {
+        "command": "apiRunner.deleteRequest",
+        "key": "delete",
+        "mac": "cmd+backspace",
+        "when": "focusedView == apiRunner.collections && viewItem =~ /^request/"
       }
     ],
     "configuration": {
@@ -672,7 +755,7 @@
           "type": "number",
           "default": 30000,
           "minimum": 0,
-          "description": "Request timeout in milliseconds."
+          "description": "Default HTTP request timeout in milliseconds. Set to 0 to disable the timeout. Per-request @timeout overrides this default when present."
         },
         "apiRunner.maxResponseBytes": {
           "type": "number",
@@ -690,7 +773,7 @@
         "apiRunner.variables.global": {
           "type": "array",
           "default": [],
-          "description": "Global API Hero variables. Sensitive values are masked by language and response UI; use trusted user settings for storage.",
+          "description": "Global API Hero variables (User settings). Sensitive values are masked in language and response UI; prefer Secret Storage for credentials via Manage Authentication.",
           "items": {
             "type": "object",
             "required": [
@@ -716,7 +799,7 @@
         "apiRunner.variables.workspace": {
           "type": "array",
           "default": [],
-          "description": "Workspace API Hero variables. Do not commit sensitive values in workspace settings.",
+          "description": "Workspace API Hero variables. Do not commit secrets in workspace settings; use Manage Authentication / Secret Storage for credentials.",
           "items": {
             "type": "object",
             "required": [
@@ -742,7 +825,7 @@
         "apiRunner.environments": {
           "type": "array",
           "default": [],
-          "description": "Named API Hero environments. Exactly one environment may be active.",
+          "description": "Named API Hero environments (id, name, variables). Prefer Manage Environments for day-to-day edits. At most one environment is active via apiRunner.activeEnvironment.",
           "items": {
             "type": "object",
             "required": [
@@ -787,12 +870,12 @@
         },
         "apiRunner.activeEnvironment": {
           "type": "string",
-          "description": "ID of the active named environment. Omit to use no environment."
+          "description": "ID of the active named environment (matches an entry in apiRunner.environments). Leave empty or omit to use no environment."
         },
         "apiRunner.authentication.profiles": {
           "type": "array",
           "default": [],
-          "description": "Named authentication profile metadata. Secret sources are stored in VS Code SecretStorage; literal sources require unsafe: true.",
+          "description": "Named authentication profile metadata (none / basic / bearer / apiKey). Prefer Manage Authentication. Secret sources use VS Code Secret Storage; literal sources require unsafe: true.",
           "items": {
             "type": "object",
             "required": [
@@ -1129,29 +1212,32 @@
         "apiRunner.languageFeatures.hover": {
           "type": "boolean",
           "default": true,
-          "description": "Enable documentation hovers in API Hero files."
+          "description": "Show documentation hovers when editing .api files."
         },
         "apiRunner.languageFeatures.outline": {
           "type": "boolean",
           "default": true,
-          "description": "Enable request symbols in the Outline view for API Hero files."
+          "description": "Show request symbols in the Outline view for .api files."
         },
         "apiRunner.languageFeatures.diagnostics": {
           "type": "boolean",
           "default": true,
-          "description": "Enable lightweight syntax diagnostics in API Hero files."
+          "description": "Show lightweight syntax diagnostics for .api files in the Problems panel."
         }
       }
     }
   },
   "scripts": {
+    "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
     "compile": "tsc -p ./",
+    "build": "npm run compile",
     "check": "tsc -p ./ --noEmit",
     "lint": "eslint \"src/**/*.ts\"",
     "test": "npm run compile && node ./scripts/run-unit-tests.mjs",
     "test:unit": "npm test",
     "test:coverage": "npm run compile && c8 --reporter=text-summary --reporter=text node ./scripts/run-unit-tests.mjs",
-    "package": "vsce package",
+    "package": "npm run clean && npm run build && npm test && node ./scripts/package-vsix.mjs",
+    "package:fast": "npm run build && node ./scripts/package-vsix.mjs",
     "vscode:prepublish": "npm run compile"
   },
   "dependencies": {

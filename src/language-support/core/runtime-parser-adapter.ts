@@ -16,6 +16,8 @@ import {
   DefaultVariableResolver,
   MASKED_VARIABLE_VALUE,
   VARIABLE_DIAGNOSTIC_CODES,
+  VARIABLE_SCOPE_UI,
+  VariableCompletionService,
   extractDocumentVariables,
   type VariableAnalysis,
   type VariableResolutionContext,
@@ -64,6 +66,13 @@ export interface RuntimeCompletion {
   readonly label: string;
   readonly kind: RuntimeCompletionKind;
   readonly detail?: string;
+  readonly documentation?: string;
+  readonly insertText?: string;
+  /** Character columns on the completion line for VS Code `CompletionItem.range`. */
+  readonly range?: {
+    readonly startColumn: number;
+    readonly endColumn: number;
+  };
 }
 
 /**
@@ -81,6 +90,7 @@ export class RuntimeParserAdapter {
   private readonly lineOffsets: readonly number[];
   private readonly variableAnalysis: VariableAnalysis;
   private readonly variableNodes: readonly VariableNode[];
+  private readonly completionService: VariableCompletionService;
 
   public constructor(
     private readonly source: string,
@@ -96,17 +106,19 @@ export class RuntimeParserAdapter {
     this.lineOffsets = lineData.offsets;
     const validation = validateApiDocument(this.document);
     const extraction = extractDocumentVariables(this.document);
-    this.variableAnalysis = variableResolver.analyze({
-      definitions: [
-        ...variableContext.definitions,
-        ...extraction.definitions,
-      ],
-    });
+    const definitions = [
+      ...variableContext.definitions,
+      ...extraction.definitions,
+    ];
+    this.variableAnalysis = variableResolver.analyze({ definitions });
+    this.completionService = new VariableCompletionService(variableResolver);
+    this.completionService.setDefinitions(definitions);
     this.variableNodes = variableNodes(this.document);
     const variableDiagnostics = createVariableDiagnostics(
       this.document,
       this.variableNodes,
       this.variableAnalysis,
+      this.completionService,
     );
     const authenticationDiagnostics = createAuthenticationDiagnostics(
       this.document,
@@ -200,11 +212,20 @@ export class RuntimeParserAdapter {
     const variable = this.variableNodes.find((node) =>
       containsPosition(node.range, position));
     if (variable !== undefined) {
-      const value = this.variableAnalysis.values.get(variable.name);
-      if (value !== undefined) {
+      const hover = this.completionService.getHoverInfo(variable.name);
+      if (hover !== undefined) {
         return {
           key: variable.originalText,
-          documentation: `${value.scope} variable · ${
+          documentation: hover.documentation,
+          range: variable.range,
+        };
+      }
+      const value = this.variableAnalysis.values.get(variable.name);
+      if (value !== undefined) {
+        const scopeUi = VARIABLE_SCOPE_UI[value.scope];
+        return {
+          key: variable.originalText,
+          documentation: `Effective source: ${scopeUi.icon} ${scopeUi.sourceLabel} · ${
             value.sensitive ? MASKED_VARIABLE_VALUE : value.value
           }`,
           range: variable.range,
@@ -212,9 +233,13 @@ export class RuntimeParserAdapter {
       }
       const issue = this.variableAnalysis.errors.find((error) =>
         error.variableName === variable.name || error.chain.includes(variable.name));
+      const suggestion = this.completionService.suggestCorrection(variable.name);
+      const base = issue?.message ?? `Variable "${variable.name}" is unresolved.`;
       return {
         key: variable.originalText,
-        documentation: issue?.message ?? `Variable "${variable.name}" is unresolved.`,
+        documentation: suggestion === undefined
+          ? base
+          : `${base} Did you mean: ${suggestion}?`,
         range: variable.range,
       };
     }
@@ -258,14 +283,36 @@ export class RuntimeParserAdapter {
     if (isMimeValuePrefix(prefix)) {
       items.push(...MIME_TYPES.map((label) => completion(label, 'mime')));
     }
-    if (hasOpenVariable(prefix)) {
-      items.push(...[...this.variableAnalysis.values.values()]
-        .sort((left, right) => left.name.localeCompare(right.name))
-        .map((value) => ({
-          label: value.name,
-          kind: 'variable' as const,
-          detail: `${value.scope}${value.sensitive ? ' · sensitive' : ''}`,
-        })));
+    const variableContext = this.completionService.analyzeInput(line, position.column);
+    if (variableContext.isActive) {
+      items.push(...this.completionService.getCompletions(variableContext.prefix)
+        .map((item) => {
+          let insertText = this.completionService.buildInsertText(
+            item,
+            variableContext,
+          );
+          const afterReplace = line.slice(variableContext.replaceEnd);
+          if (
+            variableContext.insertMode === 'name-only' &&
+            !afterReplace.startsWith('}}')
+          ) {
+            insertText = `${insertText}}}`;
+          }
+          const hover = this.completionService.getHoverInfo(item.name);
+          return {
+            label: `${item.icon} ${item.name}`,
+            kind: 'variable' as const,
+            detail: item.sensitive
+              ? `${item.sourceLabel} · sensitive`
+              : item.sourceLabel,
+            documentation: hover?.documentation,
+            insertText,
+            range: {
+              startColumn: variableContext.replaceStart,
+              endColumn: variableContext.replaceEnd,
+            },
+          };
+        }));
     } else if (prefix.length === 0 || endsCompletionBoundary(prefix)) {
       items.push(completion('{{variable}}', 'variable-template'));
     }
@@ -349,6 +396,7 @@ function createVariableDiagnostics(
   document: ApiDocument,
   nodes: readonly VariableNode[],
   analysis: VariableAnalysis,
+  completionService: VariableCompletionService,
 ): readonly AstDiagnostic[] {
   const diagnostics: AstDiagnostic[] = [];
   for (const node of nodes) {
@@ -359,24 +407,33 @@ function createVariableDiagnostics(
     }
     const unsupportedBuiltIn =
       node.name === '$timestamp' || node.name === '$uuid';
-    diagnostics.push({
-      code: issue === undefined
-        ? unsupportedBuiltIn
+    const code = issue === undefined
+      ? unsupportedBuiltIn
+        ? VARIABLE_DIAGNOSTIC_CODES.unsupportedBuiltIn
+        : VARIABLE_DIAGNOSTIC_CODES.missing
+      : issue.code === 'MISSING_VARIABLE'
+      ? VARIABLE_DIAGNOSTIC_CODES.missing
+      : issue.code === 'CYCLE'
+        ? VARIABLE_DIAGNOSTIC_CODES.cycle
+        : issue.code === 'UNSUPPORTED_BUILT_IN'
           ? VARIABLE_DIAGNOSTIC_CODES.unsupportedBuiltIn
-          : VARIABLE_DIAGNOSTIC_CODES.missing
-        : issue.code === 'MISSING_VARIABLE'
-        ? VARIABLE_DIAGNOSTIC_CODES.missing
-        : issue.code === 'CYCLE'
-          ? VARIABLE_DIAGNOSTIC_CODES.cycle
-          : issue.code === 'UNSUPPORTED_BUILT_IN'
-            ? VARIABLE_DIAGNOSTIC_CODES.unsupportedBuiltIn
-            : issue.code === 'DUPLICATE_DEFINITION'
-              ? VARIABLE_DIAGNOSTIC_CODES.duplicate
-              : VARIABLE_DIAGNOSTIC_CODES.malformedDefinition,
-      message: issue?.message ?? (unsupportedBuiltIn
-        ? `Built-in variable "${node.name}" is recognized but not supported.`
-        : `Variable "${node.name}" is not defined.`),
-      severity: 'error',
+          : issue.code === 'DUPLICATE_DEFINITION'
+            ? VARIABLE_DIAGNOSTIC_CODES.duplicate
+            : VARIABLE_DIAGNOSTIC_CODES.malformedDefinition;
+    const isMissing = code === VARIABLE_DIAGNOSTIC_CODES.missing;
+    let message = issue?.message ?? (unsupportedBuiltIn
+      ? `Built-in variable "${node.name}" is recognized but not supported.`
+      : `Variable "${node.name}" is not defined.`);
+    if (isMissing) {
+      const suggestion = completionService.suggestCorrection(node.name);
+      if (suggestion !== undefined) {
+        message = `${message} Did you mean: ${suggestion}?`;
+      }
+    }
+    diagnostics.push({
+      code,
+      message,
+      severity: isMissing ? 'warning' : 'error',
       range: node.range,
       location: node.location,
       source: 'API Hero Variables',
@@ -394,7 +451,7 @@ function createVariableDiagnostics(
     if (name.length > 0 && first !== undefined) {
       diagnostics.push({
         code: VARIABLE_DIAGNOSTIC_CODES.duplicate,
-        message: `Variable "${name}" is defined more than once in document scope.`,
+        message: `Variable "${name}" is defined more than once in Request scope.`,
         severity: 'error',
         range: directive.range,
         location: directive.location,
@@ -548,10 +605,6 @@ function isMimeValuePrefix(value: string): boolean {
   return ![...candidate].some(
     (character) => isWhitespace(character) || character === ',',
   );
-}
-
-function hasOpenVariable(value: string): boolean {
-  return value.lastIndexOf('{{') > value.lastIndexOf('}}');
 }
 
 function endsCompletionBoundary(value: string): boolean {

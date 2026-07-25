@@ -40,9 +40,9 @@ import {
   joinUnderCollection,
   pathBasename,
   pathDirname,
-  sanitizeDirectoryName,
   sanitizeRequestFileName,
   stripApiExtension,
+  validateDirectoryName,
 } from './paths';
 
 export interface CollectionMutationOptions {
@@ -92,6 +92,7 @@ export class CollectionMutationService {
   public async createCollection(
     workspaceRootPath: string,
     rawName: string,
+    description?: string,
   ): Promise<CreateCollectionResult> {
     const name = requireDirectoryName(rawName, 'Collection');
     const rootPath = collectionRootPath(workspaceRootPath, name);
@@ -103,10 +104,11 @@ export class CollectionMutationService {
 
     const siblingNames = await this.listNativeCollectionNames(workspaceRootPath);
     const order = siblingNames.length;
+    const trimmedDescription = description?.trim() ?? '';
     await this.options.filesystem.createDirectory(rootPath);
     await this.writeMarker(rootPath, {
       name,
-      description: '',
+      description: trimmedDescription,
       order,
       folderOrder: [],
       requestOrder: { [MARKER_ROOT_ORDER_KEY]: [] },
@@ -118,7 +120,7 @@ export class CollectionMutationService {
   public async renameCollection(
     collectionId: string,
     rawNewName: string,
-  ): Promise<void> {
+  ): Promise<{ collectionId: string }> {
     const collection = this.requireNativeCollection(collectionId);
     const newName = requireDirectoryName(rawNewName, 'Collection');
     const oldName = pathBasename(collection.rootPath);
@@ -127,7 +129,7 @@ export class CollectionMutationService {
         marker.name = newName;
       });
       await this.options.refresh();
-      return;
+      return { collectionId };
     }
 
     const newRoot = collectionRootPath(collection.workspaceRootPath, newName);
@@ -142,6 +144,7 @@ export class CollectionMutationService {
       marker.name = newName;
     });
     await this.options.refresh();
+    return { collectionId: collectionIdForRoot(newRoot) };
   }
 
   public async deleteCollection(collectionId: string): Promise<void> {
@@ -367,7 +370,7 @@ export class CollectionMutationService {
     collectionId: string,
     folderRelativePath: string,
     rawNewName: string,
-  ): Promise<void> {
+  ): Promise<{ relativePath: string }> {
     const collection = this.requireNativeCollection(collectionId);
     const relative = normalizeRelativePath(folderRelativePath);
     if (relative.length === 0) {
@@ -380,7 +383,7 @@ export class CollectionMutationService {
       parent.length === 0 ? newName : `${parent}/${newName}`;
     if (newRelative === relative) {
       await this.options.refresh();
-      return;
+      return { relativePath: relative };
     }
 
     const from = joinUnderCollection(collection.rootPath, relative);
@@ -399,6 +402,7 @@ export class CollectionMutationService {
       marker.folderOrder = map;
     });
     await this.options.refresh();
+    return { relativePath: newRelative };
   }
 
   public async deleteFolder(
@@ -915,11 +919,13 @@ export class CollectionMutationError extends Error {
 }
 
 function requireDirectoryName(raw: string, label: string): string {
-  const name = sanitizeDirectoryName(raw);
-  if (name === undefined) {
-    throw new CollectionMutationError(`Enter a valid ${label.toLowerCase()} name.`);
+  const result = validateDirectoryName(raw, label);
+  if (result.value === undefined) {
+    throw new CollectionMutationError(
+      result.error ?? `Enter a valid ${label.toLowerCase()} name.`,
+    );
   }
-  return name;
+  return result.value;
 }
 
 function requireRequestFileName(raw: string): string {

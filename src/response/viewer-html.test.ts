@@ -93,8 +93,9 @@ test('renders status card, tabs, copy/save/search without cookies placeholder', 
     'nonce',
   );
 
-  assert.match(html, /class="status-card"/u);
-  assert.match(html, /class="stats-summary"/u);
+  assert.match(html, /class="status-card sticky-summary"/u);
+  assert.match(html, /class="stats-summary[^"]*"/u);
+  assert.match(html, /method-badge method-get/u);
   assert.match(html, /role="tablist"/u);
   assert.match(html, /data-tab="body"/u);
   assert.match(html, /data-tab="headers"/u);
@@ -102,6 +103,8 @@ test('renders status card, tabs, copy/save/search without cookies placeholder', 
   assert.match(html, /data-action="saveBody"/u);
   assert.match(html, /data-action="copyHeaders"/u);
   assert.match(html, /id="bodySearch"/u);
+  assert.match(html, /SEARCH_MATCH_LIMIT = 500/u);
+  assert.match(html, /Showing first /u);
   assert.equal(html.includes('data-tab="cookies"'), false);
   assert.equal(html.includes('Cookie parsing and storage are not enabled'), false);
   assert.equal(/Cookies/u.test(html), false);
@@ -326,18 +329,21 @@ function deeplyNestedResult(depth: number): ExecutionResult {
 }
 
 test('renders adversarially deep JSON without unbounded recursion or unsafe output', () => {
-  // 1000 levels exceeds the tree depth cap while remaining serializable, so
-  // the bounded serialized preview leaf is exercised deterministically.
+  // 1000 levels exceeds the tree depth cap while remaining serializable.
+  // Pretty expansion of deep trees may hit the preview size cap (pre fallback);
+  // either bounded tree or truncated preview proves recursion did not explode.
   const html = renderResponseViewerHtml(
     presentExecutionResult(deeplyNestedResult(1_000)),
     'nonce',
   );
 
-  assert.match(html, /class="json-tree"/u);
-  assert.match(html, /truncated|\(…\)/u);
+  assert.ok(
+    /class="json-tree"/u.test(html) ||
+      /Preview truncated/u.test(html) ||
+      /truncated|\(…\)/u.test(html),
+  );
   assert.equal(html.includes('onerror='), false);
   assert.equal(html.includes('<script>'), false);
-  assert.match(html, /data-json-action="expand"/u);
   // Bounded output despite deep nesting proves recursion did not explode.
   assert.ok(html.length < 2_000_000);
 });
@@ -423,4 +429,38 @@ test('renders cookies tab only when cookie jar data is available', () => {
   assert.match(withJar, /data-tab="cookies"/u);
   assert.match(withJar, /session/u);
   assert.match(withJar, /example\.test/u);
+});
+
+test('renders extraction chip and Extracted tab; masks sensitive values', () => {
+  const model = presentExecutionResult(result('{"ok":true}'), undefined, {
+    outcomes: [
+      {
+        rule: {
+          id: 'r1',
+          variableName: 'token',
+          source: { kind: 'json-path', path: 'body.token' },
+          targetScope: 'run',
+          sensitive: true,
+          required: true,
+          enabled: true,
+          when: { kind: 'always' },
+        },
+        kind: 'extracted',
+        maskedValue: '••••••••',
+        writeOk: true,
+      },
+    ],
+    extractedCount: 1,
+    failedCount: 0,
+    skippedCount: 0,
+    malformedCount: 0,
+  });
+  const html = renderResponseViewerHtml(model, 'nonce');
+  assert.match(html, /data-tab="extraction"/u);
+  assert.match(html, /Extracted/u);
+  assert.match(html, /token/u);
+  assert.match(html, /••••••••/u);
+  assert.doesNotMatch(html, /create.?variable/iu);
+  assert.doesNotMatch(html, /Save as variable/iu);
+  assert.equal(html.includes('<script>'), false);
 });

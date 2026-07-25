@@ -6,6 +6,7 @@ import {
   buildNonceOnlyCsp,
   escapeAttribute,
   isWebviewMessageRecord,
+  WEBVIEW_SHARED_CSS,
 } from '../../ui/webview';
 
 export { escapeAttribute };
@@ -220,9 +221,9 @@ export function renderOpenApiImportWizardHtml(nonce: string): string {
     <ul id="summaryDiagnostics" class="diag-list" hidden></ul>
     <div id="secretBlock" class="secret-block" hidden>
       <h3>Secrets to configure</h3>
-      <p class="hint">Imported auth profiles use Secret Storage placeholders. Set real values in Auth Profiles.</p>
+      <p class="hint">Imported authentication profiles use Secret Storage placeholders. Set real values in Manage Authentication.</p>
       <ul id="secretHints" class="diag-list"></ul>
-      <button type="button" id="manageAuth" class="primary" hidden>Manage Auth Profiles</button>
+      <button type="button" id="manageAuth" class="primary" hidden>Manage Authentication</button>
     </div>
     <footer class="actions">
       <button type="button" id="summaryClose" class="primary">Close</button>
@@ -235,6 +236,7 @@ export function renderOpenApiImportWizardHtml(nonce: string): string {
 }
 
 const WIZARD_CSS = `
+${WEBVIEW_SHARED_CSS}
 :root { color-scheme: light dark; }
 * { box-sizing: border-box; }
 body {
@@ -246,7 +248,7 @@ body {
 }
 main { max-width: 640px; margin: 0 auto; padding: 20px 22px 28px; }
 header { margin-bottom: 14px; }
-h1 { margin: 0 0 6px; font-size: 1.25rem; font-weight: 600; }
+h1 { margin: 0 0 6px; font-size: 16px; font-weight: 600; }
 h2 { margin: 0 0 8px; font-size: 1.05rem; font-weight: 600; }
 h3 { margin: 0 0 6px; font-size: .95rem; font-weight: 600; }
 .subtitle, .hint, .muted {
@@ -337,25 +339,6 @@ input:focus, select:focus {
   padding-top: 10px;
   border-top: 1px solid var(--vscode-panel-border);
 }
-button {
-  border: 1px solid var(--vscode-contrastBorder, transparent);
-  border-radius: 2px;
-  padding: 6px 14px;
-  font: inherit;
-  cursor: pointer;
-}
-button.primary {
-  color: var(--vscode-button-foreground);
-  background: var(--vscode-button-background);
-}
-button.primary:hover { background: var(--vscode-button-hoverBackground); }
-button.secondary {
-  color: var(--vscode-button-secondaryForeground);
-  background: var(--vscode-button-secondaryBackground);
-}
-button.secondary:hover { background: var(--vscode-button-secondaryHoverBackground); }
-button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: 2px; }
-button:disabled { opacity: .55; cursor: default; }
 `;
 
 const WIZARD_SCRIPT = `

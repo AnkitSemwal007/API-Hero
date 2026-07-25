@@ -3,12 +3,16 @@ import {
   escapeAttribute,
   escapeHtml,
   isWebviewMessageRecord,
+  methodBadgeClass,
+  WEBVIEW_SHARED_CSS,
 } from '../ui/webview';
 import type {
   PresentedAssertions,
+  PresentedExtraction,
   ResponseBodyPresentation,
   ResponsePresentation,
 } from './presentation';
+import { RESPONSE_TEXT_PREVIEW_LIMIT } from './presentation';
 
 export { escapeHtml };
 
@@ -19,6 +23,8 @@ export type ResponseViewerMessage =
   | { readonly type: 'saveBody'; readonly mode: 'pretty' | 'raw' };
 
 const BODY_MODES = new Set(['pretty', 'raw']);
+/** Cap DOM search highlights to avoid blowups on huge bodies. */
+const RESPONSE_SEARCH_MATCH_LIMIT = 500;
 
 /** Accepts only allowlisted, closed-schema messages from the webview. */
 export function parseResponseViewerMessage(
@@ -78,27 +84,47 @@ function renderStatusCard(model: ResponsePresentation): string {
   const status = model.status === undefined
     ? `<span class="status-badge status-error">${escapeHtml(model.failure?.title ?? 'Failed')}</span>`
     : `<span class="status-badge status-${statusClass(model.status.code)}">${model.status.code} ${escapeHtml(model.status.text)}</span>`;
-  const stats = model.failure === undefined
-    ? `<div class="stats-summary" aria-label="Response statistics">
+  const methodClass = methodBadgeClass(model.method);
+  const assertionChip = model.assertions === undefined
+    ? ''
+    : statChip(
+      'Assertions',
+      `${model.assertions.summary.passed}/${model.assertions.summary.total}`,
+    );
+  const extractionChip = model.extraction === undefined
+    ? ''
+    : statChip('Extract', model.extraction.chipLabel);
+  const primaryStats = model.failure === undefined
+    ? `<div class="stats-summary primary-stats" aria-label="Response statistics">
         ${statChip('Duration', `${model.statistics.durationMs} ms`)}
-        ${statChip('Body', formatBytes(model.statistics.bodySizeBytes ?? 0))}
+        ${statChip('Size', formatBytes(model.statistics.bodySizeBytes ?? 0))}
+        ${assertionChip}
+        ${extractionChip}
+      </div>`
+    : `<div class="stats-summary primary-stats" aria-label="Failure statistics">
+        ${statChip('Duration', `${model.statistics.durationMs} ms`)}
+        ${statChip('Code', model.failure.code)}
+        ${assertionChip}
+        ${extractionChip}
+      </div>`;
+  const secondaryStats = model.failure === undefined
+    ? `<div class="stats-summary secondary-stats muted" aria-label="Additional metadata">
         ${statChip('Total', `~${formatBytes(model.statistics.responseSizeBytes ?? 0)}`)}
         ${statChip('Type', model.statistics.contentType ?? 'Unknown')}
         ${statChip('Encoding', model.statistics.encoding ?? 'Binary / unknown')}
         ${statChip('Headers', String(model.statistics.headerCount))}
       </div>`
-    : `<div class="stats-summary" aria-label="Failure statistics">
-        ${statChip('Duration', `${model.statistics.durationMs} ms`)}
-        ${statChip('Code', model.failure.code)}
+    : `<div class="stats-summary secondary-stats muted" aria-label="Failure details">
         ${statChip('Retryable', model.failure.retryable ? 'Yes' : 'No')}
       </div>`;
-  return `<header class="status-card">
+  return `<header class="status-card sticky-summary">
     <div class="status-row">
       ${status}
       <span class="summary">${escapeHtml(model.summary)}</span>
+      ${primaryStats}
     </div>
-    <div class="request-line"><strong>${escapeHtml(model.method)}</strong> <span>${escapeHtml(model.requestUrl)}</span></div>
-    ${stats}
+    <div class="request-line"><span class="${methodClass}">${escapeHtml(model.method)}</span> <span>${escapeHtml(model.requestUrl)}</span></div>
+    ${secondaryStats}
     ${model.statistics.redirected
       ? `<aside class="notice">Redirected ${model.statistics.redirectCount} time(s) to <span>${escapeHtml(model.statistics.finalUrl ?? '')}</span></aside>`
       : ''}
@@ -108,6 +134,7 @@ function renderStatusCard(model: ResponsePresentation): string {
 function renderSuccess(model: ResponsePresentation): string {
   const showCookies = model.cookies.available;
   const showAssertions = model.assertions !== undefined;
+  const showExtraction = model.extraction !== undefined;
   const tabs = [
     { id: 'body', label: 'Body', selected: true },
     {
@@ -125,6 +152,13 @@ function renderSuccess(model: ResponsePresentation): string {
           selected: false,
         }]
       : []),
+    ...(showExtraction
+      ? [{
+          id: 'extraction',
+          label: 'Extracted',
+          selected: false,
+        }]
+      : []),
   ];
   return `<nav class="tabs" role="tablist" aria-label="Response sections">
     ${tabs.map((tab) => `<button type="button" role="tab" id="tab-${tab.id}" data-tab="${tab.id}" aria-controls="panel-${tab.id}" aria-selected="${tab.selected}" tabindex="${tab.selected ? '0' : '-1'}"${tab.selected ? ' class="active"' : ''}>${escapeHtml(tab.label)}</button>`).join('')}
@@ -137,6 +171,7 @@ function renderSuccess(model: ResponsePresentation): string {
   </section>
   ${showCookies ? `<section id="panel-cookies" class="tab-panel" role="tabpanel" aria-labelledby="tab-cookies" hidden>${renderCookies(model)}</section>` : ''}
   ${showAssertions ? `<section id="panel-assertions" class="tab-panel" role="tabpanel" aria-labelledby="tab-assertions" hidden>${renderAssertions(model.assertions!)}</section>` : ''}
+  ${showExtraction ? `<section id="panel-extraction" class="tab-panel" role="tabpanel" aria-labelledby="tab-extraction" hidden>${renderExtraction(model.extraction!)}</section>` : ''}
   <aside class="meta-grid" aria-label="Response metadata">
     ${stat('Final URL', model.statistics.finalUrl ?? 'Unknown')}
     ${stat('Started', model.statistics.startedAt)}
@@ -146,13 +181,28 @@ function renderSuccess(model: ResponsePresentation): string {
 
 function renderFailure(model: ResponsePresentation): string {
   const failure = model.failure!;
-  const assertions = model.assertions === undefined
+  const assertionTab = model.assertions === undefined
     ? ''
-    : `<nav class="tabs" role="tablist" aria-label="Response sections">
-        <button type="button" role="tab" id="tab-assertions" data-tab="assertions" aria-controls="panel-assertions" aria-selected="true" tabindex="0" class="active">Assertions (${model.assertions.summary.passed}/${model.assertions.summary.total})</button>
-      </nav>
-      <section id="panel-assertions" class="tab-panel" role="tabpanel" aria-labelledby="tab-assertions">
+    : `<button type="button" role="tab" id="tab-assertions" data-tab="assertions" aria-controls="panel-assertions" aria-selected="${model.extraction === undefined ? 'true' : 'false'}" tabindex="${model.extraction === undefined ? '0' : '-1'}"${model.extraction === undefined ? ' class="active"' : ''}>Assertions (${model.assertions.summary.passed}/${model.assertions.summary.total})</button>`;
+  const extractionTab = model.extraction === undefined
+    ? ''
+    : `<button type="button" role="tab" id="tab-extraction" data-tab="extraction" aria-controls="panel-extraction" aria-selected="${model.assertions === undefined ? 'true' : 'false'}" tabindex="${model.assertions === undefined ? '0' : '-1'}"${model.assertions === undefined ? ' class="active"' : ''}>Extracted</button>`;
+  const hasTabs = assertionTab.length > 0 || extractionTab.length > 0;
+  const tabs = hasTabs
+    ? `<nav class="tabs" role="tablist" aria-label="Response sections">
+        ${assertionTab}
+        ${extractionTab}
+      </nav>`
+    : '';
+  const assertionPanel = model.assertions === undefined
+    ? ''
+    : `<section id="panel-assertions" class="tab-panel" role="tabpanel" aria-labelledby="tab-assertions"${model.extraction === undefined ? '' : ' hidden'}>
         ${renderAssertions(model.assertions)}
+      </section>`;
+  const extractionPanel = model.extraction === undefined
+    ? ''
+    : `<section id="panel-extraction" class="tab-panel" role="tabpanel" aria-labelledby="tab-extraction"${model.assertions === undefined ? '' : ' hidden'}>
+        ${renderExtraction(model.extraction)}
       </section>`;
   return `<section class="failure-card" aria-labelledby="failure-title">
     <h2 id="failure-title">${escapeHtml(failure.title)}</h2>
@@ -160,13 +210,14 @@ function renderFailure(model: ResponsePresentation): string {
     <dl>
       <div><dt>Code</dt><dd><code>${escapeHtml(failure.code)}</code></dd></div>
       <div><dt>Retryable</dt><dd>${failure.retryable ? 'Yes' : 'No'}</dd></div>
-      <div><dt>Duration</dt><dd>${model.statistics.durationMs} ms</dd></div>
       ${failure.cause?.name === undefined ? '' : `<div><dt>Cause</dt><dd>${escapeHtml(failure.cause.name)}</dd></div>`}
       ${failure.cause?.code === undefined ? '' : `<div><dt>Cause code</dt><dd><code>${escapeHtml(failure.cause.code)}</code></dd></div>`}
       ${failure.cause?.message === undefined ? '' : `<div><dt>Detail</dt><dd>${escapeHtml(failure.cause.message)}</dd></div>`}
     </dl>
   </section>
-  ${assertions}`;
+  ${tabs}
+  ${assertionPanel}
+  ${extractionPanel}`;
 }
 
 function renderHeaders(model: ResponsePresentation): string {
@@ -176,7 +227,7 @@ function renderHeaders(model: ResponsePresentation): string {
   </div>
   <div class="table-wrap"><table><thead><tr><th scope="col">Name</th><th scope="col">Value</th></tr></thead><tbody>
     ${model.headers.length === 0
-      ? '<tr><td colspan="2" class="muted">No response headers</td></tr>'
+      ? '<tr><td colspan="2"><div class="empty-inline">No response headers</div></td></tr>'
       : model.headers.map((header) => `<tr><td>${escapeHtml(header.name)}</td><td><code>${escapeHtml(header.value)}</code>${header.masked ? '<span class="masked"> masked</span>' : ''}</td></tr>`).join('')}
   </tbody></table></div>`;
 }
@@ -233,9 +284,45 @@ function renderAssertions(assertions: PresentedAssertions): string {
   <ul class="assert-list">${rows}</ul>`;
 }
 
+function renderExtraction(extraction: PresentedExtraction): string {
+  const { summary } = extraction;
+  const failed = summary.failed + summary.malformed;
+  const badgeClass = failed > 0 ? 'assert-fail' : 'assert-pass';
+  const rows = extraction.outcomes
+    .map((item) => {
+      const icon =
+        item.outcome === 'extracted'
+          ? 'pass'
+          : item.outcome === 'skipped'
+            ? 'skip'
+            : 'fail';
+      const value =
+        item.maskedValue === undefined
+          ? ''
+          : `<code>${escapeHtml(item.maskedValue)}</code>`;
+      const reason =
+        item.reason === undefined
+          ? ''
+          : `<span class="muted">${escapeHtml(item.reason)}</span>`;
+      return `<li class="assert-item assert-${icon}"><span class="assert-outcome">${escapeHtml(item.outcome)}</span><strong>${escapeHtml(item.variableName)}</strong><span class="muted">${escapeHtml(item.sourceLabel)}</span>${value}${reason}</li>`;
+    })
+    .join('');
+  return `<div class="panel-toolbar">
+    <span class="panel-title">Extracted</span>
+    <span class="count ${badgeClass}">${escapeHtml(extraction.chipLabel)}</span>
+  </div>
+  <div class="assert-summary">
+    ${stat('Extracted', String(summary.extracted))}
+    ${stat('Failed', String(summary.failed))}
+    ${stat('Malformed', String(summary.malformed))}
+    ${stat('Skipped', String(summary.skipped))}
+  </div>
+  <ul class="assert-list">${rows}</ul>`;
+}
+
 function renderBody(body: ResponseBodyPresentation | undefined): string {
   if (body === undefined) {
-    return '<p class="muted empty-body">No response body</p>';
+    return '<div class="empty-state"><strong>No response body</strong><span>This response did not include a body to display.</span></div>';
   }
   const truncation = body.truncated
     ? `<div class="notice">Preview truncated to ${body.displayedUnits.toLocaleString()} of ${body.totalUnits.toLocaleString()} ${body.unit}. The canonical response is unchanged.</div>`
@@ -248,7 +335,7 @@ function renderBody(body: ResponseBodyPresentation | undefined): string {
       <button type="button" class="active" data-mode="pretty" aria-pressed="true">Pretty</button>
       <button type="button" data-mode="raw" aria-pressed="false">Raw</button>
       ${body.language === 'json' && body.prettyAvailable
-        ? '<button type="button" data-json-action="expand">Expand all</button><button type="button" data-json-action="collapse">Collapse all</button>'
+        ? '<button type="button" data-json-action="expand">Expand</button><button type="button" data-json-action="collapse">Collapse</button>'
         : ''}
     </div>
     <div class="toolbar body-actions" role="group" aria-label="Body actions">
@@ -270,6 +357,9 @@ function renderBody(body: ResponseBodyPresentation | undefined): string {
 const JSON_TREE_MAX_DEPTH = 64;
 
 function renderJsonTree(pretty: string): string {
+  if (pretty.length > RESPONSE_TEXT_PREVIEW_LIMIT) {
+    return `<pre tabindex="0"><code>${highlight(pretty.slice(0, RESPONSE_TEXT_PREVIEW_LIMIT), 'json')}</code></pre>`;
+  }
   try {
     return `<div class="json-tree" role="tree">${renderJsonValue(JSON.parse(pretty) as unknown, 'root', 0)}</div>`;
   } catch {
@@ -385,6 +475,7 @@ function formatBytes(bytes: number): string {
 }
 
 const VIEWER_CSS = `
+${WEBVIEW_SHARED_CSS}
 :root { color-scheme: light dark; }
 * { box-sizing: border-box; }
 body {
@@ -393,141 +484,136 @@ body {
   background: var(--vscode-editor-background);
   font-family: var(--vscode-font-family);
   font-size: var(--vscode-font-size);
+  line-height: 1.4;
 }
 main { display: flex; flex-direction: column; gap: 0; min-height: 100vh; }
-.status-card {
-  padding: 14px 16px 12px;
+.status-card.sticky-summary {
+  position: sticky; top: 0; z-index: 3;
+  padding: var(--ah-space-3) var(--ah-space-4) var(--ah-space-2);
   border-bottom: 1px solid var(--vscode-panel-border);
-  background: var(--vscode-sideBar-background);
+  background: var(--vscode-sideBar-background, var(--vscode-editor-background));
 }
 .status-row, .request-line, .panel-toolbar, .toolbar, .body-toolbar, .stats-summary {
-  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  display: flex; align-items: center; gap: var(--ah-space-2); flex-wrap: wrap;
 }
-.status-row { margin-bottom: 8px; }
-.request-line { color: var(--vscode-descriptionForeground); overflow-wrap: anywhere; margin-bottom: 10px; }
-.request-line strong { color: var(--vscode-textLink-foreground); font-weight: 600; }
-.summary { color: var(--vscode-descriptionForeground); }
-.status-badge {
-  display: inline-flex; align-items: center;
-  border-radius: 2px; padding: 2px 8px; font-weight: 600; font-size: .9em;
-  background: var(--vscode-badge-background); color: var(--vscode-badge-foreground);
+.status-row { margin-bottom: var(--ah-space-2); justify-content: flex-start; }
+.request-line {
+  color: var(--vscode-descriptionForeground);
+  overflow-wrap: anywhere;
+  margin-bottom: var(--ah-space-2);
+  font-family: var(--vscode-editor-font-family, var(--vscode-font-family));
+  font-size: .92em;
 }
-.status-success { background: var(--vscode-testing-iconPassed); color: var(--vscode-editor-background); }
-.status-redirect { background: var(--vscode-editorWarning-foreground); color: var(--vscode-editor-background); }
-.status-error, .status-badge.status-error { background: var(--vscode-editorError-foreground); color: var(--vscode-editor-background); }
-.stats-summary { gap: 6px; }
-.stat-chip {
-  display: inline-flex; align-items: baseline; gap: 6px;
-  padding: 3px 8px; border-radius: 2px;
-  border: 1px solid var(--vscode-panel-border);
-  background: var(--vscode-editor-background);
-  max-width: 100%;
+.summary { color: var(--vscode-descriptionForeground); font-size: .92em; }
+.secondary-stats { gap: 4px; opacity: .9; }
+.secondary-stats .stat-chip { border-color: transparent; background: transparent; padding: 0 4px; }
+.body-toolbar {
+  padding: var(--ah-space-2) 0;
+  margin-bottom: var(--ah-space-2);
+  border-bottom: 1px solid var(--vscode-panel-border);
+  align-items: flex-start;
 }
-.stat-chip span { color: var(--vscode-descriptionForeground); font-size: .8em; text-transform: uppercase; letter-spacing: .02em; }
-.stat-chip strong { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 18rem; }
+.meta-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--ah-space-2); padding: var(--ah-space-3) var(--ah-space-4) var(--ah-space-4);
+}
 .tabs {
-  display: flex; gap: 0; padding: 0 8px;
+  display: flex; gap: 0; padding: 0 var(--ah-space-2);
   border-bottom: 1px solid var(--vscode-panel-border);
   background: var(--vscode-editor-background);
 }
 .tabs [role="tab"] {
-  appearance: none; border: none; border-bottom: 1px solid transparent;
+  appearance: none; border: none; border-bottom: 2px solid transparent;
   margin-bottom: -1px; border-radius: 0; background: transparent;
-  color: var(--vscode-foreground); padding: 8px 12px; cursor: pointer;
-  opacity: .75;
+  color: var(--vscode-foreground); padding: 7px 10px; cursor: pointer;
+  opacity: .72; font: inherit;
 }
 .tabs [role="tab"]:hover { opacity: 1; background: var(--vscode-toolbar-hoverBackground, transparent); }
 .tabs [role="tab"].active, .tabs [role="tab"][aria-selected="true"] {
   opacity: 1; border-bottom-color: var(--vscode-focusBorder);
   color: var(--vscode-foreground); font-weight: 600;
 }
-.tab-panel { padding: 12px 16px 16px; flex: 1; min-height: 0; }
-.panel-toolbar { justify-content: space-between; margin-bottom: 10px; gap: 10px; }
-.panel-title { font-weight: 600; }
-.body-toolbar { align-items: flex-start; }
+.tabs [role="tab"]:focus-visible, summary:focus-visible, pre:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder); outline-offset: 1px;
+}
+.tab-panel { padding: var(--ah-space-3) var(--ah-space-4) var(--ah-space-4); flex: 1; min-height: 0; }
+.panel-toolbar { justify-content: space-between; margin-bottom: var(--ah-space-2); gap: var(--ah-space-2); }
+.panel-title { font-weight: 600; font-size: .95em; }
 .body-actions { margin-left: auto; }
+.toolbar [data-mode].active,
+.toolbar button.active {
+  color: var(--vscode-button-foreground);
+  background: var(--vscode-button-background);
+  font-weight: 600;
+}
 .search-field input {
-  width: min(220px, 40vw); padding: 4px 8px;
+  width: min(200px, 36vw); padding: 3px 8px;
   color: var(--vscode-input-foreground);
   background: var(--vscode-input-background);
   border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
-  border-radius: 2px; font: inherit;
+  border-radius: var(--ah-radius); font: inherit;
 }
 .search-field input:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
 .search-status { font-size: .85em; min-width: 4.5rem; }
-.sr-only {
-  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
-  overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
-}
-button {
-  color: var(--vscode-button-secondaryForeground);
-  background: var(--vscode-button-secondaryBackground);
-  border: 1px solid var(--vscode-contrastBorder, transparent);
-  border-radius: 2px; padding: 4px 10px; cursor: pointer; font: inherit;
-}
-button:hover { background: var(--vscode-button-secondaryHoverBackground); }
-button.active {
-  color: var(--vscode-button-foreground);
-  background: var(--vscode-button-background);
-}
-button:focus-visible, summary:focus-visible, pre:focus-visible, .tabs [role="tab"]:focus-visible {
-  outline: 1px solid var(--vscode-focusBorder); outline-offset: 1px;
-}
 pre, .json-tree {
-  margin: 0; padding: 12px; overflow: auto; max-height: calc(100vh - 260px);
+  margin: 0; padding: var(--ah-space-3); overflow: auto; max-height: calc(100vh - 220px);
   background: var(--vscode-textCodeBlock-background);
-  border: 1px solid var(--vscode-panel-border); border-radius: 2px; tab-size: 2;
+  border: 1px solid var(--vscode-panel-border); border-radius: var(--ah-radius); tab-size: 2;
+  line-height: 1.5;
 }
 code { font-family: var(--vscode-editor-font-family); }
 .notice {
-  padding: 8px 10px; margin: 0 0 10px;
+  padding: var(--ah-space-2) 10px; margin: 0 0 var(--ah-space-2);
   color: var(--vscode-descriptionForeground);
   border: 1px solid var(--vscode-panel-border);
   background: var(--vscode-sideBar-background);
-  border-radius: 2px; overflow-wrap: anywhere;
+  border-radius: var(--ah-radius); overflow-wrap: anywhere; font-size: .9em;
 }
-.table-wrap { overflow-x: auto; border: 1px solid var(--vscode-panel-border); border-radius: 2px; }
+.table-wrap { overflow-x: auto; border: 1px solid var(--vscode-panel-border); border-radius: var(--ah-radius); }
 table { width: 100%; border-collapse: collapse; }
-th, td { text-align: left; padding: 7px 10px; border-top: 1px solid var(--vscode-panel-border); overflow-wrap: anywhere; }
-th { color: var(--vscode-descriptionForeground); font-weight: 600; background: var(--vscode-sideBar-background); }
-.count, .masked, .muted, .empty-body { color: var(--vscode-descriptionForeground); font-weight: 400; }
+th, td { text-align: left; padding: 6px 10px; border-top: 1px solid var(--vscode-panel-border); overflow-wrap: anywhere; }
+th { color: var(--vscode-descriptionForeground); font-weight: 600; font-size: .85em; background: var(--vscode-sideBar-background); }
+tbody tr:hover { background: var(--vscode-list-hoverBackground); }
+.count, .masked, .muted, .empty-inline { color: var(--vscode-descriptionForeground); font-weight: 400; }
+.empty-inline { padding: var(--ah-space-2) 0; }
 .assert-pass { color: var(--vscode-testing-iconPassed, var(--vscode-charts-green)); }
 .assert-fail { color: var(--vscode-testing-iconFailed, var(--vscode-editorError-foreground)); }
 .assert-summary {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
-  gap: 8px; margin-bottom: 12px;
+  gap: var(--ah-space-2); margin-bottom: var(--ah-space-3);
 }
 .stat {
   border: 1px solid var(--vscode-panel-border);
   background: var(--vscode-sideBar-background);
-  border-radius: 2px; padding: 8px 10px; min-width: 0;
+  border-radius: var(--ah-radius); padding: var(--ah-space-2) 10px; min-width: 0;
 }
 .stat span { display: block; color: var(--vscode-descriptionForeground); font-size: .85em; }
 .stat strong { display: block; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .meta-grid {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 8px; padding: 0 16px 16px;
+  gap: var(--ah-space-2); padding: 0 var(--ah-space-4) var(--ah-space-4);
 }
 .assert-list { list-style: none; margin: 0; padding: 0; }
-.assert-item { display: grid; gap: 6px; padding: 8px 0; border-top: 1px solid var(--vscode-panel-border); }
+.assert-item { display: grid; gap: 6px; padding: var(--ah-space-2) 0; border-top: 1px solid var(--vscode-panel-border); }
 .assert-outcome { text-transform: uppercase; font-size: .75em; font-weight: 700; letter-spacing: .04em; }
 .assert-item.assert-pass .assert-outcome { color: var(--vscode-testing-iconPassed, var(--vscode-charts-green)); }
 .assert-item.assert-fail .assert-outcome { color: var(--vscode-testing-iconFailed, var(--vscode-editorError-foreground)); }
 .assert-item.assert-skip .assert-outcome { color: var(--vscode-descriptionForeground); }
 .assert-detail { margin-top: 4px; }
 .failure-card {
-  margin: 12px 16px; padding: 14px;
+  margin: var(--ah-space-3) var(--ah-space-4); padding: var(--ah-space-3) var(--ah-space-4);
   border: 1px solid var(--vscode-panel-border);
-  background: var(--vscode-sideBar-background); border-radius: 2px;
+  background: var(--vscode-sideBar-background); border-radius: var(--ah-radius);
 }
-.failure-card h2 { margin: 0 0 8px; font-size: 1.05rem; }
-.failure-card p { margin: 0 0 10px; font-size: 1.05em; }
-dl div { display: grid; grid-template-columns: minmax(90px, 140px) 1fr; padding: 5px 0; }
+.failure-card h2 { margin: 0 0 var(--ah-space-2); font-size: 1.05rem; }
+.failure-card p { margin: 0 0 var(--ah-space-2); }
+dl div { display: grid; grid-template-columns: minmax(90px, 140px) 1fr; padding: 4px 0; }
 dt { color: var(--vscode-descriptionForeground); }
 dd { margin: 0; overflow-wrap: anywhere; }
 .json-tree { font-family: var(--vscode-editor-font-family); }
-.json-children { padding-left: 20px; border-left: 1px solid var(--vscode-tree-indentGuidesStroke); }
-.json-leaf, .json-tree summary { min-height: 1.5em; }
+.json-children { padding-left: 18px; border-left: 1px solid var(--vscode-tree-indentGuidesStroke); }
+.json-leaf, .json-tree summary { min-height: 1.45em; }
+.json-tree summary { cursor: pointer; }
 mark.search-hit {
   background: var(--vscode-editor-findMatchHighlightBackground, rgba(234, 92, 0, .33));
   color: inherit; border-radius: 1px;
@@ -551,7 +637,7 @@ mark.search-hit.current {
   dl div { grid-template-columns: 1fr; }
 }
 @media (forced-colors: active) {
-  .status-badge, button, .stat, .stat-chip, .notice, .table-wrap, pre, .json-tree, .failure-card {
+  .status-badge, button, .stat, .stat-chip, .notice, .table-wrap, pre, .json-tree, .failure-card, .empty-state {
     border: 1px solid CanvasText;
   }
   button:focus-visible, summary:focus-visible, .tabs [role="tab"]:focus-visible { outline-color: Highlight; }
@@ -638,6 +724,8 @@ const VIEWER_SCRIPT = `
   let matches = [];
   let matchIndex = -1;
   let searchTimer = undefined;
+  let searchCapped = false;
+  const SEARCH_MATCH_LIMIT = ${RESPONSE_SEARCH_MATCH_LIMIT};
 
   searchInput?.addEventListener('input', () => {
     if (searchTimer !== undefined) {
@@ -677,6 +765,7 @@ const VIEWER_SCRIPT = `
     }
     matches = [];
     matchIndex = -1;
+    searchCapped = false;
   }
 
   function runSearch(resetIndex) {
@@ -701,12 +790,23 @@ const VIEWER_SCRIPT = `
       }
     }
     for (const textNode of textNodes) {
+      if (matches.length >= SEARCH_MATCH_LIMIT) {
+        searchCapped = true;
+        break;
+      }
       const text = textNode.nodeValue || '';
       const lower = text.toLowerCase();
       const fragment = document.createDocumentFragment();
       let cursor = 0;
       let found = lower.indexOf(lowerQuery, cursor);
       while (found !== -1) {
+        if (matches.length >= SEARCH_MATCH_LIMIT) {
+          searchCapped = true;
+          if (cursor < text.length) {
+            fragment.appendChild(document.createTextNode(text.slice(cursor)));
+          }
+          break;
+        }
         if (found > cursor) {
           fragment.appendChild(document.createTextNode(text.slice(cursor, found)));
         }
@@ -718,10 +818,13 @@ const VIEWER_SCRIPT = `
         cursor = found + query.length;
         found = lower.indexOf(lowerQuery, cursor);
       }
-      if (cursor < text.length) {
+      if (!searchCapped && cursor < text.length) {
         fragment.appendChild(document.createTextNode(text.slice(cursor)));
       }
-      textNode.parentNode?.replaceChild(fragment, textNode);
+      if (fragment.childNodes.length > 0) {
+        textNode.parentNode?.replaceChild(fragment, textNode);
+      }
+      if (searchCapped) break;
     }
     if (resetIndex) {
       matchIndex = matches.length > 0 ? 0 : -1;
@@ -749,6 +852,10 @@ const VIEWER_SCRIPT = `
     }
     if (matches.length === 0) {
       searchStatus.textContent = 'No results';
+      return;
+    }
+    if (searchCapped) {
+      searchStatus.textContent = 'Showing first ' + matches.length + ' matches';
       return;
     }
     searchStatus.textContent = (matchIndex + 1) + ' of ' + matches.length;

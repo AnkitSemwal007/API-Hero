@@ -58,4 +58,14 @@ test('manifest entry points converge on the one Run Request command', () => {
     manifest.contributes.keybindings[0]?.when ?? '',
     /editorTextFocus/,
   );
+  assert.match(
+    manifest.contributes.keybindings[0]?.when ?? '',
+    /activeCustomEditorId == 'apiRunner\.requestEditor'/,
+  );
+  assert.match(
+    manifest.contributes.menus['editor/context'].find(
+      (entry) => entry.command === COMMAND_IDS.revealActiveRequest,
+    )?.when ?? '',
+    /activeCustomEditorId == 'apiRunner\.requestEditor'/,
+  );
 });

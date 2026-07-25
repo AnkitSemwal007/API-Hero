@@ -7,6 +7,8 @@ import {
   escapeAttribute,
   escapeHtml,
   isWebviewMessageRecord,
+  methodBadgeClass,
+  WEBVIEW_SHARED_CSS,
 } from './index';
 
 describe('ui/webview helpers', () => {
@@ -56,5 +58,26 @@ describe('ui/webview helpers', () => {
     assert.equal(isWebviewMessageRecord([]), false);
     assert.equal(isWebviewMessageRecord('x'), false);
     assert.equal(isWebviewMessageRecord(undefined), false);
+  });
+
+  test('WEBVIEW_SHARED_CSS exposes spacing tokens and chrome primitives', () => {
+    assert.match(WEBVIEW_SHARED_CSS, /--ah-space-1:\s*4px/u);
+    assert.match(WEBVIEW_SHARED_CSS, /button\.primary/u);
+    assert.match(WEBVIEW_SHARED_CSS, /\.status-badge/u);
+    assert.match(WEBVIEW_SHARED_CSS, /\.empty-state/u);
+    assert.match(WEBVIEW_SHARED_CSS, /\.method-badge/u);
+    assert.match(WEBVIEW_SHARED_CSS, /\.method-get/u);
+  });
+
+  test('methodBadgeClass maps known methods and falls back for others', () => {
+    assert.equal(methodBadgeClass('get'), 'method-badge method-get');
+    assert.equal(methodBadgeClass(' POST '), 'method-badge method-post');
+    assert.equal(methodBadgeClass('PUT'), 'method-badge method-put');
+    assert.equal(methodBadgeClass('patch'), 'method-badge method-patch');
+    assert.equal(methodBadgeClass('DELETE'), 'method-badge method-delete');
+    assert.equal(methodBadgeClass('HEAD'), 'method-badge method-head');
+    assert.equal(methodBadgeClass('OPTIONS'), 'method-badge method-options');
+    assert.equal(methodBadgeClass('CUSTOM'), 'method-badge method-other');
+    assert.equal(methodBadgeClass(''), 'method-badge method-other');
   });
 });

@@ -7,13 +7,19 @@ import {
   window,
   type DataTransfer,
   type TreeDragAndDropController,
+  type TreeView,
 } from 'vscode';
 
 import type { Logger } from '../../shared';
 import type { CollectionDiscoveryService } from '../discovery';
-import type { CollectionMutationService } from '../mutation';
+import {
+  CollectionMutationError,
+  type CollectionMutationService,
+} from '../mutation';
 import { pathBasename } from '../mutation';
 import {
+  findTreeNodeByFolderPath,
+  findTreeNodeByRequestFilePath,
   isLegacyTreeTarget,
   type CollectionTreeNode,
 } from '../tree-projection';
@@ -49,6 +55,7 @@ export class CollectionTreeDragAndDropController
     private readonly discovery: CollectionDiscoveryService,
     private readonly mutation: CollectionMutationService,
     private readonly logger: Logger,
+    private readonly getTreeView?: () => TreeView<CollectionTreeNode> | undefined,
   ) {}
 
   public handleDrag(
@@ -92,10 +99,16 @@ export class CollectionTreeDragAndDropController
     try {
       await this.applyDrop(target, payload.nodes);
     } catch (error) {
-      const message =
+      const detail =
         error instanceof Error ? error.message : String(error);
-      this.logger.warning('Collections drag-and-drop failed', { message });
-      throw error;
+      this.logger.warning('Collections drag-and-drop failed', {
+        message: detail,
+      });
+      const message =
+        error instanceof CollectionMutationError
+          ? error.message
+          : 'Something went wrong while moving collection items. Check the output log for details.';
+      void window.showErrorMessage(`API Hero: ${message}`);
     }
   }
 
@@ -267,12 +280,13 @@ export class CollectionTreeDragAndDropController
       return;
     }
 
-    await this.mutation.moveFolder(
+    const moved = await this.mutation.moveFolder(
       source.collectionId,
       folder.relativePath,
       destination.collectionId,
       destination.parentRelativePath,
     );
+    await this.revealFolder(destination.collectionId, moved.relativePath);
   }
 
   private async dropRequest(
@@ -344,12 +358,42 @@ export class CollectionTreeDragAndDropController
       return;
     }
 
-    await this.mutation.moveRequest(
+    const moved = await this.mutation.moveRequest(
       source.collectionId,
       request.filePath,
       destination.collectionId,
       destination.parentRelativePath,
     );
+    await this.revealRequestFile(moved.filePath);
+  }
+
+  private async revealFolder(
+    collectionId: string,
+    relativePath: string,
+  ): Promise<void> {
+    const aggregate = this.discovery.snapshot;
+    const view = this.getTreeView?.();
+    if (aggregate === undefined || view === undefined) {
+      return;
+    }
+    const node = findTreeNodeByFolderPath(aggregate, collectionId, relativePath);
+    if (node === undefined) {
+      return;
+    }
+    await view.reveal(node, { select: true, focus: false, expand: true });
+  }
+
+  private async revealRequestFile(filePath: string): Promise<void> {
+    const aggregate = this.discovery.snapshot;
+    const view = this.getTreeView?.();
+    if (aggregate === undefined || view === undefined) {
+      return;
+    }
+    const node = findTreeNodeByRequestFilePath(aggregate, filePath);
+    if (node === undefined) {
+      return;
+    }
+    await view.reveal(node, { select: true, focus: false, expand: true });
   }
 }
 

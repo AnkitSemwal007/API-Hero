@@ -28,6 +28,7 @@ import {
 } from 'vscode';
 
 import type { LanguageFeatureSettings } from '../configuration';
+import { fireAndForget } from '../shared';
 import { CONFIGURATION_KEYS, CONFIGURATION_SECTION } from '../constants';
 import type { Logger } from '../shared';
 import type { VariableResolutionContext } from '../variables';
@@ -77,7 +78,9 @@ export function registerLanguageProviders(
     return adapter;
   };
   const updateDiagnostics = (document: TextDocument): void => {
-    void refreshDiagnostics(document);
+    fireAndForget(refreshDiagnostics(document), () => {
+      // Diagnostics are best-effort; never surface as unhandled rejections.
+    });
   };
   const refreshDiagnostics = async (document: TextDocument): Promise<void> => {
     if (document.languageId !== API_LANGUAGE_ID) {
@@ -216,7 +219,7 @@ class ApiCompletionItemProvider implements CompletionItemProvider {
   ): CompletionItem[] {
     return this.getAdapter(document)
       .getCompletions(toParserPosition(document, position))
-      .map(createCompletion);
+      .map((suggestion) => createCompletion(suggestion, position));
   }
 }
 
@@ -297,7 +300,10 @@ function toDiagnosticSeverity(
   }
 }
 
-function createCompletion(suggestion: RuntimeCompletion): CompletionItem {
+function createCompletion(
+  suggestion: RuntimeCompletion,
+  position: Position,
+): CompletionItem {
   switch (suggestion.kind) {
     case 'method': {
       const item = new CompletionItem(suggestion.label, CompletionItemKind.Keyword);
@@ -327,8 +333,28 @@ function createCompletion(suggestion: RuntimeCompletion): CompletionItem {
         suggestion.label,
         CompletionItemKind.Variable,
       );
-      item.insertText = `${suggestion.label}}}`;
+      item.insertText = suggestion.insertText ?? suggestion.label;
       item.detail = suggestion.detail ?? 'API Hero variable';
+      if (suggestion.documentation !== undefined) {
+        const docs = new MarkdownString(suggestion.documentation);
+        docs.supportThemeIcons = true;
+        item.documentation = docs;
+      }
+      if (suggestion.range !== undefined) {
+        item.range = new Range(
+          position.line,
+          suggestion.range.startColumn,
+          position.line,
+          suggestion.range.endColumn,
+        );
+      }
+      const bareName = (suggestion.insertText ?? '')
+        .replace(/\}\}$/u, '')
+        .replace(/^\{\{/u, '')
+        .trim() ||
+        suggestion.label.replace(/^[^\w$]+/u, '').trim();
+      item.filterText = bareName;
+      item.sortText = bareName;
       return item;
     }
     case 'variable-template': {

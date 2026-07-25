@@ -1,0 +1,17 @@
+### List posts
+GET https://jsonplaceholder.typicode.com/posts?_limit=3
+Accept: application/json
+
+### Get post
+GET https://jsonplaceholder.typicode.com/posts/1
+Accept: application/json
+
+### Create post
+POST https://jsonplaceholder.typicode.com/posts
+Content-Type: application/json
+
+{
+  "title": "API Hero",
+  "body": "example",
+  "userId": 1
+}

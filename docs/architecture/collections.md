@@ -125,8 +125,8 @@ Collections (native + Legacy) are **sidebar roots**. Workspace folder nodes are
 not shown; multi-root workspaces qualify collection descriptions with the
 workspace folder name.
 
-Empty state (`viewsWelcome`) offers Create Collection, Import OpenAPI, and Open
-Existing Workspace.
+Empty state (`viewsWelcome`) offers New Collection first, then New Request /
+Import OpenAPI, plus Open Overview.
 
 Commands:
 
@@ -135,21 +135,61 @@ Commands:
 - `apiRunner.openCollectionRequest` — open `.api` and position at the request
 - `apiRunner.focusCollections` — focus the Collections view
 - `apiRunner.createCollection` / `renameCollection` / `deleteCollection` /
-  `duplicateCollection` — native collection CRUD (`Collections/<Name>/` + marker)
+  `duplicateCollection` — native collection CRUD (`Collections/<Name>/` + marker).
+  **Create Collection** is prompt-first (see workflow below). Explicit
+  **Rename Collection** uses the same CRUD prompt webview host after the
+  collection already exists (not `showInputBox`) — it is not part of create.
+  Collections view keybindings: **F2** rename, **Delete** / **⌘⌫** delete
+  (modal confirm), scoped by focused `viewItem`.
 - `apiRunner.exportCollection` — copy a native collection folder (with marker)
   to a user-chosen destination directory
 - `apiRunner.importCollection` — import a collection folder into
   `Collections/<Name>/`, ensure marker, refresh discovery (Rename / Overwrite
   on name collision)
 - `apiRunner.createFolder` / `renameFolder` / `deleteFolder` / `duplicateFolder`
+  — **Create Folder** still uses Explorer-style allocate-then-rename (allocate
+  on disk, then open the rename dialog). That pattern is folder-only; it does
+  **not** apply to Create Collection. Folder rename uses the CRUD prompt
+  webview.
 - `apiRunner.createRequest` / `renameRequest` / `duplicateRequest` /
   `deleteRequest` / `moveRequest` — one `.api` file per UI-created request.
   **New Request** opens a webview dialog (name, method, URL, description,
   collection, folder); content is written via
   `serializeRequestDocument` — see [request-source.md](./request-source.md).
+  **Rename Request** uses the CRUD prompt webview. **Move Request** uses the
+  destination-picker webview (collection + folder), with allowlisting against
+  the destinations presented to the user.
 - `apiRunner.openWorkspace` — wraps `vscode.openFolder`
 - `apiRunner.runCollection` / `runFolder` / `runSelectedRequests` — see
   [collection-runner.md](./collection-runner.md)
+
+### Create Collection workflow
+
+Create Collection is **prompt-first**: no temporary `New Collection` folder,
+no allocate-then-rename, and no filesystem or project-store writes until the
+user confirms **Create**. The dialog validates empty name, invalid filesystem
+characters, and reserved names; duplicate name and path collisions surface as
+in-dialog errors when the user clicks **Create** (nothing is kept on failure).
+Cancel resolves with no side effects (no writes, no temporary collection, no
+tree refresh).
+
+Rationale: avoid unnecessary disk writes, validate before the collection is
+kept, Cancel is side-effect free, and the UX matches modern create dialogs.
+Full field/cancel table: [crud-prompt-dialogs.md](./crud-prompt-dialogs.md).
+
+```mermaid
+flowchart LR
+  User[User: New Collection] --> Dialog[Create Collection Dialog]
+  Dialog -->|Cancel| Stop[No writes / no refresh]
+  Dialog --> Valid[Inline Validation]
+  Valid -->|Create| Persist[Persistence]
+  Persist --> Refresh[Refresh Discovery]
+  Refresh --> Reveal[Reveal Collection]
+```
+
+Persistence (only after Create): initialize project store if needed, create the
+collection folder, write marker metadata, then refresh and reveal with success
+feedback.
 
 Create content mutations always target native `Collections/` trees. Legacy is
 read/organize for existing files; drag-and-drop (or Move Request) can relocate
@@ -211,3 +251,5 @@ VS Code-only exports from `src/collections/vscode`:
 - `CollectionTreeDataProvider`, `CollectionNavigationService`
 - `CollectionTreeDragAndDropController`, `VsCodeCollectionFilesystem`
 - `VsCodeWorkspaceScanner`, `VsCodeApiFileReader`
+- CRUD webview hosts: `openCrudPromptDialog`, `openDestinationPickerDialog`,
+  `openNewRequestDialog` (see [crud-prompt-dialogs.md](./crud-prompt-dialogs.md))

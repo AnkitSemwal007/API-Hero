@@ -1,6 +1,13 @@
 /**
- * Writes authentication profile metadata through VS Code settings only.
+ * Persists Auth Manager metadata.
  * Secrets stay in SecretStorage — never written here.
+ *
+ * When already in `.apihero` project mode, profiles are written to
+ * `.apihero/auth/profiles.json` as SoT and are NOT mirrored to workspace
+ * settings (settings remain an untouched compatibility fallback).
+ * When a folder is open but project mode is not active yet, writes stay in
+ * VS Code settings — partial writers must not `ensureInitialized` an empty
+ * store that would shadow settings via dual-read.
  */
 
 import { ConfigurationTarget, workspace } from 'vscode';
@@ -13,19 +20,43 @@ import type {
   AuthenticationProfile,
   AuthenticationValueSource,
 } from '../../models';
+import {
+  getActiveProjectStoreCoordinator,
+} from '../../project-store/vscode/project-store-coordinator';
+import {
+  isProjectStoreMode,
+  resolveProjectStoreFolderPath,
+} from '../../project-store/vscode/resolve-project-folder';
 import type { AuthManagerState } from './auth-manager-html';
 
-/** Persists Auth Manager metadata to `apiRunner.authentication.profiles`. */
+/** Persists Auth Manager metadata (project store or settings). */
 export async function writeAuthManagerState(
   state: AuthManagerState,
   baseline: readonly AuthenticationProfile[],
 ): Promise<void> {
-  const baselineById = new Map(
-    baseline.map((profile) => [profile.id, profile] as const),
-  );
-  const profiles = state.profiles.map((profile) =>
-    toSettingsProfile(profile, baselineById.get(profile.id)),
-  );
+  const nextIds = new Set(state.profiles.map((profile) => profile.id));
+  const profiles = state.profiles.map((profile, index) => {
+    const byId = baseline.find((entry) => entry.id === profile.id);
+    const byIndex = baseline[index];
+    // When the profile id was renamed, preserve credential sources from the
+    // prior id at the same index (baseline lookup by new id would miss).
+    const baselineProfile =
+      byId ??
+      (byIndex !== undefined && !nextIds.has(byIndex.id) ? byIndex : undefined);
+    return toSettingsProfile(profile, baselineProfile);
+  });
+
+  const coordinator = getActiveProjectStoreCoordinator();
+  const folder = resolveProjectStoreFolderPath();
+  if (
+    coordinator !== undefined &&
+    folder !== undefined &&
+    isProjectStoreMode()
+  ) {
+    await coordinator.writeAuthProfiles(folder, profiles);
+    return;
+  }
+
   const configuration = workspace.getConfiguration(CONFIGURATION_SECTION);
   await configuration.update(
     CONFIGURATION_KEYS.authenticationProfiles,

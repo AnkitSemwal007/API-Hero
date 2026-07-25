@@ -3,7 +3,7 @@
  *
  * Layout (aligned with OpenAPI `generateRequestSource`):
  * - optional `#` comments
- * - `@name`, optional `@description`, `@auth`, `@variable`
+ * - `@name`, optional `@description`, `@auth`, `@variable`, `@extract`
  * - METHOD url(?query)
  * - headers (disabled → `# Name: value`)
  * - blank line + body
@@ -17,6 +17,7 @@
 import type {
   RequestSourceBody,
   RequestSourceDocument,
+  RequestSourceExtractionRule,
   RequestSourceHeader,
   RequestSourceQueryParam,
 } from './models';
@@ -65,6 +66,13 @@ export function serializeRequestDocument(
     const directive =
       variable.sensitive === true ? '@sensitive-variable' : '@variable';
     lines.push(`${directive} ${name}=${singleLine(variable.value)}`);
+  }
+
+  for (const rule of document.extractionRules ?? []) {
+    const line = formatExtractionRule(rule);
+    if (line !== undefined) {
+      lines.push(line);
+    }
   }
 
   // Blank line before the request line (matches Phase 1b placeholder / hand-written feel).
@@ -285,6 +293,34 @@ function formatExpectLine(raw: string): string | undefined {
     return trimmed;
   }
   return `expect ${trimmed}`;
+}
+
+function formatExtractionRule(
+  rule: RequestSourceExtractionRule,
+): string | undefined {
+  if (rule.enabled === false) {
+    return undefined;
+  }
+  const name = rule.name.trim();
+  const from = rule.from.trim();
+  if (name.length === 0 || from.length === 0) {
+    return undefined;
+  }
+  const dir = rule.sensitive === true ? '@sensitive-extract' : '@extract';
+  let line = `${dir} ${name} from ${from}`;
+  if (rule.scope !== undefined && rule.scope !== 'run') {
+    line += ` scope=${rule.scope}`;
+  }
+  if (rule.optional === true) {
+    line += ' optional';
+  }
+  if (rule.sensitive === true && dir === '@extract') {
+    line += ' sensitive';
+  }
+  if (rule.when !== undefined && rule.when.length > 0) {
+    line += ` when=${rule.when}`;
+  }
+  return line;
 }
 
 function formatMultiline(text: string): readonly string[] {

@@ -74,6 +74,32 @@ export function sanitizeDirectoryName(raw: string): string | undefined {
 }
 
 /**
+ * Validates a collection/folder directory name before filesystem mutation.
+ * Empty → "Name is required."; unsafe segments → friendly invalid-name error.
+ */
+export function validateDirectoryName(
+  raw: string,
+  label = 'Collection',
+): { readonly value?: string; readonly error?: string } {
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) {
+    return { error: 'Name is required.' };
+  }
+  const name = sanitizeDirectoryName(trimmed);
+  if (name === undefined) {
+    return { error: `Enter a valid ${label.toLowerCase()} name.` };
+  }
+  return { value: name };
+}
+
+/** Collection-scoped alias of {@link validateDirectoryName}. */
+export function validateCollectionDirectoryName(
+  raw: string,
+): { readonly value?: string; readonly error?: string } {
+  return validateDirectoryName(raw, 'Collection');
+}
+
+/**
  * Sanitizes a request name into a `.api` basename (adds `.api` when missing).
  * Returns undefined when the name is empty or unsafe.
  */

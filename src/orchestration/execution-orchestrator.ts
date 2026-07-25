@@ -11,6 +11,12 @@ import {
   type TestReport,
 } from '../assertions';
 import {
+  extractExtractionRulesForOffset,
+  requestKeyFor,
+  type ExtractionReport,
+  type ExtractionRule,
+} from '../extraction';
+import {
   parseApiDocument,
   validateApiRequest,
   type ApiDocument,
@@ -87,12 +93,17 @@ export interface ExecutionNotificationSink {
 }
 
 export interface ExecutionResultViewer {
-  show(result: ExecutionResult, assertions?: TestReport): void;
+  show(
+    result: ExecutionResult,
+    assertions?: TestReport,
+    extraction?: ExtractionReport,
+  ): void;
 }
 
 export type ExecutionContextProvider = () => Omit<ExecutionContext, 'signal'>;
 export type VariableResolutionContextProvider = (
   document: ApiDocument,
+  requestKey?: string,
 ) => VariableResolutionContext;
 export type AuthenticationResolutionContextProvider = (
   variables: ReadonlyMap<string, import('../models').VariableValue>,
@@ -118,6 +129,32 @@ export interface AssertionEvaluationObserver {
     readonly sourceId: string;
     readonly report: TestReport | undefined;
   }): void;
+}
+
+/**
+ * Invoked after execute for non-cancelled, non-replaced runs.
+ * Phase 1: ExtractionObserver implements this and may return an
+ * {@link ExtractionReport} for the response viewer (Option A).
+ *
+ * Call order (normative for P1 §7.1):
+ *   execute → evaluate assertions → commitHistory
+ *   → extractExtractionRulesForOffset
+ *   → PostExecutionObserver.onExecuted
+ *   → AssertionEvaluationObserver.onEvaluated
+ *   → viewer.show(result, assertions, extraction)
+ *
+ * Extraction must not be gated by assertion pass (ADR). Observer still runs
+ * when assertions failed. Skip when cancelledAtTransport or !isCurrent.
+ */
+export interface PostExecutionObserver {
+  onExecuted(input: {
+    readonly sourceId: string;
+    readonly requestKey: string;
+    readonly request: AuthenticatedRequest;
+    readonly result: ExecutionResult;
+    readonly assertionReport: TestReport | undefined;
+    readonly extractionRules: readonly ExtractionRule[];
+  }): void | ExtractionReport | Promise<void | ExtractionReport | undefined>;
 }
 
 export interface RequestExecutionPipeline {
@@ -245,6 +282,11 @@ export class ExecutionOrchestrator {
      * current run only (not on document edits).
      */
     private readonly assertionObserver?: AssertionEvaluationObserver,
+    /**
+     * Optional post-execution observer (P0 seam). Invoked after history commit
+     * and before assertion Problems notify. Phase 1 wires extraction here.
+     */
+    private readonly postExecutionObserver?: PostExecutionObserver,
   ) {}
 
   public async runAtPosition(
@@ -355,9 +397,10 @@ export class ExecutionOrchestrator {
             validation,
           );
           reporter.report('Resolving variables');
+          const requestKey = requestKeyFor(source.sourceId, selected.index);
           const resolution = this.variableResolver.resolveRequest(
             request,
-            this.getVariableContext(parsed.ast),
+            this.getVariableContext(parsed.ast, requestKey),
           );
           if (!resolution.success) {
             const names = [...new Set(resolution.errors.flatMap((error) => error.chain))]
@@ -456,6 +499,36 @@ export class ExecutionOrchestrator {
             assertionReport,
           );
 
+          let extractionReport: ExtractionReport | undefined;
+          try {
+            // Post-execution seam (extraction). Not gated by assertion pass.
+            // Skip CANCELLED / replaced runs.
+            if (!cancelledAtTransport && this.isCurrent(run.id)) {
+              const extractedRules = extractExtractionRulesForOffset(
+                parsed.ast,
+                source.text,
+                source.offset,
+                { sourceId: source.sourceId },
+              );
+              const extractionRules = extractedRules?.rules ?? [];
+              const maybe = await Promise.resolve(
+                this.postExecutionObserver?.onExecuted({
+                  sourceId: source.sourceId,
+                  requestKey,
+                  request: authenticated,
+                  result,
+                  assertionReport,
+                  extractionRules,
+                }),
+              );
+              if (maybe !== undefined) {
+                extractionReport = maybe;
+              }
+            }
+          } catch {
+            // Post-execution observers must never fail the run path.
+          }
+
           try {
             // Notify only for evaluated runs (not CANCELLED / replaced /
             // precondition). Undefined report clears prior Problems.
@@ -471,7 +544,7 @@ export class ExecutionOrchestrator {
 
           if (showViewer) {
             try {
-              this.viewer.show(result, assertionReport);
+              this.viewer.show(result, assertionReport, extractionReport);
             } catch {
               this.status.update({ kind: 'failed' });
               if (showNotifications) {

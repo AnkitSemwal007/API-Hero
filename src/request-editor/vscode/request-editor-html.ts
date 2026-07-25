@@ -5,11 +5,17 @@
 
 import { HTTP_METHODS } from '../../types';
 import {
+  VARIABLE_PRECEDENCE_LEGEND,
+  VARIABLE_SCOPE_UI,
+} from '../../variables';
+import {
   buildNonceOnlyCsp,
   escapeAttribute,
   escapeHtml,
+  WEBVIEW_SHARED_CSS,
 } from '../../ui/webview';
-import type { RequestEditorState } from './request-editor-messages';
+import type { RequestSourceDocument } from '../../request-source';
+import { VARIABLE_INTELLISENSE_SCRIPT } from './variable-intellisense-script';
 
 export { escapeAttribute, escapeHtml };
 
@@ -32,28 +38,21 @@ export function renderRequestEditorHtml(nonce: string): string {
 </head>
 <body>
 <div id="banner" class="banner" hidden></div>
-<header class="toolbar">
+<header class="toolbar sticky-toolbar">
   <div class="run-row" role="group" aria-label="Request execution">
     <label class="field method">
       <span class="sr-only">Method</span>
-      <select id="method" aria-label="HTTP method">${methodOptions}</select>
+      <select id="method" class="method-select method-get" aria-label="HTTP method">${methodOptions}</select>
     </label>
-    <label class="field grow">
+    <label class="field grow url-field">
       <span class="sr-only">URL</span>
-      <input id="url" type="text" placeholder="https://api.example.com/resource" autocomplete="off" aria-label="URL" />
+      <input id="url" type="text" placeholder="https://api.example.com/resource" autocomplete="off" aria-label="URL" data-var-complete="true" data-var-preview="urlResolved" data-var-hint="urlVarHint" />
+      <p id="urlResolved" class="var-resolved" hidden></p>
+      <p id="urlVarHint" class="var-hint" hidden></p>
     </label>
-    <button type="button" id="envShortcut" class="ghost" title="Switch Environment" aria-label="Switch Environment">Environment</button>
-    <button type="button" id="authShortcut" class="ghost" title="Select Authentication" aria-label="Select Authentication">Authentication</button>
-    <button type="button" id="run" class="primary">Run</button>
-  </div>
-  <div class="identity-row">
-    <div class="identity">
-      <input id="name" type="text" placeholder="Request name" aria-label="Request name" />
-      <input id="description" type="text" placeholder="Description (optional)" aria-label="Description" />
-    </div>
-    <div class="actions">
-      <button type="button" id="openText" class="secondary" title="Open With Text Editor">Open Text</button>
-    </div>
+    <button type="button" id="envShortcut" class="chip" title="Switch Environment" aria-label="Switch Environment">Env: None</button>
+    <button type="button" id="authShortcut" class="chip" title="Select Authentication" aria-label="Select Authentication">Auth</button>
+    <button type="button" id="run" class="primary run-btn">Run</button>
   </div>
 </header>
 <nav class="tabs" role="tablist" aria-label="Request sections">
@@ -61,12 +60,26 @@ export function renderRequestEditorHtml(nonce: string): string {
 </nav>
 <div id="formRoot" class="panels">
   <section id="tab-request" class="panel active" role="tabpanel">
-    <p class="hint">Method and URL are edited in the top bar. Query parameters are edited on the Params tab and encoded into the URL.</p>
+    <div class="identity-block">
+      <label class="field">
+        <span>Name</span>
+        <input id="name" type="text" placeholder="Request name" aria-label="Request name" />
+      </label>
+      <label class="field">
+        <span>Description <em class="optional-hint">optional</em></span>
+        <input id="description" type="text" placeholder="Short description" aria-label="Description" />
+      </label>
+      <div class="identity-actions">
+        <button type="button" id="openText" class="ghost" title="Open With Text Editor">Open Text Editor</button>
+      </div>
+    </div>
+    <p class="hint">Method and URL stay in the top bar. Query parameters are on the Params tab.</p>
   </section>
   <section id="tab-headers" class="panel" role="tabpanel" hidden>
     <div class="table-toolbar">
       <button type="button" data-add="headers" class="secondary">Add header</button>
     </div>
+    <p class="empty-state compact" data-empty-for="headersTable" hidden><strong>No headers</strong> — add one to send custom headers.</p>
     <table class="kv" id="headersTable">
       <thead><tr><th>Key</th><th>Value</th><th>Enabled</th><th></th></tr></thead>
       <tbody></tbody>
@@ -76,92 +89,115 @@ export function renderRequestEditorHtml(nonce: string): string {
     <div class="table-toolbar">
       <button type="button" data-add="params" class="secondary">Add param</button>
     </div>
+    <p class="empty-state compact" data-empty-for="paramsTable" hidden><strong>No query params</strong> — add one to encode into the URL.</p>
     <table class="kv" id="paramsTable">
       <thead><tr><th>Key</th><th>Value</th><th>Enabled</th><th></th></tr></thead>
       <tbody></tbody>
     </table>
   </section>
   <section id="tab-body" class="panel" role="tabpanel" hidden>
-    <label class="field">
-      <span>Body type</span>
-      <select id="bodyType">
-        <option value="none">none</option>
-        <option value="json">json</option>
-        <option value="text">text</option>
-        <option value="form">form</option>
-        <option value="raw">raw</option>
-        <option value="multipart">multipart</option>
-        <option value="binary">binary</option>
-      </select>
-    </label>
-    <div id="bodyJsonText" class="body-block">
-      <label class="field">
-        <span>Body</span>
-        <textarea id="bodyText" rows="12" spellcheck="false"></textarea>
+    <div class="form-compact">
+      <label class="field inline-field">
+        <span>Body type</span>
+        <select id="bodyType">
+          <option value="none">none</option>
+          <option value="json">json</option>
+          <option value="text">text</option>
+          <option value="form">form</option>
+          <option value="raw">raw</option>
+          <option value="multipart">multipart</option>
+          <option value="binary">binary</option>
+        </select>
       </label>
-      <label class="field" id="rawContentTypeField" hidden>
-        <span>Content-Type</span>
-        <input id="rawContentType" type="text" placeholder="application/xml" />
-      </label>
-    </div>
-    <div id="bodyForm" class="body-block" hidden>
-      <div class="table-toolbar">
-        <button type="button" data-add="form" class="secondary">Add field</button>
+      <div id="bodyJsonText" class="body-block">
+        <label class="field">
+          <span>Body</span>
+          <textarea id="bodyText" rows="10" spellcheck="false" data-var-complete="true"></textarea>
+        </label>
+        <label class="field" id="rawContentTypeField" hidden>
+          <span>Content-Type</span>
+          <input id="rawContentType" type="text" placeholder="application/xml" />
+        </label>
       </div>
-      <table class="kv" id="formTable">
-        <thead><tr><th>Key</th><th>Value</th><th></th></tr></thead>
-        <tbody></tbody>
-      </table>
-    </div>
-    <div id="bodyMultipart" class="body-block" hidden>
-      <label class="field">
-        <span>Boundary</span>
-        <input id="multipartBoundary" type="text" placeholder="boundary" />
-      </label>
-      <div class="table-toolbar">
-        <button type="button" data-add="multipart" class="secondary">Add field</button>
+      <div id="bodyForm" class="body-block" hidden>
+        <div class="table-toolbar">
+          <button type="button" data-add="form" class="secondary">Add field</button>
+        </div>
+        <p class="empty-state compact" data-empty-for="formTable" hidden><strong>No form fields</strong></p>
+        <table class="kv" id="formTable">
+          <thead><tr><th>Key</th><th>Value</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
       </div>
-      <table class="kv" id="multipartTable">
-        <thead><tr><th>Key</th><th>Value</th><th></th></tr></thead>
-        <tbody></tbody>
-      </table>
-    </div>
-    <div id="bodyBinary" class="body-block" hidden>
-      <label class="field">
-        <span>Note / path hint</span>
-        <input id="binaryNote" type="text" placeholder="avatar.png" />
-      </label>
-      <p class="hint">Binary bodies are emitted as a stub comment in the .api file.</p>
+      <div id="bodyMultipart" class="body-block" hidden>
+        <label class="field">
+          <span>Boundary</span>
+          <input id="multipartBoundary" type="text" placeholder="boundary" />
+        </label>
+        <div class="table-toolbar">
+          <button type="button" data-add="multipart" class="secondary">Add field</button>
+        </div>
+        <p class="empty-state compact" data-empty-for="multipartTable" hidden><strong>No multipart fields</strong></p>
+        <table class="kv" id="multipartTable">
+          <thead><tr><th>Key</th><th>Value</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div id="bodyBinary" class="body-block" hidden>
+        <label class="field">
+          <span>Note / path hint</span>
+          <input id="binaryNote" type="text" placeholder="avatar.png" />
+        </label>
+        <p class="hint">Binary bodies are emitted as a stub comment in the .api file.</p>
+      </div>
     </div>
   </section>
   <section id="tab-auth" class="panel" role="tabpanel" hidden>
-    <label class="field">
-      <span>Authentication profile</span>
-      <select id="authProfile">
-        <option value="">none</option>
-      </select>
-    </label>
-    <p class="hint">Writes <code>@auth &lt;id&gt;</code>. Secrets stay in Secret Storage — never in the webview.</p>
-    <div class="table-toolbar">
-      <button type="button" id="manageAuthProfiles" class="secondary">Manage Authentication</button>
-      <button type="button" id="selectAuthentication" class="ghost">Session default…</button>
+    <div class="form-compact">
+      <label class="field">
+        <span>Authentication profile</span>
+        <select id="authProfile">
+          <option value="">none</option>
+        </select>
+      </label>
+      <p class="hint">Writes <code>@auth &lt;id&gt;</code>. Secrets stay in Secret Storage — never in the webview.</p>
+      <div class="table-toolbar">
+        <button type="button" id="manageAuthProfiles" class="secondary">Manage Authentication</button>
+        <button type="button" id="selectAuthentication" class="ghost">Session default…</button>
+      </div>
     </div>
   </section>
   <section id="tab-variables" class="panel" role="tabpanel" hidden>
+    <p id="variablesActiveEnv" class="hint" aria-live="polite">Active environment: None</p>
+    <p class="hint" id="variablesScopeHint">These are <strong>${escapeHtml(VARIABLE_SCOPE_UI.document.sourceLabel)}</strong> variables (highest precedence). They override Environment, Workspace, and Global.</p>
+    <p class="hint" id="variablesPrecedenceLegend">${escapeHtml(VARIABLE_PRECEDENCE_LEGEND)}</p>
     <div class="table-toolbar">
       <button type="button" data-add="variables" class="secondary">Add variable</button>
       <button type="button" id="manageEnvironments" class="ghost">Manage Environments</button>
     </div>
+    <p class="empty-state compact" data-empty-for="variablesTable" hidden><strong>No Request variables</strong></p>
     <table class="kv" id="variablesTable">
       <thead><tr><th>Name</th><th>Value</th><th>Insert</th><th></th></tr></thead>
       <tbody></tbody>
     </table>
-    <h3>Resolution preview</h3>
+    <h3 class="ah-section-title">Resolution preview</h3>
+    <p class="hint">Effective values after precedence (source label shown per variable).</p>
     <pre id="variablePreview" class="preview-box">No preview</pre>
   </section>
+  <section id="tab-extract" class="panel" role="tabpanel" hidden>
+    <p class="hint">Default scope is Run. Environment writes persist. Request writes are session overlay for this request.</p>
+    <div class="table-toolbar">
+      <button type="button" data-add="extract" class="secondary">Add extraction</button>
+    </div>
+    <p class="empty-state compact" data-empty-for="extractTable" hidden><strong>No extractions</strong> — add one to write response values into variables.</p>
+    <table class="kv" id="extractTable">
+      <thead><tr><th>Name</th><th>From</th><th>Scope</th><th>Sensitive</th><th>Optional</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </section>
   <section id="tab-tests" class="panel" role="tabpanel" hidden>
-    <div class="tests-builder">
-      <h3>Add assertion</h3>
+    <div class="tests-builder form-compact">
+      <h3 class="ah-section-title">Add assertion</h3>
       <div class="row wrap">
         <label class="field">
           <span>Kind</span>
@@ -175,7 +211,7 @@ export function renderRequestEditorHtml(nonce: string): string {
         </label>
         <label class="field grow">
           <span>Value</span>
-          <input id="testValue" type="text" placeholder="200" />
+          <input id="testValue" type="text" placeholder="200" data-var-complete="true" />
         </label>
         <button type="button" id="addTest" class="secondary">Add</button>
       </div>
@@ -184,17 +220,20 @@ export function renderRequestEditorHtml(nonce: string): string {
     <ul id="testsList" class="tests-list"></ul>
   </section>
   <section id="tab-settings" class="panel" role="tabpanel" hidden>
-    <label class="field">
-      <span>Timeout (ms) — <code>@timeout</code></span>
-      <input id="timeoutMs" type="number" min="0" step="1" placeholder="(use extension default)" />
-    </label>
-    <p class="hint">Only directives already in the .api format are editable here. Redirect following is always on at runtime (no directive).</p>
+    <div class="form-compact">
+      <label class="field">
+        <span>Timeout (ms) — <code>@timeout</code></span>
+        <input id="timeoutMs" type="number" min="0" step="1" placeholder="(use extension default)" />
+      </label>
+      <p class="hint">Only directives already in the .api format are editable here. Redirect following is always on at runtime (no directive).</p>
+    </div>
   </section>
   <section id="tab-preview" class="panel" role="tabpanel" hidden>
     <pre id="previewSource" class="preview-box source"></pre>
   </section>
 </div>
 <p id="error" class="error" hidden></p>
+<div id="varSuggest" class="var-suggest" hidden role="listbox" aria-label="Variable suggestions"></div>
 <script nonce="${safeNonce}">${EDITOR_SCRIPT}</script>
 </body>
 </html>`;
@@ -207,6 +246,7 @@ const TAB_BUTTONS = [
   'body',
   'auth',
   'variables',
+  'extract',
   'tests',
   'settings',
   'preview',
@@ -218,11 +258,14 @@ const TAB_BUTTONS = [
   .join('');
 
 function labelForTab(id: string): string {
+  if (id === 'extract') {
+    return 'Extract';
+  }
   return id.charAt(0).toUpperCase() + id.slice(1);
 }
 
 /** Builds a stable empty form model for the webview. */
-export function emptyRequestEditorModel(): RequestEditorState['model'] {
+export function emptyRequestEditorModel(): RequestSourceDocument {
   return {
     name: 'New Request',
     method: 'GET',
@@ -232,10 +275,12 @@ export function emptyRequestEditorModel(): RequestEditorState['model'] {
     body: { type: 'none' },
     expectLines: [],
     variables: [],
+    extractionRules: [],
   };
 }
 
 const EDITOR_CSS = `
+${WEBVIEW_SHARED_CSS}
 :root { color-scheme: light dark; }
 * { box-sizing: border-box; }
 body {
@@ -250,7 +295,7 @@ body {
   min-height: 100vh;
 }
 .banner {
-  padding: 8px 12px;
+  padding: var(--ah-space-2) var(--ah-space-3);
   background: var(--vscode-inputValidation-warningBackground);
   border-bottom: 1px solid var(--vscode-inputValidation-warningBorder, var(--vscode-panel-border));
   color: var(--vscode-foreground);
@@ -259,9 +304,10 @@ body {
 .toolbar {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 8px 12px;
+  gap: var(--ah-space-2);
+  padding: var(--ah-space-2) var(--ah-space-3);
   border-bottom: 1px solid var(--vscode-panel-border, var(--vscode-contrastBorder));
+  background: var(--vscode-sideBar-background, var(--vscode-editor-background));
 }
 .run-row {
   display: flex;
@@ -270,172 +316,176 @@ body {
   align-items: center;
 }
 .run-row .field { margin: 0; }
-.run-row .field.method { width: 104px; flex: 0 0 104px; }
+.run-row .field.method { width: 96px; flex: 0 0 96px; }
 .run-row .field.grow { flex: 1 1 220px; min-width: 140px; }
-.identity-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 12px;
-  align-items: flex-start;
-  justify-content: space-between;
+.run-btn {
+  min-width: 64px;
+  padding: 4px 14px;
+  min-height: 26px;
 }
-.identity {
-  flex: 1 1 220px;
+.identity-block {
   display: grid;
-  gap: 4px;
-  min-width: 0;
+  gap: var(--ah-space-3);
+  max-width: 36rem;
+  margin-bottom: var(--ah-space-2);
 }
-.actions {
+.identity-block .optional-hint {
+  font-style: normal;
+  opacity: .8;
+  font-weight: 400;
+}
+.identity-actions {
   display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
+  gap: var(--ah-space-1);
   align-items: center;
-  flex: 0 1 auto;
-  justify-content: flex-end;
-}
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-.tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0;
-  padding: 0 8px;
-  border-bottom: 1px solid var(--vscode-panel-border, var(--vscode-contrastBorder));
-  background: var(--vscode-editor-background);
-}
-.tab {
-  appearance: none;
-  border: none;
-  background: transparent;
-  color: var(--vscode-foreground);
-  padding: 6px 10px;
-  cursor: pointer;
-  border-bottom: 2px solid transparent;
-  font: inherit;
-  font-size: 12px;
-  line-height: 1.4;
-  opacity: .85;
-}
-.tab:hover { opacity: 1; background: var(--vscode-list-hoverBackground); }
-.tab.active {
-  border-bottom-color: var(--vscode-focusBorder);
-  color: var(--vscode-foreground);
-  font-weight: 600;
-  opacity: 1;
 }
 .panels {
-  padding: 12px;
+  padding: var(--ah-space-3);
   flex: 1;
   overflow: auto;
 }
 .panel { display: none; }
 .panel.active { display: block; }
-.row { display: flex; gap: 12px; align-items: end; }
+.form-compact { display: grid; gap: var(--ah-space-3); max-width: 42rem; }
+.row { display: flex; gap: var(--ah-space-3); align-items: end; }
 .row.wrap { flex-wrap: wrap; }
-.field { display: grid; gap: 4px; }
+.field { display: grid; gap: var(--ah-space-1); }
 .field.grow { flex: 1; min-width: 0; }
-.field.method { width: 104px; flex: 0 0 104px; }
-.field span {
+.field.method { width: 96px; flex: 0 0 96px; }
+.field span, .field em {
   color: var(--vscode-descriptionForeground);
   font-size: 11px;
   font-weight: 500;
   line-height: 1.3;
+  font-style: normal;
 }
-input, select, textarea {
-  width: 100%;
-  color: var(--vscode-input-foreground);
-  background: var(--vscode-input-background);
-  border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
-  border-radius: 2px;
-  padding: 4px 8px;
-  min-height: 24px;
-  font: inherit;
-  line-height: 1.4;
+.inline-field {
+  grid-template-columns: auto minmax(120px, 180px);
+  align-items: center;
+  gap: var(--ah-space-2);
+  max-width: 280px;
 }
-#url, #name, #description {
+input, select, textarea { width: 100%; }
+#url, #name {
   font-family: var(--vscode-editor-font-family);
   font-size: var(--vscode-editor-font-size);
 }
+#description { font-size: 12px; }
 textarea, pre.source, .preview-box {
   font-family: var(--vscode-editor-font-family);
   font-size: var(--vscode-editor-font-size);
   line-height: 1.5;
 }
-textarea { resize: vertical; min-height: 140px; padding: 6px 8px; }
-input:focus, select:focus, textarea:focus, button:focus-visible {
-  outline: 1px solid var(--vscode-focusBorder);
-  outline-offset: -1px;
-}
-button {
-  font: inherit;
-  font-size: 12px;
-  line-height: 1.4;
-  cursor: pointer;
-  border-radius: 2px;
-  padding: 3px 10px;
-  min-height: 24px;
-  border: 1px solid var(--vscode-button-border, transparent);
-}
-button.primary {
-  color: var(--vscode-button-foreground);
-  background: var(--vscode-button-background);
-}
-button.primary:hover { background: var(--vscode-button-hoverBackground); }
-button.secondary {
-  color: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
-  background: var(--vscode-button-secondaryBackground, var(--vscode-input-background));
-}
-button.secondary:hover {
-  background: var(--vscode-button-secondaryHoverBackground, var(--vscode-list-hoverBackground));
-}
-button.ghost {
-  color: var(--vscode-textLink-foreground);
-  background: transparent;
-  border-color: transparent;
-  padding: 3px 6px;
-  text-decoration: none;
-}
-button.ghost:hover {
-  background: var(--vscode-list-hoverBackground);
-  text-decoration: underline;
-}
-button:disabled { opacity: .55; cursor: default; }
+textarea { resize: vertical; min-height: 120px; }
 .hint {
   color: var(--vscode-descriptionForeground);
   font-size: 11px;
-  margin: 8px 0 0;
+  margin: var(--ah-space-2) 0 0;
   line-height: 1.4;
 }
 .hint code, h3 code { font-family: var(--vscode-editor-font-family); }
-.table-toolbar { margin-bottom: 6px; }
+.url-field { position: relative; }
+.var-resolved, .var-hint {
+  margin: 4px 0 0;
+  font-size: 11px;
+  line-height: 1.35;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.var-resolved {
+  color: var(--vscode-descriptionForeground);
+}
+.var-hint {
+  color: var(--vscode-inputValidation-warningForeground, var(--vscode-editorWarning-foreground));
+}
+.var-suggest {
+  position: fixed;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  max-height: min(320px, 50vh);
+  overflow: hidden;
+  border: 1px solid var(--vscode-editorSuggestWidget-border, var(--vscode-panel-border));
+  background: var(--vscode-editorSuggestWidget-background, var(--vscode-editorWidget-background, var(--vscode-editor-background)));
+  color: var(--vscode-editorSuggestWidget-foreground, var(--vscode-foreground));
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  border-radius: 4px;
+}
+.var-suggest-list {
+  overflow: auto;
+  max-height: 180px;
+  padding: 2px 0;
+}
+.var-suggest-item {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  margin: 0;
+  padding: 4px 10px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+.var-suggest-item:hover,
+.var-suggest-item.active {
+  background: var(--vscode-editorSuggestWidget-selectedBackground, var(--vscode-list-activeSelectionBackground));
+  color: var(--vscode-editorSuggestWidget-selectedForeground, var(--vscode-list-activeSelectionForeground));
+}
+.var-suggest-icon { opacity: 0.95; }
+.var-suggest-label {
+  font-family: var(--vscode-editor-font-family);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.var-suggest-source {
+  color: var(--vscode-descriptionForeground);
+  font-size: 11px;
+}
+.var-suggest-item.active .var-suggest-source {
+  color: inherit;
+  opacity: 0.85;
+}
+.var-suggest-detail {
+  border-top: 1px solid var(--vscode-editorSuggestWidget-border, var(--vscode-panel-border));
+  padding: 8px 10px;
+  font-size: 11px;
+  line-height: 1.4;
+  background: var(--vscode-editorWidget-background, var(--vscode-sideBar-background));
+}
+.var-suggest-name {
+  font-family: var(--vscode-editor-font-family);
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.var-suggest-meta { margin-bottom: 6px; opacity: 0.9; }
+.var-suggest-value-label {
+  color: var(--vscode-descriptionForeground);
+  margin-bottom: 2px;
+}
+.var-suggest-value {
+  font-family: var(--vscode-editor-font-family);
+  word-break: break-all;
+  margin-bottom: 6px;
+}
+.table-toolbar {
+  display: flex;
+  gap: var(--ah-space-2);
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: var(--ah-space-2);
+}
 table.kv {
   width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
 }
-table.kv th, table.kv td {
-  border-bottom: 1px solid var(--vscode-panel-border, var(--vscode-contrastBorder));
-  padding: 4px 6px;
-  text-align: left;
-  vertical-align: middle;
-}
-table.kv th {
-  color: var(--vscode-descriptionForeground);
-  font-weight: 500;
-  font-size: 11px;
-  padding-top: 2px;
-  padding-bottom: 4px;
-}
-table.kv tbody tr:hover { background: var(--vscode-list-hoverBackground); }
 table.kv td.enabled { width: 56px; text-align: center; }
 table.kv td.actions { width: 112px; white-space: nowrap; }
 table.kv td.actions button {
@@ -448,29 +498,29 @@ table.kv input[type="checkbox"] {
   min-height: 0;
   margin: 0;
 }
-.body-block { margin-top: 12px; }
+.body-block { margin-top: 0; }
 .preview-box {
   margin: 0;
-  padding: 8px 10px;
+  padding: var(--ah-space-2) 10px;
   background: var(--vscode-textCodeBlock-background, var(--vscode-input-background));
   border: 1px solid var(--vscode-panel-border, var(--vscode-contrastBorder));
-  border-radius: 2px;
+  border-radius: var(--ah-radius);
   white-space: pre-wrap;
   word-break: break-word;
   max-height: 60vh;
   overflow: auto;
 }
 .tests-builder h3 { margin-top: 0; }
-.tests-list { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 4px; }
+.tests-list { list-style: none; padding: 0; margin: var(--ah-space-3) 0 0; display: grid; gap: var(--ah-space-1); }
 .tests-list li {
   display: flex;
-  gap: 8px;
+  gap: var(--ah-space-2);
   align-items: center;
   justify-content: space-between;
-  padding: 4px 8px;
+  padding: var(--ah-space-1) var(--ah-space-2);
   border: 1px solid var(--vscode-panel-border, var(--vscode-contrastBorder));
   background: var(--vscode-input-background);
-  border-radius: 2px;
+  border-radius: var(--ah-radius);
 }
 .tests-list code {
   flex: 1;
@@ -480,12 +530,17 @@ table.kv input[type="checkbox"] {
   font-size: var(--vscode-editor-font-size);
 }
 .error {
-  margin: 0 12px 12px;
+  margin: 0 var(--ah-space-3) var(--ah-space-3);
   color: var(--vscode-errorForeground, var(--vscode-editorError-foreground));
   font-size: 12px;
 }
-h3 {
-  margin: 12px 0 6px;
+.field-error {
+  color: var(--vscode-errorForeground, var(--vscode-editorError-foreground));
+  font-size: 10px;
+  min-height: 1em;
+}
+h3, .ah-section-title {
+  margin: var(--ah-space-3) 0 var(--ah-space-2);
   font-size: 12px;
   font-weight: 600;
   color: var(--vscode-foreground);
@@ -493,17 +548,8 @@ h3 {
 @media (max-width: 560px) {
   .run-row { flex-direction: column; align-items: stretch; }
   .run-row .field.method { width: 100%; flex: 1; }
-  .identity-row { flex-direction: column; align-items: stretch; }
-  .actions { justify-content: flex-start; }
   .row { flex-direction: column; align-items: stretch; }
-  .field.method { width: 100%; flex: 1; }
-}
-@media (prefers-contrast: more) {
-  .tab.active { border-bottom-width: 3px; }
-}
-@media (forced-colors: active) {
-  .tab.active { border-bottom: 2px solid CanvasText; }
-  button, input, select, textarea { border: 1px solid CanvasText; }
+  .inline-field { grid-template-columns: 1fr; }
 }
 `;
 
@@ -513,9 +559,13 @@ const EDITOR_SCRIPT = `
   let state = null;
   let applying = false;
   let debounceTimer = undefined;
+  /** True when the user edited a field since the last successful flush or inbound apply. */
+  let formDirty = false;
   const DEBOUNCE_MS = 300;
 
   const el = (id) => document.getElementById(id);
+
+${VARIABLE_INTELLISENSE_SCRIPT}
 
   function post(message) {
     vscode.postMessage(message);
@@ -557,7 +607,8 @@ const EDITOR_SCRIPT = `
       queryParams: [],
       body: { type: 'none' },
       expectLines: [],
-      variables: []
+      variables: [],
+      extractionRules: []
     };
   }
 
@@ -571,6 +622,7 @@ const EDITOR_SCRIPT = `
     model.queryParams = readKvTable('paramsTable', true);
     model.headers = readKvTable('headersTable', true);
     model.variables = readVariables();
+    model.extractionRules = readExtractionRules();
     model.expectLines = readExpectLines();
     const timeoutRaw = el('timeoutMs').value.trim();
     if (timeoutRaw.length > 0 && Number.isFinite(Number(timeoutRaw))) {
@@ -607,6 +659,86 @@ const EDITOR_SCRIPT = `
     });
   }
 
+  function readExtractionRules() {
+    const VARIABLE_NAME = /^[A-Za-z_][A-Za-z0-9_.-]*$/;
+    const names = new Map();
+    return Array.from(el('extractTable').querySelectorAll('tbody tr')).map((tr) => {
+      const nameInput = tr.querySelector('[data-name]');
+      const fromInput = tr.querySelector('[data-from]');
+      const name = nameInput.value.trim();
+      const from = fromInput.value.trim();
+      const scope = tr.querySelector('[data-scope]').value;
+      const sensitive = tr.querySelector('[data-sensitive]').checked;
+      const optional = tr.querySelector('[data-optional]').checked;
+      const nameError = tr.querySelector('[data-name-error]');
+      const fromError = tr.querySelector('[data-from-error]');
+      let nameMessage = '';
+      if (name.length === 0) {
+        nameMessage = 'Name required';
+      } else if (!VARIABLE_NAME.test(name)) {
+        nameMessage = 'Invalid name';
+      } else if (names.has(name)) {
+        nameMessage = 'Duplicate name';
+      } else {
+        names.set(name, true);
+      }
+      if (nameError) nameError.textContent = nameMessage;
+      if (fromError) fromError.textContent = from.length === 0 ? 'From required' : '';
+      const rule = { name, from };
+      if (scope && scope !== 'run') rule.scope = scope;
+      if (sensitive) rule.sensitive = true;
+      if (optional) rule.optional = true;
+      return rule;
+    });
+  }
+
+  function renderExtractionRules(rows) {
+    const tbody = el('extractTable').querySelector('tbody');
+    tbody.innerHTML = '';
+    (rows || []).forEach((row) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td><input data-name type="text" placeholder="token" /><div class="field-error" data-name-error></div></td>' +
+        '<td><input data-from type="text" placeholder="body.access_token" /><div class="field-error" data-from-error></div></td>' +
+        '<td><select data-scope>' +
+        '<option value="run">Run</option>' +
+        '<option value="document">Request</option>' +
+        '<option value="environment">Environment</option>' +
+        '</select></td>' +
+        '<td class="enabled"><input data-sensitive type="checkbox" /></td>' +
+        '<td class="enabled"><input data-optional type="checkbox" /></td>' +
+        '<td class="actions"><button type="button" data-del class="secondary">Remove</button></td>';
+      tr.querySelector('[data-name]').value = row.name || '';
+      tr.querySelector('[data-from]').value = row.from || '';
+      tr.querySelector('[data-scope]').value = row.scope || 'run';
+      tr.querySelector('[data-sensitive]').checked = row.sensitive === true;
+      tr.querySelector('[data-optional]').checked = row.optional === true;
+      tr.querySelector('[data-del]').addEventListener('click', () => {
+        tr.remove();
+        syncEmptyState('extractTable');
+        scheduleUpdate();
+      });
+      bindChange(tr.querySelector('[data-name]'));
+      bindChange(tr.querySelector('[data-from]'));
+      bindChange(tr.querySelector('[data-scope]'));
+      bindChange(tr.querySelector('[data-sensitive]'));
+      bindChange(tr.querySelector('[data-optional]'));
+      tbody.appendChild(tr);
+    });
+    syncEmptyState('extractTable');
+    readExtractionRules();
+  }
+
+  function replaceExtractionRulesIfChanged(rows) {
+    if (tableHasFocus('extractTable')) {
+      return;
+    }
+    if (rowsEqual(readExtractionRules(), rows || [])) {
+      return;
+    }
+    renderExtractionRules(rows || []);
+  }
+
   function readExpectLines() {
     return Array.from(el('testsList').querySelectorAll('li')).map((li) =>
       li.getAttribute('data-line') || ''
@@ -641,26 +773,60 @@ const EDITOR_SCRIPT = `
     return { type: 'none' };
   }
 
+  function flushPendingUpdate() {
+    if (applying || !state || state.mode !== 'form') return false;
+    if (debounceTimer !== undefined) {
+      clearTimeout(debounceTimer);
+      debounceTimer = undefined;
+    }
+    if (!formDirty) return false;
+    const model = currentModel();
+    state.model = model;
+    formDirty = false;
+    refreshPreview();
+    refreshVariablePreviewLocal(model);
+    post({
+      type: 'updateModel',
+      documentVersion: state.documentVersion,
+      model
+    });
+    return true;
+  }
+
   function scheduleUpdate() {
     if (applying || !state || state.mode !== 'form') return;
+    formDirty = true;
     if (debounceTimer !== undefined) clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => {
       debounceTimer = undefined;
-      const model = currentModel();
-      state.model = model;
-      refreshPreview();
-      refreshVariablePreviewLocal(model);
-      post({
-        type: 'updateModel',
-        documentVersion: state.documentVersion,
-        model
-      });
+      flushPendingUpdate();
     }, DEBOUNCE_MS);
   }
 
   function bindChange(node) {
     node.addEventListener('input', scheduleUpdate);
     node.addEventListener('change', scheduleUpdate);
+    // Only flush on blur when the user actually edited while focused — never
+    // post stale DOM over a newer inbound model after applyState skipped the field.
+    node.addEventListener('blur', () => {
+      if (formDirty) {
+        flushPendingUpdate();
+      }
+    });
+  }
+
+  function syncMethodSelect() {
+    const select = el('method');
+    const map = { GET: 'get', POST: 'post', PUT: 'put', PATCH: 'patch', DELETE: 'delete', HEAD: 'head', OPTIONS: 'options' };
+    const key = map[String(select.value || '').trim().toUpperCase()] || 'other';
+    select.className = 'method-select method-' + key;
+  }
+
+  function syncEmptyState(tableId) {
+    const empty = document.querySelector('[data-empty-for="' + tableId + '"]');
+    if (!empty) return;
+    const count = el(tableId).querySelectorAll('tbody tr').length;
+    empty.hidden = count > 0;
   }
 
   function renderKvRows(tableId, rows, withEnabled) {
@@ -686,6 +852,7 @@ const EDITOR_SCRIPT = `
       }
       tr.querySelector('[data-del]').addEventListener('click', () => {
         tr.remove();
+        syncEmptyState(tableId);
         scheduleUpdate();
       });
       const dup = tr.querySelector('[data-dup]');
@@ -705,8 +872,10 @@ const EDITOR_SCRIPT = `
       bindChange(tr.querySelector('[data-k]'));
       bindChange(tr.querySelector('[data-v]'));
       if (withEnabled) bindChange(tr.querySelector('[data-e]'));
+      bindVarComplete(tr.querySelector('[data-v]'));
       tbody.appendChild(tr);
     });
+    syncEmptyState(tableId);
   }
 
   function renderVariables(rows) {
@@ -730,6 +899,7 @@ const EDITOR_SCRIPT = `
       }
       tr.querySelector('[data-del]').addEventListener('click', () => {
         tr.remove();
+        syncEmptyState('variablesTable');
         scheduleUpdate();
       });
       tr.querySelector('[data-ins]').addEventListener('click', () => {
@@ -745,8 +915,11 @@ const EDITOR_SCRIPT = `
       });
       bindChange(tr.querySelector('[data-k]'));
       bindChange(tr.querySelector('[data-v]'));
+      bindVarComplete(tr.querySelector('[data-k]'));
+      bindVarComplete(tr.querySelector('[data-v]'));
       tbody.appendChild(tr);
     });
+    syncEmptyState('variablesTable');
   }
 
   function renderTests(lines) {
@@ -774,41 +947,140 @@ const EDITOR_SCRIPT = `
     el('bodyBinary').hidden = type !== 'binary';
   }
 
+  function isFocused(node) {
+    return document.activeElement === node;
+  }
+
+  function setFieldValue(id, nextValue) {
+    const node = el(id);
+    if (isFocused(node)) {
+      return;
+    }
+    const value = nextValue == null ? '' : String(nextValue);
+    if (node.value !== value) {
+      node.value = value;
+    }
+  }
+
+  function rowsEqual(a, b) {
+    return JSON.stringify(a || []) === JSON.stringify(b || []);
+  }
+
+  function tableHasFocus(tableId) {
+    const active = document.activeElement;
+    return !!(active && el(tableId).contains(active));
+  }
+
+  function replaceKvRowsIfChanged(tableId, rows, withEnabled) {
+    if (tableHasFocus(tableId)) {
+      return;
+    }
+    const current = readKvTable(tableId, withEnabled);
+    if (rowsEqual(current, rows || [])) {
+      return;
+    }
+    renderKvRows(tableId, rows || [], withEnabled);
+  }
+
+  function replaceVariablesIfChanged(rows) {
+    if (tableHasFocus('variablesTable')) {
+      return;
+    }
+    if (rowsEqual(readVariables(), rows || [])) {
+      return;
+    }
+    renderVariables(rows || []);
+  }
+
+  function replaceTestsIfChanged(lines) {
+    const list = el('testsList');
+    const active = document.activeElement;
+    if (active && list.contains(active)) {
+      return;
+    }
+    const next = lines || [];
+    if (rowsEqual(readExpectLines(), next)) {
+      return;
+    }
+    renderTests(next);
+  }
+
   function applyBody(body) {
     const type = body && body.type ? body.type : 'none';
-    el('bodyType').value = type;
-    el('bodyText').value = '';
-    el('rawContentType').value = '';
-    el('multipartBoundary').value = '';
-    el('binaryNote').value = '';
-    renderKvRows('formTable', [], false);
-    renderKvRows('multipartTable', [], false);
+    setFieldValue('bodyType', type);
     if (type === 'json' || type === 'text' || type === 'raw') {
-      el('bodyText').value = body.text || '';
-      if (type === 'raw' && body.contentType) {
-        el('rawContentType').value = body.contentType;
+      setFieldValue('bodyText', body.text || '');
+      if (type === 'raw') {
+        setFieldValue('rawContentType', body.contentType || '');
+      } else {
+        setFieldValue('rawContentType', '');
       }
+      replaceKvRowsIfChanged('formTable', [], false);
+      replaceKvRowsIfChanged('multipartTable', [], false);
+      setFieldValue('multipartBoundary', '');
+      setFieldValue('binaryNote', '');
     } else if (type === 'form') {
-      renderKvRows('formTable', body.fields || [], false);
+      setFieldValue('bodyText', '');
+      setFieldValue('rawContentType', '');
+      setFieldValue('multipartBoundary', '');
+      setFieldValue('binaryNote', '');
+      replaceKvRowsIfChanged('formTable', body.fields || [], false);
+      replaceKvRowsIfChanged('multipartTable', [], false);
     } else if (type === 'multipart') {
-      el('multipartBoundary').value = body.boundary || '';
-      renderKvRows('multipartTable', body.fields || [], false);
+      setFieldValue('bodyText', '');
+      setFieldValue('rawContentType', '');
+      setFieldValue('multipartBoundary', body.boundary || '');
+      setFieldValue('binaryNote', '');
+      replaceKvRowsIfChanged('formTable', [], false);
+      replaceKvRowsIfChanged('multipartTable', body.fields || [], false);
     } else if (type === 'binary') {
-      el('binaryNote').value = body.note || '';
+      setFieldValue('bodyText', '');
+      setFieldValue('rawContentType', '');
+      setFieldValue('multipartBoundary', '');
+      setFieldValue('binaryNote', body.note || '');
+      replaceKvRowsIfChanged('formTable', [], false);
+      replaceKvRowsIfChanged('multipartTable', [], false);
+    } else {
+      setFieldValue('bodyText', '');
+      setFieldValue('rawContentType', '');
+      setFieldValue('multipartBoundary', '');
+      setFieldValue('binaryNote', '');
+      replaceKvRowsIfChanged('formTable', [], false);
+      replaceKvRowsIfChanged('multipartTable', [], false);
     }
     updateBodyVisibility();
   }
 
   function applyAuthProfiles(profiles, selected) {
     const select = el('authProfile');
-    select.innerHTML = '<option value="">none</option>';
-    (profiles || []).forEach((profile) => {
-      const option = document.createElement('option');
-      option.value = profile.id;
-      option.textContent = profile.label || profile.id;
-      select.appendChild(option);
-    });
-    select.value = selected || '';
+    const focused = isFocused(select);
+    const nextSelected = selected || '';
+    const profileKey = JSON.stringify(
+      (profiles || []).map((profile) => [profile.id, profile.label || profile.id])
+    );
+    const currentKey = JSON.stringify(
+      Array.from(select.options)
+        .filter((option) => option.value)
+        .map((option) => [option.value, option.textContent || option.value])
+    );
+    if (profileKey !== currentKey) {
+      const keepValue = focused ? select.value : nextSelected;
+      select.innerHTML = '<option value="">none</option>';
+      (profiles || []).forEach((profile) => {
+        const option = document.createElement('option');
+        option.value = profile.id;
+        option.textContent = profile.label || profile.id;
+        select.appendChild(option);
+      });
+      select.value = keepValue;
+      if (!focused && select.value !== nextSelected) {
+        select.value = nextSelected;
+      }
+      return;
+    }
+    if (!focused && select.value !== nextSelected) {
+      select.value = nextSelected;
+    }
   }
 
   function refreshPreview() {
@@ -819,19 +1091,41 @@ const EDITOR_SCRIPT = `
   function refreshVariablePreviewLocal(model) {
     const preview = state && state.variablePreview ? state.variablePreview : {};
     const lines = Object.keys(preview).sort().map((key) => key + ' = ' + preview[key]);
-    const docVars = (model.variables || [])
-      .filter((row) => row.name)
-      .map((row) => row.name + ' (document) = ' + row.value);
     el('variablePreview').textContent =
-      lines.length || docVars.length
-        ? [...docVars, ...lines].join('\\n')
+      lines.length
+        ? lines.join('\\n')
         : 'No resolved variables yet';
   }
 
+  function refreshActiveEnvironmentUi() {
+    const label = state && state.activeEnvironmentLabel
+      ? String(state.activeEnvironmentLabel)
+      : '';
+    const envShortcut = el('envShortcut');
+    const variablesActiveEnv = el('variablesActiveEnv');
+    if (label) {
+      envShortcut.textContent = 'Env: ' + label;
+      envShortcut.title = 'Active environment: ' + label + ' — click to switch';
+      envShortcut.setAttribute('aria-label', 'Active environment ' + label + '. Switch Environment');
+      variablesActiveEnv.textContent = 'Active environment: ' + label;
+    } else {
+      envShortcut.textContent = 'Env: None';
+      envShortcut.title = 'No active environment — click to switch';
+      envShortcut.setAttribute('aria-label', 'No active environment. Switch Environment');
+      variablesActiveEnv.textContent = 'Active environment: None';
+    }
+  }
+
   function applyState(next) {
+    if (debounceTimer !== undefined) {
+      clearTimeout(debounceTimer);
+      debounceTimer = undefined;
+    }
+    formDirty = false;
     applying = true;
     state = next;
     showError('');
+    refreshActiveEnvironmentUi();
     const banner = el('banner');
     const formRoot = el('formRoot');
     const run = el('run');
@@ -884,22 +1178,28 @@ const EDITOR_SCRIPT = `
     manageEnvironments.disabled = false;
 
     const model = next.model || defaultModel();
-    el('name').value = model.name || '';
-    el('description').value = model.description || '';
-    el('method').value = model.method || 'GET';
-    el('url').value = model.url || '';
-    el('timeoutMs').value =
+    setFieldValue('name', model.name || '');
+    setFieldValue('description', model.description || '');
+    setFieldValue('method', model.method || 'GET');
+    syncMethodSelect();
+    setFieldValue('url', model.url || '');
+    setFieldValue(
+      'timeoutMs',
       model.timeoutMs === undefined || model.timeoutMs === null
         ? ''
-        : String(model.timeoutMs);
+        : String(model.timeoutMs)
+    );
     applyAuthProfiles(next.authProfiles || [], model.authProfileId || '');
-    renderKvRows('paramsTable', model.queryParams || [], true);
-    renderKvRows('headersTable', model.headers || [], true);
-    renderVariables(model.variables || []);
-    renderTests(model.expectLines || []);
+    replaceKvRowsIfChanged('paramsTable', model.queryParams || [], true);
+    replaceKvRowsIfChanged('headersTable', model.headers || [], true);
+    replaceVariablesIfChanged(model.variables || []);
+    replaceExtractionRulesIfChanged(model.extractionRules || []);
+    replaceTestsIfChanged(model.expectLines || []);
     applyBody(model.body || { type: 'none' });
     refreshPreview();
     refreshVariablePreviewLocal(model);
+    setVarCatalog(next.variableCompletions || []);
+    bindAllVarFields();
     applying = false;
   }
 
@@ -956,6 +1256,7 @@ const EDITOR_SCRIPT = `
     bindChange(el(id));
   });
 
+  el('method').addEventListener('change', syncMethodSelect);
   el('bodyType').addEventListener('change', () => {
     updateBodyVisibility();
     scheduleUpdate();
@@ -976,6 +1277,10 @@ const EDITOR_SCRIPT = `
         const rows = readVariables();
         rows.push({ name: '', value: '' });
         renderVariables(rows);
+      } else if (kind === 'extract') {
+        const rows = readExtractionRules();
+        rows.push({ name: '', from: '', scope: 'run' });
+        renderExtractionRules(rows);
       } else if (kind === 'form') {
         const rows = readKvTable('formTable', false);
         rows.push({ name: '', value: '' });
@@ -999,7 +1304,22 @@ const EDITOR_SCRIPT = `
     scheduleUpdate();
   });
 
-  el('run').addEventListener('click', () => post({ type: 'run' }));
+  function runRequest() {
+    // Flush pending form edits before run so execution sees the latest model.
+    flushPendingUpdate();
+    post({ type: 'run' });
+  }
+  el('run').addEventListener('click', () => {
+    runRequest();
+  });
+  // Belt-and-suspenders when the webview has keyboard focus (host keybinding
+  // may not fire for Custom Text Editor webviews).
+  window.addEventListener('keydown', (event) => {
+    if (!(event.ctrlKey || event.metaKey) || !event.altKey) return;
+    if (event.key !== 'r' && event.key !== 'R') return;
+    event.preventDefault();
+    runRequest();
+  });
   el('openText').addEventListener('click', () => post({ type: 'openTextEditor' }));
   el('envShortcut').addEventListener('click', () => post({ type: 'switchEnvironment' }));
   el('authShortcut').addEventListener('click', () => post({ type: 'selectAuthentication' }));
@@ -1014,13 +1334,41 @@ const EDITOR_SCRIPT = `
       applyState(message.state);
       return;
     }
+    if (message.type === 'ack') {
+      if (!state) return;
+      state.documentVersion = message.documentVersion;
+      if (typeof message.sourceText === 'string') {
+        state.sourceText = message.sourceText;
+        refreshPreview();
+      }
+      return;
+    }
+    if (message.type === 'resubmit') {
+      if (!state) return;
+      state.documentVersion = message.documentVersion;
+      if (debounceTimer !== undefined) {
+        clearTimeout(debounceTimer);
+        debounceTimer = undefined;
+      }
+      if (state.mode !== 'form') return;
+      const model = currentModel();
+      state.model = model;
+      post({
+        type: 'updateModel',
+        documentVersion: state.documentVersion,
+        model
+      });
+      return;
+    }
     if (message.type === 'error') {
       showError(message.message || 'Something went wrong.');
     }
   });
 
+  syncMethodSelect();
   updateTestHint();
   updateBodyVisibility();
+  bindAllVarFields();
   post({ type: 'ready' });
 })();
 `;

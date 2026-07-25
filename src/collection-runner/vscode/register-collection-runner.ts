@@ -51,6 +51,11 @@ export interface RegisterCollectionRunnerOptions {
     readonly environmentName?: string;
     readonly collectionName?: string;
   };
+  /**
+   * Suppresses the single-request status bar while a collection run is active
+   * so only the Collection Runner progress/status UI is visible.
+   */
+  readonly setRequestStatusSuppressed?: (suppressed: boolean) => void;
 }
 
 /**
@@ -71,6 +76,7 @@ export function registerCollectionRunner(
     logger,
     context,
     getHistoryCaptureContext,
+    setRequestStatusSuppressed,
   } = options;
   const progressUi = new VsCodeCollectionRunProgress();
   const reportPanel = new CollectionRunReportPanel();
@@ -126,6 +132,7 @@ export function registerCollectionRunner(
 
     activeRun = new AbortController();
     const controller = activeRun;
+    setRequestStatusSuppressed?.(true);
     try {
       const summary = await withCollectionRunProgress(
         title,
@@ -165,6 +172,7 @@ export function registerCollectionRunner(
         'API Hero could not complete the collection run.',
       );
     } finally {
+      setRequestStatusSuppressed?.(false);
       if (activeRun === controller) {
         activeRun = undefined;
       }

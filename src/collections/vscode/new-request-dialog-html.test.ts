@@ -17,6 +17,7 @@ test('renderNewRequestDialogHtml uses nonce CSP and form controls', () => {
   assert.match(html, /id="collection"/u);
   assert.match(html, /id="folder"/u);
   assert.match(html, /<option value="GET" selected>/u);
+  assert.match(html, /Escape/u);
 });
 
 test('parseNewRequestDialogMessage accepts create and rejects junk', () => {

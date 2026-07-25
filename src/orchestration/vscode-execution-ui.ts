@@ -14,7 +14,6 @@ import type {
 } from './execution-orchestrator';
 
 const IDLE_DELAY_MS = 3_000;
-
 /** Runs orchestration work in VS Code's cancellable notification progress UI. */
 export class VsCodeExecutionProgressRunner implements ExecutionProgressRunner {
   public run<T>(

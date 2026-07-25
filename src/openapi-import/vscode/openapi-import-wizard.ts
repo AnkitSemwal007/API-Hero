@@ -3,6 +3,9 @@
  * Wraps the existing import pipeline — no duplicate parsers/writers.
  */
 
+import { readdir } from 'node:fs/promises';
+import { join } from 'node:path';
+
 import {
   commands,
   Uri,
@@ -24,6 +27,7 @@ import type { Logger } from '../../shared';
 import { createWebviewNonce } from '../../ui/webview';
 import {
   evaluateImportSourceSize,
+  rollbackWrittenFiles,
   runImportPipeline,
   type ImportProgressEvent,
   type ImportSummary,
@@ -49,7 +53,7 @@ export interface OpenOpenApiImportWizardOptions {
   readonly readEnvironments: () => readonly Environment[];
   readonly readAuthProfiles: () => readonly AuthenticationProfile[];
   readonly applySettingsPatch: (patch: SettingsPatch) => Promise<void>;
-  /** When false, summary omits the Manage Auth Profiles CTA. */
+  /** When false, summary omits the Manage Authentication CTA. */
   readonly manageAuthAvailable?: boolean;
 }
 
@@ -260,6 +264,35 @@ export async function openOpenApiImportWizard(
         },
       };
 
+      let overwrite = false;
+      if (outputDirectoryName.length > 0) {
+        const targetPath = join(
+          selectedFolderPath,
+          ...outputDirectoryName.split(/[/\\]/u).filter(Boolean),
+        );
+        try {
+          const entries = await readdir(targetPath);
+          if (entries.length > 0) {
+            const choice = await window.showWarningMessage(
+              `Import target "${outputDirectoryName}" already exists and is not empty. Overwrite?`,
+              { modal: true },
+              'Overwrite',
+            );
+            if (choice !== 'Overwrite') {
+              await post({
+                type: 'error',
+                message:
+                  'Import cancelled — choose a different collection name or confirm overwrite.',
+              });
+              return;
+            }
+            overwrite = true;
+          }
+        } catch {
+          // Target does not exist yet — proceed.
+        }
+      }
+
       try {
         const result = await runImportPipeline({
           sourceText,
@@ -274,6 +307,7 @@ export async function openOpenApiImportWizard(
           existingAuthProfiles: options.readAuthProfiles(),
           cancellation,
           writer: options.writer,
+          ...(overwrite ? { overwrite: true } : {}),
           onProgress: (event: ImportProgressEvent) => {
             void post({
               type: 'progress',
@@ -293,7 +327,31 @@ export async function openOpenApiImportWizard(
         }
 
         if (result.summary.success && result.settingsPatch !== undefined) {
-          await options.applySettingsPatch(result.settingsPatch);
+          try {
+            await options.applySettingsPatch(result.settingsPatch);
+          } catch (settingsError) {
+            const settingsMessage =
+              settingsError instanceof Error
+                ? settingsError.message
+                : String(settingsError);
+            if (result.summary.writtenFiles.length > 0) {
+              await rollbackWrittenFiles(
+                options.writer,
+                result.summary.writtenFiles,
+                result.summary.targetDirectory,
+              );
+            }
+            options.logger.warning(
+              'OpenAPI import settings patch failed; rolled back files',
+              { message: settingsMessage },
+            );
+            await post({
+              type: 'error',
+              message:
+                `Import files were rolled back because settings could not be updated: ${settingsMessage}`,
+            });
+            return;
+          }
         }
 
         if (result.summary.success) {

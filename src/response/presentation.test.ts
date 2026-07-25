@@ -192,6 +192,39 @@ test('truncates text and binary previews without changing source', () => {
   );
 });
 
+test('caps expanded JSON pretty output that exceeds the preview limit', () => {
+  // Compact source under the limit, but pretty-printed expansion exceeds it.
+  const compactObj: Record<string, string> = {};
+  for (let index = 0; index < 4_200; index += 1) {
+    compactObj[`k${index}`] = 'x'.repeat(48);
+  }
+  const compact = JSON.stringify(compactObj);
+  const pretty = JSON.stringify(compactObj, undefined, 2);
+  assert.ok(
+    compact.length < RESPONSE_TEXT_PREVIEW_LIMIT,
+    `compact ${compact.length} should be under limit`,
+  );
+  assert.ok(
+    pretty.length > RESPONSE_TEXT_PREVIEW_LIMIT,
+    `pretty ${pretty.length} should exceed limit`,
+  );
+
+  const model = presentExecutionResult(
+    success({
+      contentType: 'application/json',
+      body: Object.freeze({
+        bytes: EMPTY_BYTES,
+        text: compact,
+        json: compactObj,
+      }),
+      bodySizeBytes: compact.length,
+    }),
+  );
+  assert.equal(model.body?.prettyAvailable, false);
+  assert.equal(model.body?.truncated, true);
+  assert.equal(model.body?.pretty.length, RESPONSE_TEXT_PREVIEW_LIMIT);
+});
+
 test('defaults encoding to UTF-8 only for renderable text-like bodies', () => {
   const textLike: readonly [string, string][] = [
     ['application/json', '{"ok":true}'],
@@ -362,4 +395,51 @@ test('masks Bearer tokens in passed assertion text for the viewer model', () => 
   );
   assert.doesNotMatch(JSON.stringify(model.assertions), /live-token-value/u);
   assert.doesNotMatch(JSON.stringify(model.assertions), /skip-secret/u);
+});
+
+test('presents extraction outcomes and masks sensitive values', () => {
+  const model = presentExecutionResult(success(), undefined, {
+    outcomes: [
+      {
+        rule: {
+          id: 'r1',
+          variableName: 'token',
+          source: { kind: 'json-path', path: 'body.token' },
+          targetScope: 'environment',
+          sensitive: true,
+          required: true,
+          enabled: true,
+          when: { kind: 'always' },
+        },
+        kind: 'extracted',
+        maskedValue: '••••••••',
+        writeOk: true,
+      },
+      {
+        rule: {
+          id: 'r2',
+          variableName: 'id',
+          source: { kind: 'json-path', path: 'body.id' },
+          targetScope: 'run',
+          sensitive: false,
+          required: true,
+          enabled: true,
+          when: { kind: 'always' },
+        },
+        kind: 'failed',
+        reason: 'Path not found',
+      },
+    ],
+    extractedCount: 1,
+    failedCount: 1,
+    skippedCount: 0,
+    malformedCount: 0,
+  });
+  assert.ok(model.extraction);
+  assert.equal(model.extraction.summary.extracted, 1);
+  assert.equal(model.extraction.summary.failed, 1);
+  assert.match(model.extraction.chipLabel, /failed/u);
+  assert.equal(model.extraction.outcomes[0]?.maskedValue, '••••••••');
+  assert.equal(model.extraction.outcomes[0]?.variableName, 'token');
+  assert.doesNotMatch(JSON.stringify(model.extraction), /secret-token/u);
 });

@@ -6,6 +6,11 @@ export const UNIT_TEST_GLOBS = Object.freeze([
   'dist/auth/*.test.js',
   'dist/auth/vscode/*.test.js',
   'dist/assertions/*.test.js',
+  'dist/extraction/*.test.js',
+  'dist/extraction/shared/*.test.js',
+  'dist/extraction/extractors/*.test.js',
+  'dist/extraction/vscode/*.test.js',
+
   'dist/commands/*.test.js',
   'dist/collections/*.test.js',
   'dist/collections/mutation/*.test.js',

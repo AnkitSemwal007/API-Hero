@@ -126,14 +126,11 @@ test('provides variable diagnostics, effective completions, and safe hovers', ()
     ],
   });
 
-  assert.equal(
-    adapter.getHover(positionAt(source, '{{token}}', 3))?.documentation,
-    'document variable · ••••••••',
-  );
-  assert.doesNotMatch(
-    adapter.getHover(positionAt(source, '{{token}}', 3))?.documentation ?? '',
-    /private/,
-  );
+  const tokenHover = adapter.getHover(positionAt(source, '{{token}}', 3))?.documentation ?? '';
+  assert.match(tokenHover, /Sensitive/);
+  assert.match(tokenHover, /Yes/);
+  assert.match(tokenHover, /••••••••/);
+  assert.doesNotMatch(tokenHover, /private/);
   assert.deepEqual(adapter.diagnostics, []);
 
   const incomplete = `${source}\nX-Test: {{`;
@@ -142,13 +139,24 @@ test('provides variable diagnostics, effective completions, and safe hovers', ()
       { name: 'host', value: 'example.test', scope: 'environment', sensitive: false },
     ],
   }).getCompletions(positionAt(incomplete, 'X-Test: {{', 10));
+  const variableCompletions = completions.filter((item) => item.kind === 'variable');
   assert.deepEqual(
-    completions.filter((item) => item.kind === 'variable').map((item) => item.label),
-    ['host', 'local', 'token'],
+    variableCompletions.map((item) => item.insertText ?? item.label),
+    ['host}}', 'local}}', 'token}}'],
   );
   assert.equal(
-    completions.find((item) => item.label === 'token')?.detail,
-    'document · sensitive',
+    variableCompletions.find((item) => item.insertText?.startsWith('token'))?.detail,
+    'Request · sensitive',
+  );
+
+  const filtered = new RuntimeParserAdapter(incomplete + 'ho', undefined, {
+    definitions: [
+      { name: 'host', value: 'example.test', scope: 'environment', sensitive: false },
+    ],
+  }).getCompletions(positionAt(`${incomplete}ho`, 'X-Test: {{ho', 12));
+  assert.deepEqual(
+    filtered.filter((item) => item.kind === 'variable').map((item) => item.insertText),
+    ['host}}'],
   );
 });
 
@@ -160,19 +168,33 @@ test('deduplicates variable diagnostics with canonical ranges and stable codes',
   ].join('\n');
   const diagnostics = new RuntimeParserAdapter(source, 'variables.api').diagnostics;
 
-  assert.equal(
-    diagnostics.filter((item) => item.code === 'variables.duplicate-definition').length,
-    1,
+  const duplicates = diagnostics.filter(
+    (item) => item.code === 'variables.duplicate-definition',
   );
-  assert.equal(
-    diagnostics.filter((item) => item.code === 'variables.missing').length,
-    1,
+  assert.equal(duplicates.length, 1);
+  assert.match(
+    duplicates[0]?.message ?? '',
+    /defined more than once in Request scope/u,
   );
+  const missing = diagnostics.filter((item) => item.code === 'variables.missing');
+  assert.equal(missing.length, 1);
+  assert.equal(missing[0]?.severity, 'warning');
   assert.equal(
     diagnostics.filter((item) => item.code === 'variables.unsupported-built-in').length,
     1,
   );
   assert.ok(diagnostics.every((item) => item.range.start.offset <= item.range.end.offset));
+});
+
+test('suggests did-you-mean for unknown variable diagnostics', () => {
+  const source = [
+    '@variable baseUrl=https://example.test',
+    'GET {{baseUr}}',
+  ].join('\n');
+  const diagnostics = new RuntimeParserAdapter(source, 'variables.api').diagnostics;
+  const missing = diagnostics.find((item) => item.code === 'variables.missing');
+  assert.equal(missing?.severity, 'warning');
+  assert.match(missing?.message ?? '', /Did you mean: baseUrl/);
 });
 
 test('combines canonical parser and semantic validation diagnostics once', () => {

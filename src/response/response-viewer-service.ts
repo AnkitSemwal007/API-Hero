@@ -1,5 +1,6 @@
 import type { TestReport } from '../assertions';
 import type { ExecutionResult } from '../execution';
+import type { ExtractionReport } from '../extraction';
 import { createWebviewNonce } from '../ui/webview';
 import {
   presentExecutionResult,
@@ -54,6 +55,7 @@ export class ResponseViewerService implements ResponseViewerDisposable {
   private panel: ResponseViewerPanel | undefined;
   private panelDisposables: ResponseViewerDisposable[] = [];
   private lastModel: ResponsePresentation | undefined;
+  private lastExtraction: ExtractionReport | undefined;
 
   public constructor(
     private readonly panelFactory: ResponseViewerPanelFactory,
@@ -63,7 +65,11 @@ export class ResponseViewerService implements ResponseViewerDisposable {
   ) {}
 
   /** Shows the result, creating or revealing the shared panel as needed. */
-  public show(result: ExecutionResult, assertions?: TestReport): void {
+  public show(
+    result: ExecutionResult,
+    assertions?: TestReport,
+    extraction?: ExtractionReport,
+  ): void {
     if (this.panel === undefined) {
       this.panel = this.panelFactory.create();
       const ownedPanel = this.panel;
@@ -81,21 +87,26 @@ export class ResponseViewerService implements ResponseViewerDisposable {
           return this.handleMessage(parsed);
         }),
       ];
-      this.update(result, assertions);
+      this.update(result, assertions, extraction);
     } else {
       // Set the new response before revealing to avoid flashing stale content.
-      this.update(result, assertions);
+      this.update(result, assertions, extraction);
       this.panel.reveal();
     }
   }
 
   /** Replaces the current panel state, creating the panel when necessary. */
-  public update(result: ExecutionResult, assertions?: TestReport): void {
+  public update(
+    result: ExecutionResult,
+    assertions?: TestReport,
+    extraction?: ExtractionReport,
+  ): void {
     if (this.panel === undefined) {
-      this.show(result, assertions);
+      this.show(result, assertions, extraction);
       return;
     }
-    const model = presentExecutionResult(result, assertions);
+    this.lastExtraction = extraction;
+    const model = presentExecutionResult(result, assertions, extraction);
     this.lastModel = model;
     this.panel.setHtml(renderResponseViewerHtml(model, this.createNonce()));
   }
@@ -152,6 +163,7 @@ export class ResponseViewerService implements ResponseViewerDisposable {
     const panel = this.panel;
     this.panel = undefined;
     this.lastModel = undefined;
+    this.lastExtraction = undefined;
     for (const disposable of this.panelDisposables) {
       disposable.dispose();
     }

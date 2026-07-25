@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, rmdir, unlink, writeFile } from 'node:fs/promises';
 
 import {
   commands,
@@ -16,6 +16,10 @@ import {
 } from '../../constants';
 import type { AuthenticationProfile, Environment } from '../../models';
 import type { Logger } from '../../shared';
+import {
+  getActiveProjectStoreCoordinator,
+} from '../../project-store/vscode/project-store-coordinator';
+import { resolveProjectStoreFolderPath } from '../../project-store/vscode/resolve-project-folder';
 import type { SettingsPatch, WorkspaceFileWriter } from '../index';
 import { openOpenApiImportWizard } from './openapi-import-wizard';
 
@@ -65,6 +69,23 @@ function createVsCodeWorkspaceWriter(): WorkspaceFileWriter {
     async writeFile(absolutePath: string, content: string): Promise<void> {
       await writeFile(absolutePath, content, 'utf8');
     },
+    async deleteFile(absolutePath: string): Promise<void> {
+      await unlink(absolutePath);
+    },
+    async removeDirectory(absolutePath: string): Promise<void> {
+      await rmdir(absolutePath);
+    },
+    async isNonEmptyDirectory(absolutePath: string): Promise<boolean> {
+      try {
+        const entries = await readdir(absolutePath);
+        return entries.length > 0;
+      } catch {
+        return false;
+      }
+    },
+    async listDirectory(absolutePath: string): Promise<readonly string[]> {
+      return readdir(absolutePath);
+    },
   };
 }
 
@@ -110,9 +131,59 @@ function readAuthProfiles(): readonly AuthenticationProfile[] {
 }
 
 async function applySettingsPatch(patch: SettingsPatch): Promise<void> {
+  // Strip extension-only OAuth metadata keys that violate the settings schema
+  // enum for providerId — keep executable profiles; record oauth as none.
+  const authPayload = patch.authenticationProfiles.map((profile) => {
+    const providerId = profile.providerId;
+    if (
+      providerId === 'none' ||
+      providerId === 'basic' ||
+      providerId === 'bearer' ||
+      providerId === 'apiKey'
+    ) {
+      return sanitizeProfileForSettings(profile) as AuthenticationProfile;
+    }
+    return {
+      id: profile.id,
+      label: profile.label,
+      providerId: 'none',
+    } as AuthenticationProfile;
+  });
+
+  const environments = patch.environments.map((environment) => ({
+    id: environment.id,
+    name: environment.name,
+    variables: environment.variables.map((variable) => ({
+      name: variable.name,
+      value: variable.value,
+      sensitive: variable.sensitive === true,
+      scope: 'environment' as const,
+    })),
+  }));
+
+  const coordinator = getActiveProjectStoreCoordinator();
+  const folder = resolveProjectStoreFolderPath();
+  // Only dual-write when already in project mode — avoid ensureInitialized
+  // empty-store shadow of workspace settings before first full env save.
+  if (
+    coordinator !== undefined &&
+    folder !== undefined &&
+    coordinator.isProjectMode(folder)
+  ) {
+    const cached = coordinator.getCached(folder);
+    await coordinator.writeProjectMetadata(folder, {
+      environments,
+      workspaceVariables: cached?.workspaceVariables ?? [],
+      activeEnvironmentId:
+        patch.activeEnvironmentId ?? cached?.activeEnvironmentId,
+      authenticationProfiles: authPayload,
+    });
+    return;
+  }
+
   const configuration = workspace.getConfiguration(CONFIGURATION_SECTION);
 
-  const environmentPayload = patch.environments.map((environment) => ({
+  const environmentPayload = environments.map((environment) => ({
     id: environment.id,
     name: environment.name,
     variables: environment.variables.map((variable) => ({
@@ -135,25 +206,6 @@ async function applySettingsPatch(patch: SettingsPatch): Promise<void> {
       ConfigurationTarget.Workspace,
     );
   }
-
-  // Strip extension-only OAuth metadata keys that violate the settings schema
-  // enum for providerId — keep executable profiles; record oauth as none.
-  const authPayload = patch.authenticationProfiles.map((profile) => {
-    const providerId = profile.providerId;
-    if (
-      providerId === 'none' ||
-      providerId === 'basic' ||
-      providerId === 'bearer' ||
-      providerId === 'apiKey'
-    ) {
-      return sanitizeProfileForSettings(profile);
-    }
-    return {
-      id: profile.id,
-      label: profile.label,
-      providerId: 'none',
-    };
-  });
 
   await configuration.update(
     CONFIGURATION_KEYS.authenticationProfiles,

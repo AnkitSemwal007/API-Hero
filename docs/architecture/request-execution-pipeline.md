@@ -26,7 +26,9 @@ flowchart LR
   V --> B[buildSelectedRequest]
   B --> VR[VariableResolver once]
   VR --> E[RequestExecutor]
-  E --> R[ResponseViewerService]
+  E --> A[Assertions]
+  A --> X[Extract]
+  X --> R[ResponseViewerService]
 ```
 
 The command is a VS Code adapter only. It validates a serializable CodeLens
@@ -59,8 +61,12 @@ execution, or presentation logic.
   unresolved references. See [variables.md](variables.md).
 - `src/execution` receives only `RuntimeRequest`; parser and AST types never
   cross the execution boundary, and the executor never resolves variables.
-- `ResponseViewerService` receives only `ExecutionResult` and reuses its one
-  panel.
+- `ResponseViewerService` receives only `ExecutionResult` (plus optional
+  assertion and extraction reports) and reuses its one panel.
+- After execute, assertions evaluate, then `@extract` rules run via the
+  post-execution observer (not gated on assertion pass). See
+  [variables.md](variables.md#response-extraction-extract) and
+  [ADR-0001 Phase 1](./adr/0001-phase-1-implementation-spec.md).
 - VS Code progress, status, notifications, CodeLens, command, and webview-panel
   implementations remain narrow adapters.
 

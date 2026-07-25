@@ -31,7 +31,7 @@ describe('openapi-import-wizard-html', () => {
     assert.match(html, /id="step-progress"/u);
     assert.match(html, /id="step-summary"/u);
     assert.match(html, /id="manageAuth"/u);
-    assert.match(html, /Manage Auth Profiles/u);
+    assert.match(html, /Manage Authentication/u);
     assert.match(html, /id="previewImport"/u);
     assert.match(html, /id="outputDirectory"/u);
     assert.doesNotMatch(html, /connect-src [^']*https/u);

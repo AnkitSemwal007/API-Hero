@@ -3,11 +3,17 @@
  * No `vscode` import — keeps core/tests free of the extension host.
  */
 
+import { normalizeOptionalEnvironmentId } from '../environment-manager';
 import { MASKED_VARIABLE_VALUE } from '../variable-resolver';
+import {
+  VARIABLE_PRECEDENCE_LEGEND,
+  VARIABLE_SCOPE_UI,
+} from '../variable-scope-ui';
 import {
   buildNonceOnlyCsp,
   escapeAttribute,
   isWebviewMessageRecord,
+  WEBVIEW_SHARED_CSS,
 } from '../../ui/webview';
 
 export { escapeAttribute };
@@ -39,6 +45,11 @@ export interface EnvironmentManagerState {
 
 export type EnvironmentManagerInboundMessage =
   | { readonly type: 'ready' }
+  | { readonly type: 'dirty'; readonly dirty: boolean }
+  | {
+      readonly type: 'setActiveEnvironment';
+      readonly id: string | undefined;
+    }
   | {
       readonly type: 'commit';
       readonly state: EnvironmentManagerState;
@@ -46,7 +57,15 @@ export type EnvironmentManagerInboundMessage =
 
 export type EnvironmentManagerOutboundMessage =
   | { readonly type: 'init'; readonly state: EnvironmentManagerState }
-  | { readonly type: 'error'; readonly message: string };
+  | { readonly type: 'error'; readonly message: string }
+  | {
+      readonly type: 'activeEnvironmentSet';
+      readonly id: string | undefined;
+    }
+  | {
+      readonly type: 'activeEnvironmentError';
+      readonly message: string;
+    };
 
 /** Validates webview → extension messages. */
 export function parseEnvironmentManagerMessage(
@@ -58,6 +77,21 @@ export function parseEnvironmentManagerMessage(
   const record = value;
   if (record.type === 'ready') {
     return { type: 'ready' };
+  }
+  if (record.type === 'dirty' && typeof record.dirty === 'boolean') {
+    return { type: 'dirty', dirty: record.dirty };
+  }
+  if (record.type === 'setActiveEnvironment') {
+    if (record.id === undefined || record.id === null) {
+      return { type: 'setActiveEnvironment', id: undefined };
+    }
+    if (typeof record.id !== 'string') {
+      return undefined;
+    }
+    return {
+      type: 'setActiveEnvironment',
+      id: normalizeOptionalEnvironmentId(record.id),
+    };
   }
   if (record.type !== 'commit') {
     return undefined;
@@ -94,11 +128,17 @@ export function validateEnvironmentManagerState(
     }
   }
 
+  const activeEnvironmentId = normalizeOptionalEnvironmentId(
+    state.activeEnvironmentId,
+  );
   if (
-    state.activeEnvironmentId !== undefined &&
-    !ids.has(state.activeEnvironmentId)
+    activeEnvironmentId !== undefined &&
+    !ids.has(activeEnvironmentId)
   ) {
-    return `Unknown active environment "${state.activeEnvironmentId}".`;
+    return (
+      `Active environment "${activeEnvironmentId}" is not in the list. ` +
+      'Choose an existing environment or clear the active selection before saving.'
+    );
   }
 
   const globalError = validateVariableList(state.globalVariables, 'Global');
@@ -183,6 +223,13 @@ export function restoreEnvironmentManagerState(
 /** Builds the Environment Manager document. */
 export function renderEnvironmentManagerHtml(nonce: string): string {
   const safeNonce = escapeAttribute(nonce);
+  const workspaceLabel = escapeAttribute(
+    `${VARIABLE_SCOPE_UI.workspace.icon} ${VARIABLE_SCOPE_UI.workspace.sourceLabel}`,
+  );
+  const globalLabel = escapeAttribute(
+    `${VARIABLE_SCOPE_UI.global.icon} ${VARIABLE_SCOPE_UI.global.sourceLabel}`,
+  );
+  const precedenceLegend = escapeAttribute(VARIABLE_PRECEDENCE_LEGEND);
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -194,22 +241,38 @@ export function renderEnvironmentManagerHtml(nonce: string): string {
 </head>
 <body>
 <div id="app">
-  <aside>
+  <aside aria-label="Environment Manager navigation">
     <div class="aside-header">
-      <h1>Environments</h1>
-      <button type="button" id="addEnv" class="primary" title="Add environment">Add</button>
+      <h1>Environment Manager</h1>
     </div>
-    <label class="search-field">
-      <span class="sr-only">Search environments</span>
-      <input id="envSearch" type="search" placeholder="Search environments" autocomplete="off" />
-    </label>
-    <ul id="envList" class="env-list" role="listbox" aria-label="Environments"></ul>
-    <div class="scope-list">
-      <button type="button" class="scope-item" data-scope="global" id="scopeGlobal">Global variables</button>
-      <button type="button" class="scope-item" data-scope="workspace" id="scopeWorkspace">Workspace variables</button>
-    </div>
+    <section class="nav-section" aria-labelledby="environmentsHeading">
+      <div class="nav-section-header">
+        <h2 id="environmentsHeading" class="nav-section-label">Environments</h2>
+        <button type="button" id="addEnv" class="primary" title="Add environment">Add</button>
+      </div>
+      <label class="search-field">
+        <span class="sr-only">Search environments</span>
+        <input id="envSearch" type="search" placeholder="Search environments" autocomplete="off" />
+      </label>
+      <ul id="envList" class="env-list" role="listbox" aria-label="Environments"></ul>
+      <p id="envEmpty" class="nav-empty" hidden>No environments yet — optional for a first run; click Add when you need variables.</p>
+    </section>
+    <section class="nav-section nav-section-scopes" aria-labelledby="scopesHeading">
+      <h2 id="scopesHeading" class="nav-section-label">Scopes</h2>
+      <ul class="scope-list" role="listbox" aria-label="Variable scopes">
+        <li role="presentation">
+          <button type="button" class="scope-item" data-scope="workspace" id="scopeWorkspace" role="option" aria-selected="false">${workspaceLabel} Variables</button>
+        </li>
+        <li role="presentation">
+          <button type="button" class="scope-item" data-scope="global" id="scopeGlobal" role="option" aria-selected="false">${globalLabel} Variables</button>
+        </li>
+      </ul>
+      <p id="precedenceLegend" class="precedence-legend">${precedenceLegend}</p>
+      <p class="nav-empty scope-request-note">Request variables live in the .api file / Request Editor (highest precedence).</p>
+    </section>
   </aside>
   <main>
+    <p id="activeEnvStrip" class="active-env-strip" aria-live="polite">Active environment: None</p>
     <header class="main-header">
       <div class="title-row">
         <input id="envName" type="text" autocomplete="off" placeholder="Environment name" aria-label="Environment name" />
@@ -218,7 +281,7 @@ export function renderEnvironmentManagerHtml(nonce: string): string {
         <button type="button" id="deleteEnv" class="danger">Delete</button>
       </div>
       <p id="scopeHint" class="hint" hidden></p>
-      <p id="activeBadge" class="badge" hidden>Active</p>
+      <p id="activeBadge" class="badge" hidden>Active environment</p>
     </header>
     <section class="variables">
       <div class="section-header">
@@ -267,13 +330,6 @@ function parseState(value: unknown): EnvironmentManagerState | undefined {
   ) {
     return undefined;
   }
-  const activeEnvironmentId =
-    record.activeEnvironmentId === undefined ||
-    record.activeEnvironmentId === null
-      ? undefined
-      : typeof record.activeEnvironmentId === 'string'
-        ? record.activeEnvironmentId
-        : undefined;
   if (
     record.activeEnvironmentId !== undefined &&
     record.activeEnvironmentId !== null &&
@@ -281,6 +337,12 @@ function parseState(value: unknown): EnvironmentManagerState | undefined {
   ) {
     return undefined;
   }
+  const activeEnvironmentId = normalizeOptionalEnvironmentId(
+    record.activeEnvironmentId === undefined ||
+      record.activeEnvironmentId === null
+      ? undefined
+      : record.activeEnvironmentId,
+  );
   const selectedId =
     record.selectedId === undefined
       ? undefined
@@ -390,11 +452,15 @@ function restoreVariables(
   incoming: readonly EnvironmentManagerVariable[],
   baseline: readonly EnvironmentManagerVariable[],
 ): readonly EnvironmentManagerVariable[] {
-  const baselineSensitive = new Map(
+  const baselineSensitiveByName = new Map(
     baseline
       .filter((variable) => variable.sensitive)
       .map((variable) => [variable.name, variable.value] as const),
   );
+  const baselineSensitiveOrdered = baseline.filter(
+    (variable) => variable.sensitive,
+  );
+  let sensitiveIndex = 0;
   return incoming.map((variable) => {
     if (!variable.sensitive) {
       return {
@@ -403,14 +469,32 @@ function restoreVariables(
         sensitive: false,
       };
     }
-    const original = baselineSensitive.get(variable.name);
+    const index = sensitiveIndex;
+    sensitiveIndex += 1;
+    const byName = baselineSensitiveByName.get(variable.name);
     if (
-      original !== undefined &&
-      (variable.value === MASKED_VARIABLE_VALUE || variable.value === original)
+      byName !== undefined &&
+      (variable.value === MASKED_VARIABLE_VALUE || variable.value === byName)
     ) {
       return {
         name: variable.name.trim(),
-        value: original,
+        value: byName,
+        sensitive: true,
+      };
+    }
+    if (variable.value === MASKED_VARIABLE_VALUE) {
+      const byIndex = baselineSensitiveOrdered[index];
+      if (byIndex !== undefined) {
+        return {
+          name: variable.name.trim(),
+          value: byIndex.value,
+          sensitive: true,
+        };
+      }
+      // Never persist the mask glyph — drop unmatched masked values.
+      return {
+        name: variable.name.trim(),
+        value: '',
         sensitive: true,
       };
     }
@@ -432,6 +516,7 @@ function slugifyEnvironmentId(name: string): string {
 }
 
 const MANAGER_CSS = `
+${WEBVIEW_SHARED_CSS}
 :root { color-scheme: light dark; }
 * { box-sizing: border-box; }
 body {
@@ -462,15 +547,49 @@ aside {
 }
 h1 { margin: 0; font-size: 1.05rem; font-weight: 600; }
 h2 { margin: 0; font-size: .95rem; font-weight: 600; }
-.env-list {
+.nav-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+.nav-section:first-of-type { flex: 1; }
+.nav-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.nav-section-label {
+  margin: 0;
+  color: var(--vscode-descriptionForeground);
+  font-size: .75em;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.nav-section-scopes {
+  padding-top: 8px;
+  border-top: 1px solid var(--vscode-panel-border, var(--vscode-contrastBorder));
+}
+.nav-empty {
+  margin: 0;
+  padding: 4px 10px;
+  color: var(--vscode-descriptionForeground);
+  font-size: .9em;
+}
+.env-list, .scope-list {
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
   gap: 2px;
+}
+.env-list {
   flex: 1;
   overflow: auto;
+  min-height: 0;
 }
 .env-item, .scope-item {
   display: block;
@@ -491,13 +610,30 @@ h2 { margin: 0; font-size: .95rem; font-weight: 600; }
   background: var(--vscode-list-activeSelectionBackground);
   color: var(--vscode-list-activeSelectionForeground);
 }
-.env-item .meta {
-  display: block;
-  font-size: .85em;
-  color: var(--vscode-descriptionForeground);
+.env-item-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
-.env-item.active .meta { color: inherit; opacity: .85; }
-.scope-list { display: flex; flex-direction: column; gap: 2px; }
+.env-item-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.env-item.is-active-env .env-item-name { font-weight: 600; }
+.env-item .env-active-badge {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 1px 6px;
+  border-radius: 2px;
+  background: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+  font-size: .75em;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.env-item.active .env-active-badge {
+  background: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+  opacity: .95;
+}
 main {
   padding: 16px 20px 20px;
   display: flex;
@@ -534,6 +670,32 @@ main {
   background: var(--vscode-badge-background);
   color: var(--vscode-badge-foreground);
   font-size: .85em;
+}
+.active-env-strip {
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: 2px;
+  border: 1px solid var(--vscode-panel-border, var(--vscode-contrastBorder));
+  background: var(--vscode-sideBar-background, var(--vscode-editor-background));
+  color: var(--vscode-descriptionForeground);
+  font-size: .9em;
+}
+.active-env-strip.has-active {
+  color: var(--vscode-foreground);
+  font-weight: 600;
+}
+.precedence-legend {
+  margin: 6px 0 0;
+  padding: 0 2px;
+  color: var(--vscode-descriptionForeground);
+  font-size: .78em;
+  line-height: 1.35;
+}
+.scope-request-note {
+  margin-top: 4px;
+  padding-left: 2px;
+  font-size: .78em;
+  line-height: 1.35;
 }
 .hint { margin: 0; color: var(--vscode-descriptionForeground); }
 .section-header {
@@ -592,54 +754,12 @@ footer {
   padding-top: 8px;
   border-top: 1px solid var(--vscode-panel-border, var(--vscode-contrastBorder));
 }
-button {
-  border: 1px solid var(--vscode-button-border, transparent);
-  border-radius: 2px;
-  padding: 5px 12px;
-  font: inherit;
-  cursor: pointer;
-}
-button.primary {
-  color: var(--vscode-button-foreground);
-  background: var(--vscode-button-background);
-}
-button.primary:hover { background: var(--vscode-button-hoverBackground); }
-button.secondary {
-  color: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
-  background: var(--vscode-button-secondaryBackground, var(--vscode-input-background));
-}
-button.secondary:hover {
-  background: var(--vscode-button-secondaryHoverBackground, var(--vscode-list-hoverBackground));
-}
-button.danger {
-  color: var(--vscode-errorForeground, var(--vscode-editorError-foreground));
-  background: transparent;
-  border-color: var(--vscode-panel-border, var(--vscode-contrastBorder));
-}
-button:focus-visible {
-  outline: 1px solid var(--vscode-focusBorder);
-  outline-offset: 1px;
-}
-button:disabled {
-  opacity: .55;
-  cursor: default;
-}
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  border: 0;
-}
 .search-field input {
   width: 100%;
   color: var(--vscode-input-foreground);
   background: var(--vscode-input-background);
   border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
-  border-radius: 2px;
+  border-radius: var(--ah-radius);
   padding: 4px 8px;
   font: inherit;
 }
@@ -652,6 +772,10 @@ button:disabled {
 const MANAGER_SCRIPT = `
 const vscode = acquireVsCodeApi();
 const MASK = ${JSON.stringify(MASKED_VARIABLE_VALUE)};
+const SCOPE_UI = ${JSON.stringify({
+  global: VARIABLE_SCOPE_UI.global,
+  workspace: VARIABLE_SCOPE_UI.workspace,
+})};
 
 /** @type {any} */
 let state = {
@@ -663,6 +787,10 @@ let state = {
 };
 let dirty = false;
 let envFilter = '';
+/** @type {string | undefined} */
+let previousActiveEnvironmentId = undefined;
+/** @type {string | undefined | null} null = not waiting on setActive */
+let pendingActiveEnvironmentId = null;
 
 const el = (id) => {
   const node = document.getElementById(id);
@@ -688,6 +816,7 @@ function showError(message) {
 function setDirty(value) {
   dirty = value;
   el('dirtyHint').hidden = !value;
+  post({ type: 'dirty', dirty: value });
 }
 
 function selectedScope() {
@@ -739,32 +868,67 @@ function renderList() {
   const list = el('envList');
   list.innerHTML = '';
   const query = envFilter.trim().toLowerCase();
+  let visibleCount = 0;
   for (const environment of state.environments) {
     const haystack = ((environment.name || '') + ' ' + (environment.id || '')).toLowerCase();
     if (query && !haystack.includes(query)) continue;
+    visibleCount += 1;
+    const isSelected = state.selectedId === environment.id;
+    const isActiveEnv = environment.id === state.activeEnvironmentId;
     const item = document.createElement('button');
     item.type = 'button';
-    item.className = 'env-item' + (state.selectedId === environment.id ? ' active' : '');
+    item.className = 'env-item'
+      + (isSelected ? ' active' : '')
+      + (isActiveEnv ? ' is-active-env' : '');
     item.setAttribute('role', 'option');
-    item.setAttribute('aria-selected', state.selectedId === environment.id ? 'true' : 'false');
-    const label = document.createElement('span');
-    label.textContent = environment.name || environment.id;
-    item.appendChild(label);
-    if (environment.id === state.activeEnvironmentId) {
-      const meta = document.createElement('span');
-      meta.className = 'meta';
-      meta.textContent = 'Active';
-      item.appendChild(meta);
+    item.setAttribute('aria-selected', isSelected ? 'true' : 'false');
+    if (isActiveEnv) {
+      item.setAttribute('aria-current', 'true');
+      item.title = (environment.name || environment.id) + ' (Active)';
     }
+    const row = document.createElement('span');
+    row.className = 'env-item-row';
+    const label = document.createElement('span');
+    label.className = 'env-item-name';
+    label.textContent = environment.name || environment.id;
+    row.appendChild(label);
+    if (isActiveEnv) {
+      const badge = document.createElement('span');
+      badge.className = 'env-active-badge';
+      badge.textContent = 'Active';
+      row.appendChild(badge);
+    }
+    item.appendChild(row);
     item.addEventListener('click', () => {
       state = { ...state, selectedId: environment.id };
       render();
     });
-    list.appendChild(item);
+    const wrap = document.createElement('li');
+    wrap.setAttribute('role', 'presentation');
+    wrap.appendChild(item);
+    list.appendChild(wrap);
   }
 
-  el('scopeGlobal').classList.toggle('active', state.selectedId === 'global');
-  el('scopeWorkspace').classList.toggle('active', state.selectedId === 'workspace');
+  const empty = el('envEmpty');
+  if (state.environments.length === 0) {
+    empty.hidden = false;
+    empty.textContent =
+      'No environments yet — optional for a first run; click Add when you need variables.';
+  } else if (visibleCount === 0) {
+    empty.hidden = false;
+    empty.textContent = 'No matching environments.';
+  } else {
+    empty.hidden = true;
+  }
+
+  const scopeGlobal = el('scopeGlobal');
+  const scopeWorkspace = el('scopeWorkspace');
+  const globalSelected = state.selectedId === 'global';
+  const workspaceSelected = state.selectedId === 'workspace';
+  scopeGlobal.classList.toggle('active', globalSelected);
+  scopeWorkspace.classList.toggle('active', workspaceSelected);
+  scopeGlobal.setAttribute('aria-selected', globalSelected ? 'true' : 'false');
+  scopeWorkspace.setAttribute('aria-selected', workspaceSelected ? 'true' : 'false');
 }
 
 function renderVariables() {
@@ -841,6 +1005,24 @@ function renderVariables() {
   });
 }
 
+function activeEnvironmentName() {
+  if (!state.activeEnvironmentId) return undefined;
+  const active = state.environments.find((entry) => entry.id === state.activeEnvironmentId);
+  return active ? (active.name || active.id) : undefined;
+}
+
+function renderActiveEnvStrip() {
+  const strip = el('activeEnvStrip');
+  const name = activeEnvironmentName();
+  if (name) {
+    strip.textContent = 'Active environment: ' + name;
+    strip.classList.add('has-active');
+  } else {
+    strip.textContent = 'Active environment: None';
+    strip.classList.remove('has-active');
+  }
+}
+
 function renderMain() {
   const scope = selectedScope();
   const nameInput = el('envName');
@@ -849,28 +1031,37 @@ function renderMain() {
   const duplicateEnv = el('duplicateEnv');
   const hint = el('scopeHint');
   const badge = el('activeBadge');
+  renderActiveEnvStrip();
 
   if (scope === 'global' || scope === 'workspace') {
     nameInput.disabled = true;
-    nameInput.value = scope === 'global' ? 'Global variables' : 'Workspace variables';
+    const scopeUi = scope === 'global' ? SCOPE_UI.global : SCOPE_UI.workspace;
+    nameInput.value = scopeUi.icon + ' ' + scopeUi.sourceLabel + ' Variables';
     setActive.disabled = true;
+    setActive.textContent = 'Set Active';
     deleteEnv.disabled = true;
     duplicateEnv.disabled = true;
     hint.hidden = false;
     hint.textContent = scope === 'global'
-      ? 'Shared across all workspaces (user settings).'
-      : 'Shared for this workspace.';
+      ? 'Global scope (user settings). Overridden by Request, Environment, and Workspace when names collide.'
+      : 'Workspace scope. Overridden by Request and Environment when names collide.';
     badge.hidden = true;
   } else {
     const environment = state.environments.find((entry) => entry.id === state.selectedId);
     nameInput.disabled = !environment;
     nameInput.value = environment ? environment.name : '';
-    setActive.disabled = !environment;
     deleteEnv.disabled = !environment;
     duplicateEnv.disabled = !environment;
-    hint.hidden = true;
-    const isActive = environment && environment.id === state.activeEnvironmentId;
+    const isActive = Boolean(
+      environment && environment.id === state.activeEnvironmentId,
+    );
     badge.hidden = !isActive;
+    setActive.textContent = isActive ? 'Active' : 'Set Active';
+    setActive.disabled = !environment || isActive;
+    hint.hidden = false;
+    hint.textContent = isActive
+      ? 'This environment is active. Its variables override Workspace and Global; Request still wins.'
+      : 'Environment variables apply only when this environment is active. Request still overrides them.';
   }
   renderVariables();
 }
@@ -937,8 +1128,11 @@ el('envName').addEventListener('input', () => {
 });
 el('setActive').addEventListener('click', () => {
   if (selectedScope() !== 'environment' || !state.selectedId) return;
+  previousActiveEnvironmentId = state.activeEnvironmentId;
+  pendingActiveEnvironmentId = state.selectedId;
   state = { ...state, activeEnvironmentId: state.selectedId };
-  setDirty(true);
+  // Persist active id immediately so runtime matches without a full Save.
+  post({ type: 'setActiveEnvironment', id: state.selectedId });
   render();
 });
 el('deleteEnv').addEventListener('click', () => {
@@ -966,6 +1160,8 @@ window.addEventListener('message', (event) => {
   const message = event.data;
   if (!message || typeof message !== 'object') return;
   if (message.type === 'init' && message.state) {
+    pendingActiveEnvironmentId = null;
+    previousActiveEnvironmentId = undefined;
     state = {
       environments: message.state.environments || [],
       globalVariables: message.state.globalVariables || [],
@@ -979,6 +1175,25 @@ window.addEventListener('message', (event) => {
     setDirty(false);
     showError('');
     render();
+    return;
+  }
+  if (message.type === 'activeEnvironmentSet') {
+    pendingActiveEnvironmentId = null;
+    previousActiveEnvironmentId = undefined;
+    state = { ...state, activeEnvironmentId: message.id };
+    render();
+    return;
+  }
+  // Distinct from save 'error' so a commit failure cannot roll back a pending
+  // setActive (or misattribute the message) when both round-trips overlap.
+  if (message.type === 'activeEnvironmentError') {
+    if (pendingActiveEnvironmentId !== null) {
+      state = { ...state, activeEnvironmentId: previousActiveEnvironmentId };
+      pendingActiveEnvironmentId = null;
+      previousActiveEnvironmentId = undefined;
+      showError(message.message || 'Unable to set active environment.');
+      render();
+    }
     return;
   }
   if (message.type === 'error') {

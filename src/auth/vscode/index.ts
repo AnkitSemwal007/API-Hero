@@ -1,4 +1,4 @@
-/** VS Code adapters for the Auth Profiles Manager panel. */
+/** VS Code adapters for the Manage Authentication panel. */
 export {
   allocateAuthProfileId,
   escapeAttribute,

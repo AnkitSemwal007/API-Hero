@@ -58,6 +58,16 @@ expression, or host environment evaluation occurs. `{{$timestamp}}` and
 `{{$uuid}}` are recognized and reported as unsupported for future
 compatibility.
 
+## Response extraction (`@extract`)
+
+Phase 1 ships `@extract` / `@sensitive-extract` directives that write values
+from a response into `run`, document-session overlay, or the active
+environment after execute. See
+[ADR-0001 Phase 1](./adr/0001-phase-1-implementation-spec.md). Extracted `run`
+and overlay values are merged into `getVariableContext` for the next single
+request; environment writes refresh Environment Manager. Collection-scope
+writes remain unsupported until Phase 2.
+
 The resolver creates a new deeply frozen `RuntimeRequest`. URL and body content
 remain authoritative; query and form projections are rebuilt from resolved
 content and path placeholders are cleared. Headers, cookies, directive values,
@@ -80,8 +90,28 @@ The runtime parser adapter combines parser/validator diagnostics with variable
 diagnostics and deduplicates by code and range. It reuses the document-version
 cache. Configuration or active-environment changes invalidate adapters and
 refresh diagnostics. Hover and completion use the same immutable definition
-snapshot: hover masks sensitive values, and completion exposes names,
-effective scopes, and sensitivity but never values.
+snapshot via `VariableCompletionService`: hover masks sensitive values, and
+completion exposes names, effective scopes, icons, and sensitivity but never
+secret values. Unknown references are warnings (not blockers) and may include a
+fuzzy "Did you mean" suggestion.
+
+## Variable Completion Service
+
+`VariableCompletionService` (`src/variables/variable-completion-service.ts`) is
+the reusable IntelliSense catalog for text editors and the Request Editor:
+
+- Merges scopes with resolver precedence (document → environment → workspace →
+  global)
+- Caches effective items by definition fingerprint (refresh on env/workspace/
+  global/document/project changes only)
+- Fuzzy-filters names without rebuilding the catalog
+- Detects open `{{` regions, builds insert text without duplicating braces, and
+  resolves non-sensitive inline previews
+
+Text language features consume it through `RuntimeParserAdapter`. The Request
+Editor host posts a safe `variableCompletions` catalog; the webview renders a
+VS Code–like suggestion popup (keyboard/mouse, Escape, Tab/Enter, Ctrl+Space)
+plus URL resolution preview and unknown-variable hints.
 
 ## Security and presentation
 
@@ -91,10 +121,23 @@ separate masked presentation URL; execution uses the real URL while result
 presentation uses the masked form. Sensitive response headers retain the
 existing masking behavior. The resolver does not log values.
 
+## Environment Manager and status bar
+
+**API Hero: Manage Environments** opens the Environment Manager webview
+(`src/variables/vscode/environment-manager-panel.ts`) for CRUD on
+`apiRunner.environments` and related variable lists. The sidebar is split into
+two sections: **Environments** (named environment records) and **Scopes**
+(Workspace Variables and Global Variables). Scopes are not environments; they
+are fixed variable stores edited in the same panel. The active environment is
+called out with a persistent detail strip, an **Active** badge on the list row
+and header, and bold list labeling. An **environment status bar** item reflects
+the active environment and opens the switch flow. These UI surfaces sit outside
+the Activity Bar (Collections + History only).
+
 ## Exclusions
 
 This subsystem does not implement authentication, history, collections,
-OpenAPI, AI, operating-system variables, built-in values, secret persistence,
-request-scoped definitions, or broad environment UI. Node's existing
+OpenAPI, AI, operating-system variables, built-in value evaluation, secret
+persistence for variables, or request-scoped definitions. Node's existing
 `node:test` runner remains authoritative; adding Vitest would create a second
 runner and duplicate the established test infrastructure.

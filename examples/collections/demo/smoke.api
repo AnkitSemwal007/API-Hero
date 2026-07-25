@@ -1,0 +1,9 @@
+### Collection ping
+GET https://httpbin.org/get
+Accept: application/json
+
+### Collection post
+POST https://httpbin.org/post
+Content-Type: application/json
+
+{ "from": "collection-demo" }

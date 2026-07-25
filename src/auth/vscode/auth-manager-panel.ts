@@ -1,5 +1,5 @@
 /**
- * Command-opened WebviewPanel host for the Auth Profiles Manager.
+ * Command-opened WebviewPanel host for Manage Authentication.
  */
 
 import {
@@ -18,6 +18,7 @@ import {
   renderAuthManagerHtml,
   secretFieldsForProvider,
   validateAuthManagerState,
+  type AuthManagerCredentialSource,
   type AuthManagerProfile,
   type AuthManagerProviderId,
   type AuthManagerState,
@@ -29,14 +30,14 @@ import {
 import { writeAuthManagerState } from './auth-settings-writer';
 
 const PANEL_VIEW_TYPE = 'apiRunner.authManager';
-const PANEL_TITLE = 'Auth Profiles Manager';
+const PANEL_TITLE = 'Manage Authentication';
 
 export interface AuthManagerPanelOptions {
   readonly profileManager: AuthenticationProfileManager;
   readonly secrets: AuthenticationSecretRepository;
 }
 
-/** Owns a singleton Auth Profiles Manager panel. */
+/** Owns a singleton Manage Authentication panel. */
 export class AuthManagerPanel implements Disposable {
   private panel: WebviewPanel | undefined;
   private baselineProfiles: readonly AuthenticationProfile[];
@@ -52,7 +53,7 @@ export class AuthManagerPanel implements Disposable {
     );
   }
 
-  /** Opens or reveals the Auth Profiles Manager panel. */
+  /** Opens or reveals the Manage Authentication panel. */
   public show(selectedId?: string): void {
     if (this.panel !== undefined) {
       this.panel.reveal(ViewColumn.Beside, false);
@@ -157,10 +158,29 @@ export class AuthManagerPanel implements Disposable {
       const previousIds = new Set(
         this.baselineProfiles.map((profile) => profile.id),
       );
-      await writeAuthManagerState(message.state, this.baselineProfiles);
+      const renamedPairs = findRenamedProfiles(
+        this.baselineProfiles,
+        message.state.profiles,
+      );
+      // Copy secrets under the new id first (leave old keys intact) so a failed
+      // settings write can roll back without destroying the old secrets.
+      for (const { fromId, toId } of renamedPairs) {
+        await copyProfileSecrets(this.options.secrets, fromId, toId);
+      }
+      try {
+        await writeAuthManagerState(message.state, this.baselineProfiles);
+      } catch (writeError) {
+        for (const { toId } of renamedPairs) {
+          await this.clearProfileSecrets(toId);
+        }
+        throw writeError;
+      }
+      for (const { fromId } of renamedPairs) {
+        await this.clearProfileSecrets(fromId);
+      }
       const nextIds = new Set(message.state.profiles.map((profile) => profile.id));
       for (const id of previousIds) {
-        if (!nextIds.has(id)) {
+        if (!nextIds.has(id) && !renamedPairs.some((pair) => pair.fromId === id)) {
           await this.clearProfileSecrets(id);
         }
       }
@@ -172,6 +192,7 @@ export class AuthManagerPanel implements Disposable {
       }
       this.baselineProfiles = this.options.profileManager.list();
       await this.postInit(message.state.selectedId);
+      window.setStatusBarMessage('API Hero: Authentication saved', 3_000);
     } catch (cause) {
       const text = cause instanceof Error ? cause.message : String(cause);
       await this.panel.webview.postMessage({
@@ -228,17 +249,35 @@ async function toManagerProfile(
   const meta = secretFieldsForProvider(providerId);
   const data = profile as Readonly<Record<string, unknown>>;
   const secretFields = [];
+  const credentialSources: AuthManagerCredentialSource[] = [];
   for (const entry of meta) {
     const source = data[entry.field];
-    if (!isSecretSource(source)) {
+    if (isSecretSource(source)) {
+      const present = await secrets.get(profile.id, entry.field);
+      secretFields.push({
+        field: entry.field,
+        label: entry.label,
+        status: (present === undefined ? 'missing' : 'set') as 'set' | 'missing',
+      });
       continue;
     }
-    const present = await secrets.get(profile.id, entry.field);
-    secretFields.push({
-      field: entry.field,
-      label: entry.label,
-      status: (present === undefined ? 'missing' : 'set') as 'set' | 'missing',
-    });
+    if (isVariableSource(source)) {
+      credentialSources.push({
+        field: entry.field,
+        label: entry.label,
+        kind: 'variable',
+        detail: source.name,
+      });
+      continue;
+    }
+    if (isLiteralSource(source)) {
+      credentialSources.push({
+        field: entry.field,
+        label: entry.label,
+        kind: 'literal',
+        detail: '(literal value)',
+      });
+    }
   }
   return {
     id: profile.id,
@@ -252,7 +291,47 @@ async function toManagerProfile(
       ? { apiKeyLocation: data.location }
       : {}),
     secretFields,
+    credentialSources,
   };
+}
+
+function findRenamedProfiles(
+  baseline: readonly AuthenticationProfile[],
+  next: readonly AuthManagerProfile[],
+): readonly { readonly fromId: string; readonly toId: string }[] {
+  if (baseline.length !== next.length) {
+    return [];
+  }
+  const pairs: { fromId: string; toId: string }[] = [];
+  for (let index = 0; index < baseline.length; index += 1) {
+    const from = baseline[index]!;
+    const to = next[index]!;
+    if (from.id !== to.id) {
+      const fromStillPresent = next.some((profile) => profile.id === from.id);
+      const toWasPresent = baseline.some((profile) => profile.id === to.id);
+      if (!fromStillPresent && !toWasPresent) {
+        pairs.push({ fromId: from.id, toId: to.id });
+      }
+    }
+  }
+  return pairs;
+}
+
+/** Copies secret values to a new profile id without deleting the old keys. */
+async function copyProfileSecrets(
+  secrets: AuthenticationSecretRepository,
+  fromId: string,
+  toId: string,
+): Promise<void> {
+  for (const providerId of ['basic', 'bearer', 'apiKey'] as const) {
+    for (const field of secretFieldsForProvider(providerId)) {
+      const value = await secrets.get(fromId, field.field);
+      if (value === undefined) {
+        continue;
+      }
+      await secrets.store(toId, field.field, value);
+    }
+  }
 }
 
 function isSecretSource(value: unknown): boolean {
@@ -261,6 +340,27 @@ function isSecretSource(value: unknown): boolean {
     value !== null &&
     'kind' in value &&
     (value as { kind: unknown }).kind === 'secret'
+  );
+}
+
+function isVariableSource(
+  value: unknown,
+): value is { readonly kind: 'variable'; readonly name: string } {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'kind' in value &&
+    (value as { kind: unknown }).kind === 'variable' &&
+    typeof (value as { name?: unknown }).name === 'string'
+  );
+}
+
+function isLiteralSource(value: unknown): boolean {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'kind' in value &&
+    (value as { kind: unknown }).kind === 'literal'
   );
 }
 

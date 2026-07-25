@@ -84,6 +84,56 @@ describe('documentToRequestSource / parseSourceToRequestDocument', () => {
     assert.match(roundTrip, /@sensitive-variable token=sekrit\n/u);
   });
 
+  test('round-trips extraction rules including sensitive, scope, optional, and when', () => {
+    const original = {
+      name: 'Login',
+      method: 'POST' as const,
+      url: 'https://example.test/login',
+      extractionRules: [
+        { name: 'accessToken', from: 'body.access_token' },
+        {
+          name: 'refreshToken',
+          from: 'body.refresh_token',
+          scope: 'environment' as const,
+          sensitive: true,
+        },
+        {
+          name: 'productId',
+          from: 'body.data[0].id',
+          scope: 'document' as const,
+          optional: true,
+        },
+        {
+          name: 'requestId',
+          from: 'header X-Request-Id',
+          when: 'status:2xx',
+        },
+        { name: 'code', from: 'status' },
+      ],
+    };
+
+    const source = serializeRequestDocument(original);
+    const parsed = parseSourceToRequestDocument(source);
+    assert.equal(parsed.kind, 'single');
+    if (parsed.kind !== 'single') {
+      return;
+    }
+
+    assert.deepEqual(parsed.document.extractionRules, original.extractionRules);
+
+    const second = parseSourceToRequestDocument(
+      serializeRequestDocument(parsed.document),
+    );
+    assert.equal(second.kind, 'single');
+    if (second.kind !== 'single') {
+      return;
+    }
+    assert.deepEqual(
+      second.document.extractionRules,
+      original.extractionRules,
+    );
+  });
+
   test('reports multi-request files without projecting a form model', () => {
     const source = ['GET https://a.test', '###', 'POST https://b.test'].join(
       '\n',

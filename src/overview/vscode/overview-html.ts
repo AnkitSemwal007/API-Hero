@@ -15,6 +15,8 @@ import {
   escapeAttribute,
   escapeHtml,
   isWebviewMessageRecord,
+  methodBadgeClass,
+  WEBVIEW_SHARED_CSS,
 } from '../../ui/webview';
 
 export { escapeAttribute, escapeHtml, formatDuration };
@@ -43,6 +45,7 @@ const QUICK_ACTION_IDS = new Set<string>(Object.values(OverviewQuickAction));
 export interface OverviewHistoryItem {
   readonly id: string;
   readonly method: string;
+  readonly methodBadgeClass: string;
   readonly url: string;
   readonly title: string;
   readonly outcome: HistoryStatus;
@@ -192,6 +195,7 @@ function toHistoryItem(entry: HistoryEntry): OverviewHistoryItem {
   return {
     id: entry.id,
     method: summary.method,
+    methodBadgeClass: methodBadgeClass(summary.method),
     url: summary.url,
     title,
     outcome: summary.status,
@@ -294,6 +298,7 @@ function shortUrl(url: string): string {
 }
 
 const OVERVIEW_CSS = `
+${WEBVIEW_SHARED_CSS}
 :root { color-scheme: light dark; }
 * { box-sizing: border-box; }
 body {
@@ -334,12 +339,11 @@ main { display: flex; flex-direction: column; min-height: 100vh; }
   font-size: .95em;
   font-weight: 600;
 }
-.muted { color: var(--vscode-descriptionForeground); }
 .empty {
   margin: 0;
   padding: 12px;
   border: 1px dashed var(--vscode-panel-border);
-  border-radius: 2px;
+  border-radius: var(--ah-radius);
   color: var(--vscode-descriptionForeground);
 }
 .list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
@@ -348,7 +352,7 @@ main { display: flex; flex-direction: column; min-height: 100vh; }
   width: 100%; text-align: left;
   padding: 8px 10px;
   border: 1px solid var(--vscode-panel-border);
-  border-radius: 2px;
+  border-radius: var(--ah-radius);
   background: var(--vscode-sideBar-background);
   color: inherit;
   cursor: pointer;
@@ -367,44 +371,25 @@ main { display: flex; flex-direction: column; min-height: 100vh; }
   color: var(--vscode-descriptionForeground);
   font-size: .9em;
 }
-.method {
-  color: var(--vscode-textLink-foreground);
-  font-weight: 600;
-  font-family: var(--vscode-editor-font-family, var(--vscode-font-family));
-}
 .url { overflow-wrap: anywhere; }
-.status-badge {
-  display: inline-flex; align-items: center;
-  border-radius: 2px; padding: 1px 6px; font-weight: 600; font-size: .85em;
-  background: var(--vscode-badge-background); color: var(--vscode-badge-foreground);
-}
-.status-success { background: var(--vscode-testing-iconPassed); color: var(--vscode-editor-background); }
-.status-redirect { background: var(--vscode-editorWarning-foreground); color: var(--vscode-editor-background); }
-.status-error { background: var(--vscode-editorError-foreground); color: var(--vscode-editor-background); }
-.status-cancelled { background: var(--vscode-disabledForeground, var(--vscode-descriptionForeground)); color: var(--vscode-editor-background); }
-.status-neutral { background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); }
 .actions {
   display: flex; flex-wrap: wrap; gap: 8px;
   margin-top: 4px;
 }
-button.action, button.secondary {
-  appearance: none;
-  border: 1px solid var(--vscode-button-border, var(--vscode-panel-border));
-  border-radius: 2px;
-  padding: 5px 10px;
-  font: inherit;
-  cursor: pointer;
-  background: var(--vscode-button-background);
+button.action {
   color: var(--vscode-button-foreground);
+  background: var(--vscode-button-background);
+  font-weight: 600;
 }
-button.secondary {
-  background: var(--vscode-button-secondaryBackground);
-  color: var(--vscode-button-secondaryForeground);
-}
-button.action:hover, button.secondary:hover {
+button.action:hover:not(:disabled) {
   background: var(--vscode-button-hoverBackground);
 }
-button.secondary:hover {
+button.action.secondary-action {
+  color: var(--vscode-button-secondaryForeground);
+  background: var(--vscode-button-secondaryBackground);
+  font-weight: 400;
+}
+button.action.secondary-action:hover:not(:disabled) {
   background: var(--vscode-button-secondaryHoverBackground);
 }
 .banner {
@@ -449,13 +434,6 @@ button.secondary:hover {
   line-height: 1.4;
 }
 .tip strong { color: var(--vscode-foreground); font-weight: 600; }
-button.action.secondary-action {
-  background: var(--vscode-button-secondaryBackground);
-  color: var(--vscode-button-secondaryForeground);
-}
-button.action.secondary-action:hover {
-  background: var(--vscode-button-secondaryHoverBackground);
-}
 `;
 
 const OVERVIEW_SCRIPT = `
@@ -519,7 +497,7 @@ const OVERVIEW_SCRIPT = `
       model.historyEmpty
         ? el('p', {
             className: 'empty',
-            text: 'No recent requests yet. Run a request from Collections or the editor to start building history.',
+            text: 'No runs yet. Create a collection and request, then Run — history appears here.',
           })
         : el(
             'ul',
@@ -534,7 +512,7 @@ const OVERVIEW_SCRIPT = `
                   },
                 }, [
                   el('div', { className: 'row-title' }, [
-                    el('span', { className: 'method', text: item.method }),
+                    el('span', { className: item.methodBadgeClass, text: item.method }),
                     el('span', { text: item.title }),
                     el('span', {
                       className: 'status-badge ' + item.statusBadgeClass,
@@ -554,7 +532,7 @@ const OVERVIEW_SCRIPT = `
       model.historyEmpty
         ? el('p', {
             className: 'empty',
-            text: 'No recent request activity yet.',
+            text: 'Activity appears after you run a request.',
           })
         : el('div', { className: 'activity-summary' }, [
             el('p', {
@@ -601,8 +579,8 @@ const OVERVIEW_SCRIPT = `
         ? el('p', {
             className: 'empty',
             text: model.hasWorkspace
-              ? 'No collections yet. Create one or import an OpenAPI specification.'
-              : 'Collections appear here after a workspace is open.',
+              ? 'No collections yet. Start with New Collection, then New Request — or Import OpenAPI.'
+              : 'Open a folder workspace, then create a collection.',
           })
         : el(
             'ul',
@@ -637,7 +615,7 @@ const OVERVIEW_SCRIPT = `
         actionButton('Import OpenAPI', 'importOpenApi', true),
         actionButton('Manage Environments', 'manageEnvironments', true),
         actionButton('Manage Authentication', 'manageAuthProfiles', true),
-        actionButton('Recent Requests', 'recentRequests', true),
+        actionButton('Open History', 'recentRequests', true),
         actionButton('Settings', 'openSettings', true),
         actionButton('Focus Collections', 'focusCollections', true),
       ]),

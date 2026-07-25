@@ -6,10 +6,15 @@ import type {
   VariableDefinition,
   VariableScope,
 } from '../models';
-import type {
-  VariableConfigurationRepository,
-  VariableConfigurationSnapshot,
-} from '../variables';
+import {
+  normalizeOptionalEnvironmentId,
+  type VariableConfigurationRepository,
+  type VariableConfigurationSnapshot,
+} from '../variables/environment-manager';
+import {
+  getActiveProjectStoreCoordinator,
+} from '../project-store/vscode/project-store-coordinator';
+import { resolveProjectStoreFolderPath } from '../project-store/vscode/resolve-project-folder';
 
 interface ConfiguredVariable {
   readonly name?: unknown;
@@ -23,16 +28,36 @@ interface ConfiguredEnvironment {
   readonly variables?: unknown;
 }
 
-/** Reads variable configuration without exposing VS Code to the domain layer. */
+/**
+ * Reads variable configuration with dual-read:
+ * - Global variables always come from user settings.
+ * - When `.apihero/config.json` exists (cached), environments / workspace vars /
+ *   activeEnvironment come from the project store; otherwise settings.
+ * Parse failures fall back to settings (coordinator omits bad cache entries).
+ */
 export class VsCodeVariableConfigurationRepository
 implements VariableConfigurationRepository {
   public getSnapshot(): VariableConfigurationSnapshot {
     const configuration = workspace.getConfiguration(CONFIGURATION_SECTION);
+    const globalVariables = readVariables(
+      configuration.get<unknown>(CONFIGURATION_KEYS.globalVariables),
+      'global',
+    );
+
+    const project = tryReadProjectSnapshot();
+    if (project !== undefined) {
+      return Object.freeze({
+        globalVariables,
+        workspaceVariables: project.workspaceVariables,
+        environments: project.environments,
+        activeEnvironmentId: normalizeOptionalEnvironmentId(
+          project.activeEnvironmentId,
+        ),
+      });
+    }
+
     return Object.freeze({
-      globalVariables: readVariables(
-        configuration.get<unknown>(CONFIGURATION_KEYS.globalVariables),
-        'global',
-      ),
+      globalVariables,
       workspaceVariables: readVariables(
         configuration.get<unknown>(CONFIGURATION_KEYS.workspaceVariables),
         'workspace',
@@ -40,11 +65,32 @@ implements VariableConfigurationRepository {
       environments: readEnvironments(
         configuration.get<unknown>(CONFIGURATION_KEYS.environments),
       ),
-      activeEnvironmentId: configuration.get<string>(
-        CONFIGURATION_KEYS.activeEnvironment,
+      activeEnvironmentId: normalizeOptionalEnvironmentId(
+        configuration.get<string>(CONFIGURATION_KEYS.activeEnvironment),
       ),
     });
   }
+}
+
+function tryReadProjectSnapshot(): {
+  readonly environments: readonly Environment[];
+  readonly workspaceVariables: readonly VariableDefinition[];
+  readonly activeEnvironmentId?: string;
+} | undefined {
+  const coordinator = getActiveProjectStoreCoordinator();
+  const folder = resolveProjectStoreFolderPath();
+  if (coordinator === undefined || folder === undefined) {
+    return undefined;
+  }
+  const cached = coordinator.getCached(folder);
+  if (cached === undefined) {
+    return undefined;
+  }
+  return {
+    environments: cached.environments,
+    workspaceVariables: cached.workspaceVariables,
+    activeEnvironmentId: cached.activeEnvironmentId,
+  };
 }
 
 function readVariables(value: unknown, scope: VariableScope): readonly VariableDefinition[] {

@@ -46,6 +46,78 @@ test('uses deterministic precedence and permits shadowing across scopes', () => 
   assert.deepEqual(analysis.errors, []);
 });
 
+test('run beats document for the same variable name', () => {
+  const analysis = resolver.analyze({ definitions: [
+    definition('host', 'document', 'document'),
+    definition('host', 'run', 'run'),
+  ] });
+  assert.equal(analysis.values.get('host')?.value, 'run');
+  assert.equal(analysis.values.get('host')?.scope, 'run');
+  assert.deepEqual(analysis.errors, []);
+});
+
+test('document beats environment for the same variable name', () => {
+  const analysis = resolver.analyze({ definitions: [
+    definition('host', 'environment', 'environment'),
+    definition('host', 'document', 'document'),
+  ] });
+  assert.equal(analysis.values.get('host')?.value, 'document');
+  assert.equal(analysis.values.get('host')?.scope, 'document');
+  assert.deepEqual(analysis.errors, []);
+});
+
+test('environment beats collection for the same variable name', () => {
+  const analysis = resolver.analyze({ definitions: [
+    definition('host', 'collection', 'collection'),
+    definition('host', 'environment', 'environment'),
+  ] });
+  assert.equal(analysis.values.get('host')?.value, 'environment');
+  assert.equal(analysis.values.get('host')?.scope, 'environment');
+  assert.deepEqual(analysis.errors, []);
+});
+
+test('collection beats workspace for the same variable name', () => {
+  const analysis = resolver.analyze({ definitions: [
+    definition('host', 'workspace', 'workspace'),
+    definition('host', 'collection', 'collection'),
+  ] });
+  assert.equal(analysis.values.get('host')?.value, 'collection');
+  assert.equal(analysis.values.get('host')?.scope, 'collection');
+  assert.deepEqual(analysis.errors, []);
+});
+
+test('workspace beats global for the same variable name', () => {
+  const analysis = resolver.analyze({ definitions: [
+    definition('host', 'global', 'global'),
+    definition('host', 'workspace', 'workspace'),
+  ] });
+  assert.equal(analysis.values.get('host')?.value, 'workspace');
+  assert.equal(analysis.values.get('host')?.scope, 'workspace');
+  assert.deepEqual(analysis.errors, []);
+});
+
+test('empty collection and run scopes match four-scope baseline fixture', () => {
+  const fourScopeBaseline: VariableDefinition[] = [
+    definition('host', 'global', 'global'),
+    definition('host', 'workspace', 'workspace'),
+    definition('host', 'environment', 'environment'),
+    definition('host', 'document', 'document'),
+  ];
+  const withEmptyNewScopes: VariableDefinition[] = [
+    ...fourScopeBaseline,
+    // No collection or run definitions — empty new scopes.
+  ];
+  const baseline = resolver.analyze({ definitions: fourScopeBaseline });
+  const withEmpty = resolver.analyze({ definitions: withEmptyNewScopes });
+
+  assert.equal(baseline.values.get('host')?.value, 'document');
+  assert.equal(baseline.values.get('host')?.scope, 'document');
+  assert.equal(withEmpty.values.get('host')?.value, baseline.values.get('host')?.value);
+  assert.equal(withEmpty.values.get('host')?.scope, baseline.values.get('host')?.scope);
+  assert.deepEqual(withEmpty.errors, baseline.errors);
+  assert.deepEqual(baseline.errors, []);
+});
+
 test('reports duplicates within one scope without silently choosing the duplicate', () => {
   const analysis = resolver.analyze({ definitions: [
     definition('host', 'first', 'workspace'),
@@ -361,4 +433,187 @@ test('unrelated refresh preserves an explicit session environment switch', () =>
 
   assert.equal(manager.activeId, 'prod');
   assert.equal(notifications, 1);
+});
+
+test('globals resolve when no named environment is active', () => {
+  const manager = new EnvironmentManager({
+    getSnapshot: () => ({
+      globalVariables: [definition('baseUrl', 'https://global.test', 'global')],
+      workspaceVariables: [],
+      environments: [],
+    }),
+  });
+  const snapshot = manager.capture();
+  assert.equal(manager.activeId, undefined);
+  assert.equal(snapshot.active, undefined);
+
+  const analysis = resolver.analyze({
+    definitions: [...snapshot.globalVariables, ...snapshot.workspaceVariables],
+  });
+  assert.equal(analysis.values.get('baseUrl')?.value, 'https://global.test');
+  assert.deepEqual(analysis.errors, []);
+
+  const resolved = resolver.resolveRequest(
+    request('GET {{baseUrl}}/users'),
+    { definitions: [...snapshot.globalVariables, ...snapshot.workspaceVariables] },
+  );
+  assert.equal(resolved.success, true);
+  if (resolved.success) {
+    assert.equal(resolved.request.url, 'https://global.test/users');
+  }
+});
+
+test('active environment overrides global variables', () => {
+  const manager = new EnvironmentManager({
+    getSnapshot: () => ({
+      globalVariables: [definition('baseUrl', 'https://global.test', 'global')],
+      workspaceVariables: [],
+      activeEnvironmentId: 'dev',
+      environments: [{
+        id: 'dev',
+        name: 'Development',
+        variables: [definition('baseUrl', 'https://dev.test', 'environment')],
+      }],
+    }),
+  });
+  const snapshot = manager.capture();
+  const definitions = [
+    ...snapshot.globalVariables,
+    ...snapshot.workspaceVariables,
+    ...(snapshot.active?.variables ?? []),
+  ];
+  const analysis = resolver.analyze({ definitions });
+  assert.equal(analysis.values.get('baseUrl')?.value, 'https://dev.test');
+  assert.equal(analysis.values.get('baseUrl')?.scope, 'environment');
+});
+
+test('missing variable still fails without definitions', () => {
+  const manager = new EnvironmentManager({
+    getSnapshot: () => ({
+      globalVariables: [],
+      workspaceVariables: [],
+      environments: [],
+    }),
+  });
+  const snapshot = manager.capture();
+  const analysis = resolver.analyze({
+    definitions: [
+      ...snapshot.globalVariables,
+      ...snapshot.workspaceVariables,
+      definition('url', '{{baseUrl}}', 'document'),
+    ],
+  });
+  assert.ok(analysis.errors.some((item) =>
+    item.code === 'MISSING_VARIABLE' && item.variableName === 'baseUrl'));
+});
+
+test('empty-string active environment is treated as none and globals still resolve', () => {
+  let config: VariableConfigurationSnapshot = {
+    globalVariables: [definition('baseUrl', 'https://global.test', 'global')],
+    workspaceVariables: [],
+    activeEnvironmentId: '',
+    environments: [{
+      id: 'dev',
+      name: 'Development',
+      variables: [definition('baseUrl', 'https://dev.test', 'environment')],
+    }],
+  };
+  const manager = new EnvironmentManager({ getSnapshot: () => config });
+  assert.equal(manager.activeId, undefined);
+  const snapshot = manager.capture();
+  assert.equal(snapshot.active, undefined);
+  assert.equal(snapshot.globalVariables[0]?.value, 'https://global.test');
+
+  const analysis = resolver.analyze({
+    definitions: [
+      ...snapshot.globalVariables,
+      ...snapshot.workspaceVariables,
+    ],
+  });
+  assert.equal(analysis.values.get('baseUrl')?.value, 'https://global.test');
+  assert.equal(analysis.values.get('baseUrl')?.scope, 'global');
+
+  manager.switchActive('');
+  assert.equal(manager.activeId, undefined);
+  manager.switchActive('   ');
+  assert.equal(manager.activeId, undefined);
+  assert.throws(() => manager.switchActive('missing'));
+
+  // Configured id changing from a real env to empty/whitespace clears session.
+  config = { ...config, activeEnvironmentId: 'dev' };
+  manager.refresh();
+  assert.equal(manager.activeId, 'dev');
+  config = { ...config, activeEnvironmentId: '   ' };
+  manager.refresh();
+  assert.equal(manager.activeId, undefined);
+  assert.equal(manager.capture().active, undefined);
+});
+
+test('globals still resolve after active environment is deleted', () => {
+  let snapshot: VariableConfigurationSnapshot = {
+    globalVariables: [definition('baseUrl', 'https://global.test', 'global')],
+    workspaceVariables: [],
+    activeEnvironmentId: 'dev',
+    environments: [{
+      id: 'dev',
+      name: 'Development',
+      variables: [definition('baseUrl', 'https://dev.test', 'environment')],
+    }],
+  };
+  const manager = new EnvironmentManager({ getSnapshot: () => snapshot });
+  assert.equal(manager.capture().active?.variables[0]?.value, 'https://dev.test');
+
+  snapshot = {
+    globalVariables: snapshot.globalVariables,
+    workspaceVariables: [],
+    environments: [],
+  };
+  manager.refresh();
+
+  assert.equal(manager.activeId, undefined);
+  const capture = manager.capture();
+  assert.equal(capture.active, undefined);
+  const analysis = resolver.analyze({
+    definitions: [...capture.globalVariables, ...capture.workspaceVariables],
+  });
+  assert.equal(analysis.values.get('baseUrl')?.value, 'https://global.test');
+});
+
+test('session activeId clears when it points at a deleted environment', () => {
+  let snapshot: VariableConfigurationSnapshot = {
+    globalVariables: [],
+    workspaceVariables: [],
+    activeEnvironmentId: 'dev',
+    environments: [
+      {
+        id: 'dev',
+        name: 'Development',
+        variables: [definition('host', 'https://dev.test', 'environment')],
+      },
+      {
+        id: 'prod',
+        name: 'Production',
+        variables: [definition('host', 'https://prod.test', 'environment')],
+      },
+    ],
+  };
+  const manager = new EnvironmentManager({ getSnapshot: () => snapshot });
+  manager.switchActive('prod');
+  assert.equal(manager.activeId, 'prod');
+
+  // Configured id unchanged (still "dev"), but session points at deleted "prod".
+  snapshot = {
+    globalVariables: [],
+    workspaceVariables: [],
+    activeEnvironmentId: 'dev',
+    environments: [
+      {
+        id: 'dev',
+        name: 'Development',
+        variables: [definition('host', 'https://dev.test', 'environment')],
+      },
+    ],
+  };
+  manager.refresh();
+  assert.equal(manager.activeId, undefined);
 });

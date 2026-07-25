@@ -102,13 +102,18 @@ Activity Bar view `apiRunner.history` groups entries:
 
 `Today` / `Yesterday` / `Last 7 Days` / `Older`
 
+**API Hero: Open History Entry** opens the **History Detail** panel (webview)
+with sanitized metadata and copy-summary support. **Filter History** applies a
+query plus facets (for example status and method) via the tree provider.
+
 Commands:
 
-- Open History Entry
+- Open History Entry (detail panel)
 - Re-run History Entry
 - Reveal Original Request
+- Copy History Summary
 - Delete Entry / Clear History
-- Search (filter) / Refresh
+- Search (filter + facets) / Refresh
 
 ## Re-run
 

@@ -7,6 +7,8 @@ export {
 } from './errors';
 export { Logger } from './logging';
 export type { LogContext, LogSink } from './logging';
+export { fireAndForget } from './async';
+export { describeFilesystemFailure } from './filesystem-failure';
 export { freezeDetachedBytes } from './bytes';
 export type { ImmutableBytes } from './bytes';
 export { HTTP_METHOD_SET } from './http';

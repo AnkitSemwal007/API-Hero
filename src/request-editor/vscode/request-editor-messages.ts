@@ -3,10 +3,12 @@
  * Framework-free so parsers and HTML helpers stay unit-testable.
  */
 
+import type { VariableScope } from '../../models';
 import { HTTP_METHODS, type HttpMethod } from '../../types';
 import type {
   RequestSourceBody,
   RequestSourceDocument,
+  RequestSourceExtractionRule,
   RequestSourceHeader,
   RequestSourceQueryParam,
   RequestSourceVariable,
@@ -14,6 +16,17 @@ import type {
 
 /** Placeholder posted to the webview instead of cleartext sensitive values. */
 export const SENSITIVE_VARIABLE_MASK = '••••••••';
+
+/** Catalog entry for webview variable IntelliSense (never includes secrets). */
+export interface RequestEditorVariableCompletion {
+  readonly name: string;
+  readonly scope: VariableScope;
+  readonly sourceLabel: string;
+  readonly icon: string;
+  readonly sensitive: boolean;
+  readonly description?: string;
+  readonly valuePreview?: string;
+}
 
 export interface RequestEditorAuthProfileOption {
   readonly id: string;
@@ -30,6 +43,9 @@ export interface RequestEditorState {
   readonly authProfiles: readonly RequestEditorAuthProfileOption[];
   readonly model?: RequestSourceDocument;
   readonly variablePreview?: Readonly<Record<string, string>>;
+  readonly variableCompletions?: readonly RequestEditorVariableCompletion[];
+  /** Display name of the active environment, when one is selected. */
+  readonly activeEnvironmentLabel?: string;
   readonly fileName?: string;
 }
 
@@ -50,7 +66,30 @@ export type RequestEditorInboundMessage =
 export type RequestEditorOutboundMessage =
   | { readonly type: 'init'; readonly state: RequestEditorState }
   | { readonly type: 'state'; readonly state: RequestEditorState }
+  | {
+      readonly type: 'ack';
+      readonly documentVersion: number;
+      readonly sourceText?: string;
+    }
+  | { readonly type: 'resubmit'; readonly documentVersion: number }
   | { readonly type: 'error'; readonly message: string };
+
+/** Host → webview: version bump after a successful form→text apply (no DOM wipe). */
+export function createRequestEditorAck(
+  documentVersion: number,
+  sourceText?: string,
+): Extract<RequestEditorOutboundMessage, { type: 'ack' }> {
+  return sourceText === undefined
+    ? { type: 'ack', documentVersion }
+    : { type: 'ack', documentVersion, sourceText };
+}
+
+/** Host → webview: ask for an immediate updateModel with the current buffer version. */
+export function createRequestEditorResubmit(
+  documentVersion: number,
+): Extract<RequestEditorOutboundMessage, { type: 'resubmit' }> {
+  return { type: 'resubmit', documentVersion };
+}
 
 /** Validates webview → extension messages. */
 export function parseRequestEditorMessage(
@@ -130,6 +169,10 @@ export function parseRequestSourceDocument(
   if (variables === undefined) {
     return undefined;
   }
+  const extractionRules = parseExtractionRules(record.extractionRules);
+  if (extractionRules === undefined) {
+    return undefined;
+  }
   const body = parseBody(record.body);
   if (body === undefined) {
     return undefined;
@@ -185,6 +228,7 @@ export function parseRequestSourceDocument(
       ? { expectLines: record.expectLines }
       : {}),
     ...(variables !== null ? { variables } : {}),
+    ...(extractionRules !== null ? { extractionRules } : {}),
     ...(isStringArray(record.comments) ? { comments: record.comments } : {}),
   };
   return model;
@@ -225,32 +269,50 @@ export function redactSensitiveVariablesInSource(sourceText: string): string {
  * On save: if a sensitive value is still the mask (or matches baseline), keep
  * the original cleartext from the last parsed document; otherwise treat the
  * edited value as the new secret (still sensitive).
+ *
+ * Matching prefers name, then the same index in the baseline sensitive list so
+ * renaming a masked row does not persist the mask glyph as cleartext.
  */
 export function restoreSensitiveVariablesFromBaseline(
   incoming: RequestSourceDocument,
   baseline: RequestSourceDocument,
 ): RequestSourceDocument {
-  const baselineSensitive = new Map(
-    (baseline.variables ?? [])
+  const baselineVariables = baseline.variables ?? [];
+  const baselineSensitiveByName = new Map(
+    baselineVariables
       .filter((entry) => entry.sensitive === true)
       .map((entry) => [entry.name, entry.value] as const),
   );
-  if (baselineSensitive.size === 0 || incoming.variables === undefined) {
+  const baselineSensitiveOrdered = baselineVariables.filter(
+    (entry) => entry.sensitive === true,
+  );
+  if (baselineSensitiveOrdered.length === 0 || incoming.variables === undefined) {
     return incoming;
   }
 
+  let sensitiveIndex = 0;
   return {
     ...incoming,
     variables: incoming.variables.map((entry) => {
       if (entry.sensitive !== true) {
         return entry;
       }
-      const original = baselineSensitive.get(entry.name);
+      const index = sensitiveIndex;
+      sensitiveIndex += 1;
+      const byName = baselineSensitiveByName.get(entry.name);
       if (
-        original !== undefined &&
-        (entry.value === SENSITIVE_VARIABLE_MASK || entry.value === original)
+        byName !== undefined &&
+        (entry.value === SENSITIVE_VARIABLE_MASK || entry.value === byName)
       ) {
-        return { name: entry.name, value: original, sensitive: true };
+        return { name: entry.name, value: byName, sensitive: true };
+      }
+      if (entry.value === SENSITIVE_VARIABLE_MASK) {
+        const byIndex = baselineSensitiveOrdered[index];
+        if (byIndex !== undefined) {
+          return { name: entry.name, value: byIndex.value, sensitive: true };
+        }
+        // Never persist the mask glyph — drop unmatched masked values.
+        return { name: entry.name, value: '', sensitive: true };
       }
       return { name: entry.name, value: entry.value, sensitive: true };
     }),
@@ -370,6 +432,85 @@ function parseVariables(
     });
   }
   return variables;
+}
+
+const EXTRACTION_SCOPES = new Set([
+  'run',
+  'document',
+  'collection',
+  'environment',
+  'workspace',
+]);
+
+function parseExtractionRules(
+  value: unknown,
+): readonly RequestSourceExtractionRule[] | null | undefined {
+  if (value === undefined) {
+    return null;
+  }
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  const rules: RequestSourceExtractionRule[] = [];
+  for (const entry of value) {
+    if (
+      entry === null ||
+      typeof entry !== 'object' ||
+      Array.isArray(entry)
+    ) {
+      return undefined;
+    }
+    const record = entry as Record<string, unknown>;
+    if (typeof record.name !== 'string' || typeof record.from !== 'string') {
+      return undefined;
+    }
+    if (
+      record.scope !== undefined &&
+      (typeof record.scope !== 'string' || !EXTRACTION_SCOPES.has(record.scope))
+    ) {
+      return undefined;
+    }
+    if (
+      record.sensitive !== undefined &&
+      typeof record.sensitive !== 'boolean'
+    ) {
+      return undefined;
+    }
+    if (
+      record.optional !== undefined &&
+      typeof record.optional !== 'boolean'
+    ) {
+      return undefined;
+    }
+    if (record.when !== undefined && typeof record.when !== 'string') {
+      return undefined;
+    }
+    if (
+      record.enabled !== undefined &&
+      typeof record.enabled !== 'boolean'
+    ) {
+      return undefined;
+    }
+    rules.push({
+      name: record.name,
+      from: record.from,
+      ...(typeof record.scope === 'string'
+        ? {
+            scope: record.scope as
+              | 'run'
+              | 'document'
+              | 'collection'
+              | 'environment'
+              | 'workspace',
+          }
+        : {}),
+      ...(record.sensitive === true ? { sensitive: true as const } : {}),
+      ...(record.optional === true ? { optional: true as const } : {}),
+      ...(typeof record.when === 'string' ? { when: record.when } : {}),
+      ...(record.enabled === false ? { enabled: false as const } : {}),
+    });
+  }
+  return rules;
 }
 
 function parseBody(

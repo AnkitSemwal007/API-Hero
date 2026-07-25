@@ -15,13 +15,22 @@ import { COMMAND_IDS } from '../../constants';
 import type { ExecutionOrchestrator } from '../../orchestration';
 import type { RequestSourceDocument } from '../../request-source';
 import type { VariableDefinition } from '../../models';
-import type { DefaultVariableResolver } from '../../variables';
+import {
+  MASKED_VARIABLE_VALUE,
+  VARIABLE_SCOPE_UI,
+  VariableCompletionService,
+  type DefaultVariableResolver,
+} from '../../variables';
+import { formatVariablePreviewError } from '../format-variable-preview-error';
 import { REQUEST_EDITOR_VIEW_TYPE } from './constants';
 import {
   openRequestEditor,
   RequestEditorProvider,
 } from './request-editor-provider';
-import type { RequestEditorAuthProfileOption } from './request-editor-messages';
+import type {
+  RequestEditorAuthProfileOption,
+  RequestEditorVariableCompletion,
+} from './request-editor-messages';
 
 export interface RegisterRequestEditorOptions {
   readonly context: ExtensionContext;
@@ -29,6 +38,8 @@ export interface RegisterRequestEditorOptions {
   readonly getAuthProfiles: () => readonly RequestEditorAuthProfileOption[];
   readonly variableResolver: DefaultVariableResolver;
   readonly getExternalVariableDefinitions: () => readonly VariableDefinition[];
+  /** Active environment display name for Variables-tab discoverability. */
+  readonly getActiveEnvironmentLabel?: () => string | undefined;
 }
 
 export interface RequestEditorRegistration {
@@ -41,6 +52,7 @@ export function registerRequestEditor(
   options: RegisterRequestEditorOptions,
 ): RequestEditorRegistration {
   const { context, orchestrator } = options;
+  const completionService = new VariableCompletionService(options.variableResolver);
 
   const provider = new RequestEditorProvider({
     getAuthProfiles: options.getAuthProfiles,
@@ -50,6 +62,13 @@ export function registerRequestEditor(
         options.getExternalVariableDefinitions(),
         model,
       ),
+    getVariableCompletions: (model) =>
+      buildVariableCompletions(
+        completionService,
+        options.getExternalVariableDefinitions(),
+        model,
+      ),
+    getActiveEnvironmentLabel: options.getActiveEnvironmentLabel,
     runDocument: (document) => runRequestDocument(orchestrator, document),
   });
 
@@ -91,12 +110,11 @@ async function runRequestDocument(
   });
 }
 
-function buildVariablePreview(
-  resolver: DefaultVariableResolver,
+function collectDefinitions(
   external: readonly VariableDefinition[],
   model: RequestSourceDocument,
-): Readonly<Record<string, string>> {
-  const definitions: VariableDefinition[] = [
+): VariableDefinition[] {
+  return [
     ...external,
     ...(model.variables ?? []).map((variable) => ({
       name: variable.name,
@@ -105,17 +123,44 @@ function buildVariablePreview(
       sensitive: variable.sensitive === true,
     })),
   ];
+}
+
+function buildVariablePreview(
+  resolver: DefaultVariableResolver,
+  external: readonly VariableDefinition[],
+  model: RequestSourceDocument,
+): Readonly<Record<string, string>> {
+  const definitions = collectDefinitions(external, model);
   const analysis = resolver.analyze({ definitions });
   const preview: Record<string, string> = {};
   for (const [name, value] of analysis.values) {
-    preview[name] = value.sensitive ? '••••••••' : value.value;
+    const scopeLabel = VARIABLE_SCOPE_UI[value.scope].sourceLabel;
+    const display = value.sensitive ? MASKED_VARIABLE_VALUE : value.value;
+    preview[name] = `${display} · ${scopeLabel} (effective)`;
   }
   for (const error of analysis.errors) {
     if (preview[error.variableName] === undefined) {
-      preview[error.variableName] = `(${error.code})`;
+      preview[error.variableName] = formatVariablePreviewError(error);
     }
   }
   return preview;
+}
+
+function buildVariableCompletions(
+  completionService: VariableCompletionService,
+  external: readonly VariableDefinition[],
+  model: RequestSourceDocument,
+): readonly RequestEditorVariableCompletion[] {
+  completionService.setDefinitions(collectDefinitions(external, model));
+  return completionService.getCompletions('').map((item) => ({
+    name: item.name,
+    scope: item.scope,
+    sourceLabel: item.sourceLabel,
+    icon: item.icon,
+    sensitive: item.sensitive,
+    ...(item.description !== undefined ? { description: item.description } : {}),
+    ...(item.valuePreview !== undefined ? { valuePreview: item.valuePreview } : {}),
+  }));
 }
 
 async function pickApiDocument(): Promise<TextDocument | undefined> {

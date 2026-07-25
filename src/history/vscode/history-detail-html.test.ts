@@ -62,6 +62,7 @@ describe('history-detail-html', () => {
     const model = buildHistoryDetailModel(sampleEntry());
     assert.equal(model.id, 'hist_1');
     assert.equal(model.method, 'GET');
+    assert.equal(model.methodBadgeClass, 'method-badge method-get');
     assert.equal(model.url, 'https://example.test/users');
     assert.equal(model.outcome, HistoryExecutionStatus.Success);
     assert.equal(model.statusBadgeClass, 'status-success');

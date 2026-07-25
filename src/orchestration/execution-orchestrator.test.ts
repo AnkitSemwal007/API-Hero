@@ -27,6 +27,7 @@ import {
   type ExecutionResultViewer,
   type ExecutionStatus,
   type ExecutionStatusPresenter,
+  type PostExecutionObserver,
   type RequestExecutionPipeline,
 } from './execution-orchestrator';
 import { selectRequestAtOffset } from './request-selection';
@@ -62,16 +63,20 @@ class FakeViewer implements ExecutionResultViewer {
   public readonly results: ExecutionResult[] = [];
   public readonly assertionReports: (import('../assertions').TestReport | undefined)[] =
     [];
+  public readonly extractionReports: (import('../extraction').ExtractionReport | undefined)[] =
+    [];
   public fail = false;
   public show(
     result: ExecutionResult,
     assertions?: import('../assertions').TestReport,
+    extraction?: import('../extraction').ExtractionReport,
   ): void {
     if (this.fail) {
       throw new Error('viewer details must not escape');
     }
     this.results.push(result);
     this.assertionReports.push(assertions);
+    this.extractionReports.push(extraction);
   }
 }
 
@@ -106,6 +111,7 @@ function harness(
   authenticationContext?: Omit<AuthenticationResolutionContext, 'variables'>,
   historyRecorder?: HistoryRecorder,
   assertionObserver?: AssertionEvaluationObserver,
+  postExecutionObserver?: PostExecutionObserver,
 ) {
   const status = new FakeStatus();
   const viewer = new FakeViewer();
@@ -128,6 +134,7 @@ function harness(
     historyRecorder,
     () => ({ environmentName: 'TestEnv' }),
     assertionObserver,
+    postExecutionObserver,
   );
   return { orchestrator, status, viewer, notifications, progress };
 }
@@ -708,6 +715,192 @@ test('skips assertion evaluation and Problems observer for CANCELLED results', a
   assert.equal(result.outcome, 'cancelled');
   assert.equal(result.assertions, undefined);
   assert.equal(observations.length, 0);
+});
+
+test('invokes PostExecutionObserver once on successful execute', async () => {
+  const observations: {
+    sourceId: string;
+    requestKey: string;
+    statusCode: number | undefined;
+    hasAssertionReport: boolean;
+    ruleNames: string[];
+  }[] = [];
+  const h = harness(
+    {
+      async execute(request) {
+        return success(request, 200);
+      },
+    },
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    {
+      onExecuted: (input) => {
+        observations.push({
+          sourceId: input.sourceId,
+          requestKey: input.requestKey,
+          statusCode: input.result.success
+            ? input.result.response.statusCode
+            : undefined,
+          hasAssertionReport: input.assertionReport !== undefined,
+          ruleNames: input.extractionRules.map((rule) => rule.variableName),
+        });
+      },
+    },
+  );
+
+  const text = [
+    'GET https://example.test/items',
+    '@extract token from status',
+    'expect status == 200',
+  ].join('\n');
+  const result = await h.orchestrator.runAtSourceLocation(source(text, 0));
+
+  assert.equal(result.outcome, 'success');
+  assert.deepEqual(observations, [
+    {
+      sourceId: 'test.api',
+      requestKey: 'request:test.api#0',
+      statusCode: 200,
+      hasAssertionReport: true,
+      ruleNames: ['token'],
+    },
+  ]);
+});
+
+test('PostExecutionObserver ExtractionReport reaches the viewer', async () => {
+  const report = {
+    outcomes: [],
+    extractedCount: 1,
+    failedCount: 0,
+    skippedCount: 0,
+    malformedCount: 0,
+  };
+  const h = harness(
+    {
+      async execute(request) {
+        return success(request, 200);
+      },
+    },
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    {
+      onExecuted: () => report,
+    },
+  );
+
+  await h.orchestrator.runAtSourceLocation(
+    source('GET https://example.test/items'),
+  );
+
+  assert.deepEqual(h.viewer.extractionReports, [report]);
+});
+
+test('assertion failure still invokes PostExecutionObserver', async () => {
+  let observerCalls = 0;
+  const h = harness(
+    {
+      async execute(request) {
+        return success(request, 500);
+      },
+    },
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    {
+      onExecuted: () => {
+        observerCalls += 1;
+      },
+    },
+  );
+
+  const text = [
+    'GET https://example.test/items',
+    'expect status == 200',
+  ].join('\n');
+  const result = await h.orchestrator.runAtSourceLocation(source(text, 0));
+
+  assert.equal(result.outcome, 'failed');
+  assert.equal(result.assertionFailed, true);
+  assert.equal(observerCalls, 1);
+});
+
+test('skips PostExecutionObserver for CANCELLED results', async () => {
+  const observations: unknown[] = [];
+  const h = harness(
+    {
+      async execute(request) {
+        return failure(request, 'CANCELLED');
+      },
+    },
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    {
+      onExecuted: (input) => {
+        observations.push(input);
+      },
+    },
+  );
+
+  const result = await h.orchestrator.runAtSourceLocation(
+    source('GET https://example.test/items'),
+  );
+
+  assert.equal(result.outcome, 'cancelled');
+  assert.equal(observations.length, 0);
+});
+
+test('thrown PostExecutionObserver does not fail the run and assertion observer still runs', async () => {
+  const assertionObservations: { sourceId: string }[] = [];
+  const h = harness(
+    {
+      async execute(request) {
+        return success(request, 200);
+      },
+    },
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    {
+      onEvaluated: (input) => {
+        assertionObservations.push({ sourceId: input.sourceId });
+      },
+    },
+    {
+      onExecuted: () => {
+        throw new Error('post-execution boom');
+      },
+    },
+  );
+
+  const result = await h.orchestrator.runAtSourceLocation(
+    source('GET https://example.test/items'),
+  );
+
+  assert.equal(result.outcome, 'success');
+  assert.equal(result.statusCode, 200);
+  assert.deepEqual(assertionObservations, [{ sourceId: 'test.api' }]);
 });
 
 test('skips assertion evaluation for precondition failures before execute', async () => {

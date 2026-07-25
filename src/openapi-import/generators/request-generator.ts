@@ -409,7 +409,7 @@ function mediaTypeToBody(
       type: 'raw',
       contentType,
       text: [
-        '<!-- TODO: replace with a real XML body from the OpenAPI schema -->',
+        '<!-- Replace with a real XML body from the OpenAPI schema -->',
         '<request />',
       ].join('\n'),
     };
