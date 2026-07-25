@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-07-26
+
+Phase 1 release checkpoint — response variable extraction and the post-execution extraction pipeline (same product scope as 0.2.0, tagged for Phase 2 kickoff).
+
+### Added
+
+- **Extraction Engine** — apply `@extract` / `@sensitive-extract` rules to execution results and produce an extraction report
+- **`@extract` / `@sensitive-extract`** — parse, validate, diagnostics, language hover/completion, and RequestSource round-trip
+- **Variable resolution improvements** — document, environment, and session **Run** scope writes after successful extracts
+- **Request Editor extraction support** — Extract tab to author and edit extraction rules in the UI
+- **Response Viewer extraction report** — report-only section parallel to assertions
+- **Extraction pipeline** — post-execute observer order (history → extraction → assertion presentation)
+- **Parser enhancements** — extract-directive validation and diagnostic codes
+- **Test suite improvements** — unit coverage for extraction engine, pipeline, parser, Request Editor, and Response Viewer
+
+### Unchanged
+
+- Stable `apiRunner.*` command IDs, configuration keys, and Secret Storage patterns
+- Activity Bar remains **Collections** + **History** only
+
+### Tests
+
+- **559** unit tests passing
+
 ## [0.2.0] - 2026-07-26
 
 Phase 1 complete — response variable extraction and the post-execution extraction pipeline.

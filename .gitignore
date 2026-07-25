@@ -28,3 +28,10 @@ docs/architecture/adr/*-task-plan.md
 *.scratch.md
 *.scratch.json
 docs/architecture/*-proposal.md
+
+# Internal audits / readiness scratch (keep local; not contributor docs)
+docs/*AUDIT*.md
+docs/*-AUDIT*.md
+docs/ux/*-audit.md
+docs/ux/*-hardening-audit.md
+docs/ux/v1-release-readiness.md
