@@ -138,3 +138,11 @@ redirects alongside Authorization, Cookie, and Proxy-Authorization.
 
 Authentication does not inspect AST nodes, mutate requests, perform network
 flows, refresh tokens, persist variable values, or render credentials.
+
+## Auth Manager UI
+
+**API Hero: Manage Authentication** opens the Auth Manager webview
+(`src/auth/vscode/auth-manager-panel.ts`). It edits
+`apiRunner.authentication.profiles` metadata and prompts for Secret Storage
+writes; the webview never receives cleartext secrets after storage. This panel
+is not an Activity Bar view — Activity Bar remains Collections + History only.

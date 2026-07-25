@@ -4,14 +4,16 @@ import {
   workspace,
   type Disposable,
   type ExtensionContext,
+  type TreeView,
 } from 'vscode';
 
 import { COMMAND_IDS, VIEW_IDS } from '../../constants';
-import type { Logger } from '../../shared';
+import { fireAndForget, type Logger } from '../../shared';
 import { COLLECTION_MARKER_FILENAME } from '../constants';
 import {
   CollectionDiscoveryService,
   InMemoryCollectionRepository,
+  type CollectionTreeNode,
 } from '../index';
 import { CollectionMutationService } from '../mutation';
 import { CollectionTreeDragAndDropController } from './collection-dnd-controller';
@@ -44,10 +46,17 @@ export function registerCollections(
     refresh: () => discovery.refresh(),
   });
   const treeProvider = new CollectionTreeDataProvider(discovery);
+  const treeViewHolder: { current?: TreeView<CollectionTreeNode> } = {};
   const dragAndDropController = new CollectionTreeDragAndDropController(
     discovery,
     mutation,
     logger,
+    () => {
+      if (treeViewHolder.current === undefined) {
+        throw new Error('Collections tree view is not ready');
+      }
+      return treeViewHolder.current;
+    },
   );
   const treeView = window.createTreeView(VIEW_IDS.collections, {
     treeDataProvider: treeProvider,
@@ -55,6 +64,7 @@ export function registerCollections(
     canSelectMany: true,
     dragAndDropController,
   });
+  treeViewHolder.current = treeView;
   treeProvider.attachTreeView(treeView);
   const navigation = new CollectionNavigationService(discovery, treeProvider);
   const markerWatcher = workspace.createFileSystemWatcher(
@@ -106,7 +116,11 @@ export function registerCollections(
       await commands.executeCommand(`${VIEW_IDS.collections}.focus`);
     }),
     workspace.onDidChangeWorkspaceFolders(() => {
-      void discovery.invalidateAll();
+      invalidateAllCollectionsBackground(
+        discovery,
+        logger,
+        'workspace folders changed',
+      );
     }),
     workspace.onDidCreateFiles((event) => {
       if (
@@ -118,7 +132,7 @@ export function registerCollections(
               .endsWith(`/${COLLECTION_MARKER_FILENAME.toLowerCase()}`),
         )
       ) {
-        void discovery.refresh();
+        refreshCollectionsBackground(discovery, logger, 'files created');
       }
     }),
     workspace.onDidDeleteFiles((event) => {
@@ -131,7 +145,7 @@ export function registerCollections(
               .endsWith(`/${COLLECTION_MARKER_FILENAME.toLowerCase()}`),
         )
       ) {
-        void discovery.refresh();
+        refreshCollectionsBackground(discovery, logger, 'files deleted');
       }
     }),
     workspace.onDidRenameFiles((event) => {
@@ -148,7 +162,7 @@ export function registerCollections(
               .endsWith(`/${COLLECTION_MARKER_FILENAME.toLowerCase()}`),
         )
       ) {
-        void discovery.refresh();
+        refreshCollectionsBackground(discovery, logger, 'files renamed');
       }
     }),
     workspace.onDidSaveTextDocument((document) => {
@@ -159,22 +173,34 @@ export function registerCollections(
           .toLowerCase()
           .endsWith(`/${COLLECTION_MARKER_FILENAME.toLowerCase()}`)
       ) {
-        void discovery.invalidateFile(document.uri.toString());
+        invalidateCollectionFileBackground(
+          discovery,
+          logger,
+          document.uri.toString(),
+          'document saved',
+        );
       }
     }),
     markerWatcher.onDidCreate(() => {
-      void discovery.refresh();
+      refreshCollectionsBackground(discovery, logger, 'collection marker created');
     }),
     markerWatcher.onDidChange((uri) => {
-      void discovery.invalidateFile(uri.toString());
+      invalidateCollectionFileBackground(
+        discovery,
+        logger,
+        uri.toString(),
+        'collection marker changed',
+      );
     }),
     markerWatcher.onDidDelete(() => {
-      void discovery.refresh();
+      refreshCollectionsBackground(discovery, logger, 'collection marker deleted');
     }),
   ];
 
-  void discovery.refresh().then(
-    () => logger.info('Collections discovered'),
+  fireAndForget(
+    discovery.refresh().then(() => {
+      logger.info('Collections discovered');
+    }),
     (error: unknown) => {
       logger.warning('Collections discovery failed', {
         message: error instanceof Error ? error.message : String(error),
@@ -184,6 +210,44 @@ export function registerCollections(
 
   context.subscriptions.push(...disposables);
   return { disposables, discovery, mutation, treeView };
+}
+
+function refreshCollectionsBackground(
+  discovery: CollectionDiscoveryService,
+  logger: Logger,
+  reason: string,
+): void {
+  fireAndForget(discovery.refresh(), (error: unknown) => {
+    logger.warning(`Collections refresh failed (${reason})`, {
+      message: error instanceof Error ? error.message : String(error),
+    });
+  });
+}
+
+function invalidateCollectionFileBackground(
+  discovery: CollectionDiscoveryService,
+  logger: Logger,
+  path: string,
+  reason: string,
+): void {
+  fireAndForget(discovery.invalidateFile(path), (error: unknown) => {
+    logger.warning(`Collections file invalidation failed (${reason})`, {
+      message: error instanceof Error ? error.message : String(error),
+      path,
+    });
+  });
+}
+
+function invalidateAllCollectionsBackground(
+  discovery: CollectionDiscoveryService,
+  logger: Logger,
+  reason: string,
+): void {
+  fireAndForget(discovery.invalidateAll(), (error: unknown) => {
+    logger.warning(`Collections full invalidation failed (${reason})`, {
+      message: error instanceof Error ? error.message : String(error),
+    });
+  });
 }
 
 /** Services returned by {@link registerCollections} for composition. */

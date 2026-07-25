@@ -3,7 +3,7 @@
 ## Scope
 
 Import-only pipeline for **OpenAPI 3.0.x and 3.1.x** specifications into API
-Runner artifacts:
+Hero artifacts:
 
 - `.api` request files under a workspace folder
 - named environments (`baseUrl`, optional `host` / `port`, server variables)
@@ -32,7 +32,10 @@ File → Loader → Parser → Validator → $ref Resolver → Generators
 | Generate | `generators/*` | `.api` text, env vars, auth profiles |
 | Write | `workspace-writer.ts` | Path-safe file writes under target root |
 | Orchestrate | `pipeline.ts` | Stages, `ImportSummary`, cancellation |
-| UI | `vscode/register-openapi-import.ts` | Dialog, progress, settings, refresh |
+| UI | `vscode/register-openapi-import.ts`, `openapi-import-wizard.ts` | **OpenAPI import wizard** webview, progress, settings, refresh |
+
+Generated `.api` text uses the shared **request-source** model (same serialization
+path as the Request Editor) so imported files round-trip cleanly in the form UI.
 
 Domain code under `src/openapi-import` does **not** import `vscode`.
 

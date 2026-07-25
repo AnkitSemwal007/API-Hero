@@ -15,15 +15,22 @@ import {
 } from 'vscode';
 
 import { COMMAND_IDS, REQUEST_EDITOR_VIEW_TYPE } from '../../constants';
+import { describeFilesystemFailure, fireAndForget } from '../../shared';
 import { createWebviewNonce } from '../../ui/webview';
 import {
   parseSourceToRequestDocument,
   serializeRequestDocument,
   type RequestSourceDocument,
 } from '../../request-source';
+import {
+  clearActiveRequestEditorDocument,
+  setActiveRequestEditorDocument,
+} from './active-request-editor';
 import { REQUEST_EDITOR_SYNC_DEBOUNCE_MS } from './constants';
 import { renderRequestEditorHtml } from './request-editor-html';
 import {
+  createRequestEditorAck,
+  createRequestEditorResubmit,
   maskSensitiveVariablesForWebview,
   parseRequestEditorMessage,
   redactSensitiveVariablesInSource,
@@ -37,6 +44,11 @@ export interface RequestEditorProviderOptions {
   readonly getVariablePreview?: (
     model: RequestSourceDocument,
   ) => Readonly<Record<string, string>>;
+  readonly getVariableCompletions?: (
+    model: RequestSourceDocument,
+  ) => readonly import('./request-editor-messages').RequestEditorVariableCompletion[];
+  /** Active environment display name, or undefined when none is selected. */
+  readonly getActiveEnvironmentLabel?: () => string | undefined;
   /**
    * Runs the document request (same pipeline as `apiRunner.runRequest`).
    * Preferred over executeCommand so Custom Text Editors work without an
@@ -70,10 +82,15 @@ export class RequestEditorProvider implements CustomTextEditorProvider {
 class RequestEditorDocumentSync implements Disposable {
   private readonly disposables: Disposable[] = [];
   private disposed = false;
-  private formDebounce: ReturnType<typeof setTimeout> | undefined;
   private textDebounce: ReturnType<typeof setTimeout> | undefined;
   /** Document versions written by the form — ignore echo change events. */
   private readonly ignoredVersions = new Set<number>();
+  /** Latest form model waiting to apply (coalesced while an apply is in flight). */
+  private pendingForm:
+    | { readonly model: RequestSourceDocument; expectedVersion: number }
+    | undefined;
+  private applyInFlight = false;
+  private readonly drainWaiters: Array<() => void> = [];
 
   public constructor(
     private readonly document: TextDocument,
@@ -89,9 +106,22 @@ class RequestEditorDocumentSync implements Disposable {
     };
     this.panel.webview.html = renderRequestEditorHtml(nonce);
 
+    if (this.panel.active) {
+      setActiveRequestEditorDocument(this.document);
+    }
+
     this.disposables.push(
+      this.panel.onDidChangeViewState(() => {
+        if (this.panel.active) {
+          setActiveRequestEditorDocument(this.document);
+        } else {
+          clearActiveRequestEditorDocument(this.document);
+        }
+      }),
       this.panel.webview.onDidReceiveMessage((raw) => {
-        void this.handleMessage(raw);
+        fireAndForget(this.handleMessage(raw), (error: unknown) =>
+          this.reportBackgroundError(error, 'Could not handle editor message.'),
+        );
       }),
       workspace.onDidChangeTextDocument((event) => {
         if (event.document.uri.toString() !== this.document.uri.toString()) {
@@ -111,11 +141,15 @@ class RequestEditorDocumentSync implements Disposable {
       return;
     }
     this.disposed = true;
-    if (this.formDebounce !== undefined) {
-      clearTimeout(this.formDebounce);
-    }
+    clearActiveRequestEditorDocument(this.document);
+    this.pendingForm = undefined;
     if (this.textDebounce !== undefined) {
       clearTimeout(this.textDebounce);
+    }
+    // Unblock waitUntilFormAppliesIdle if Run was waiting on a flush.
+    const waiters = this.drainWaiters.splice(0);
+    for (const waiter of waiters) {
+      waiter();
     }
     for (const disposable of this.disposables) {
       disposable.dispose();
@@ -157,6 +191,8 @@ class RequestEditorDocumentSync implements Disposable {
     }
     if (message.type === 'run') {
       try {
+        // Wait for any in-flight / pending form→text apply before executing.
+        await this.waitUntilFormAppliesIdle();
         await this.options.runDocument(this.document);
       } catch (error) {
         const text = error instanceof Error ? error.message : String(error);
@@ -165,20 +201,88 @@ class RequestEditorDocumentSync implements Disposable {
       return;
     }
 
-    this.scheduleFormToText(message.model, message.documentVersion);
+    this.enqueueFormModel(message.model, message.documentVersion);
   }
 
-  private scheduleFormToText(
+  /**
+   * Apply form→text immediately (webview already debounces). Serialize applies
+   * and keep only the latest pending model while one is in flight.
+   */
+  private enqueueFormModel(
     model: RequestSourceDocument,
     expectedVersion: number,
   ): void {
-    if (this.formDebounce !== undefined) {
-      clearTimeout(this.formDebounce);
+    this.pendingForm = { model, expectedVersion };
+    fireAndForget(this.drainFormApplies(), (error: unknown) =>
+      this.reportBackgroundError(
+        error,
+        'Could not apply request editor changes.',
+      ),
+    );
+  }
+
+  /** Resolves when no form apply is in flight and nothing is queued. */
+  private async waitUntilFormAppliesIdle(): Promise<void> {
+    while (!this.disposed) {
+      if (this.pendingForm !== undefined && !this.applyInFlight) {
+        await this.drainFormApplies();
+        continue;
+      }
+      if (!this.applyInFlight && this.pendingForm === undefined) {
+        return;
+      }
+      await new Promise<void>((resolve) => {
+        this.drainWaiters.push(resolve);
+      });
     }
-    this.formDebounce = setTimeout(() => {
-      this.formDebounce = undefined;
-      void this.applyFormModel(model, expectedVersion);
-    }, REQUEST_EDITOR_SYNC_DEBOUNCE_MS);
+  }
+
+  private async drainFormApplies(): Promise<void> {
+    if (this.applyInFlight) {
+      return;
+    }
+    this.applyInFlight = true;
+    try {
+      while (this.pendingForm !== undefined && !this.disposed) {
+        const pending = this.pendingForm;
+        this.pendingForm = undefined;
+        await this.applyFormModel(pending.model, pending.expectedVersion);
+        // Do NOT rebase expectedVersion onto concurrent buffer edits — that can
+        // clobber text changes. Version skew is handled inside applyFormModel
+        // via postResubmit; drop any stale pending model that arrived mid-apply
+        // with an outdated expectedVersion.
+        if (this.dropStalePendingForm()) {
+          await this.postResubmit();
+        }
+      }
+    } finally {
+      this.applyInFlight = false;
+      const waiters = this.drainWaiters.splice(0);
+      for (const waiter of waiters) {
+        waiter();
+      }
+      if (this.pendingForm !== undefined && !this.disposed) {
+        fireAndForget(this.drainFormApplies(), (error: unknown) =>
+          this.reportBackgroundError(
+            error,
+            'Could not apply request editor changes.',
+          ),
+        );
+      }
+    }
+  }
+
+  /** Drops a coalesced form update whose expected version no longer matches. */
+  private dropStalePendingForm(): boolean {
+    const coalesced = this.pendingForm;
+    if (
+      coalesced === undefined ||
+      coalesced.expectedVersion === this.document.version
+    ) {
+      return false;
+    }
+    this.pendingForm = undefined;
+    return true;
   }
 
   private scheduleTextToForm(): void {
@@ -187,7 +291,12 @@ class RequestEditorDocumentSync implements Disposable {
     }
     this.textDebounce = setTimeout(() => {
       this.textDebounce = undefined;
-      void this.postState();
+      fireAndForget(this.postState(), (error: unknown) =>
+        this.reportBackgroundError(
+          error,
+          'Could not refresh the request editor.',
+        ),
+      );
     }, REQUEST_EDITOR_SYNC_DEBOUNCE_MS);
   }
 
@@ -199,7 +308,7 @@ class RequestEditorDocumentSync implements Disposable {
       return;
     }
     if (this.document.version !== expectedVersion) {
-      await this.postState();
+      await this.postResubmit();
       return;
     }
 
@@ -218,6 +327,14 @@ class RequestEditorDocumentSync implements Disposable {
     );
     const nextText = serializeRequestDocument(restored);
     if (nextText === this.document.getText()) {
+      await this.postAck();
+      return;
+    }
+
+    // Re-check immediately before applyEdit — concurrent text edits may land
+    // after the earlier version check.
+    if (this.document.version !== expectedVersion) {
+      await this.postResubmit();
       return;
     }
 
@@ -229,16 +346,72 @@ class RequestEditorDocumentSync implements Disposable {
     edit.replace(this.document.uri, fullRange, nextText);
     const nextVersion = this.document.version + 1;
     this.ignoredVersions.add(nextVersion);
-    const applied = await workspace.applyEdit(edit);
+    let applied = false;
+    try {
+      applied = await workspace.applyEdit(edit);
+    } catch (error) {
+      this.ignoredVersions.delete(nextVersion);
+      const filesystemHint = describeFilesystemFailure(error);
+      await this.panel.webview.postMessage({
+        type: 'error',
+        message:
+          filesystemHint ??
+          (error instanceof Error
+            ? error.message
+            : 'Could not update the request document.'),
+      });
+      return;
+    }
     if (!applied) {
       this.ignoredVersions.delete(nextVersion);
       await this.panel.webview.postMessage({
         type: 'error',
-        message: 'Could not update the request document.',
+        message:
+          'Could not update the request document. The file may be read-only.',
       });
       return;
     }
-    await this.postState();
+    await this.postAck();
+  }
+
+  private async reportBackgroundError(
+    error: unknown,
+    fallback: string,
+  ): Promise<void> {
+    if (this.disposed) {
+      return;
+    }
+    const text =
+      describeFilesystemFailure(error) ??
+      (error instanceof Error && error.message.trim().length > 0
+        ? error.message
+        : fallback);
+    try {
+      await this.panel.webview.postMessage({ type: 'error', message: text });
+    } catch {
+      // Panel may already be disposed.
+    }
+  }
+
+  private async postAck(): Promise<void> {
+    if (this.disposed) {
+      return;
+    }
+    await this.panel.webview.postMessage(
+      createRequestEditorAck(
+        this.document.version,
+        redactSensitiveVariablesInSource(this.document.getText()),
+      ),
+    );
+  }
+
+  private async postResubmit(): Promise<void> {
+    if (this.disposed) {
+      return;
+    }
+    await this.panel.webview.postMessage(
+      createRequestEditorResubmit(this.document.version),
+    );
   }
 
   private async postState(): Promise<void> {
@@ -253,31 +426,40 @@ class RequestEditorDocumentSync implements Disposable {
       this.document.uri.toString(),
     );
     const authProfiles = this.options.getAuthProfiles();
+    const activeEnvironmentLabel = this.options.getActiveEnvironmentLabel?.();
+    const withActiveEnv = <T extends RequestEditorState>(
+      base: Omit<T, 'activeEnvironmentLabel'>,
+    ): T =>
+      (activeEnvironmentLabel === undefined
+        ? base
+        : { ...base, activeEnvironmentLabel }) as T;
     let state: RequestEditorState;
 
     if (parsed.kind === 'multi') {
-      state = {
+      state = withActiveEnv({
         mode: 'multi',
         documentVersion: this.document.version,
         sourceText,
         requestCount: parsed.requestCount,
         authProfiles,
         fileName: this.document.fileName,
-      };
+      });
     } else if (parsed.kind === 'empty') {
-      state = {
+      state = withActiveEnv({
         mode: 'empty',
         documentVersion: this.document.version,
         sourceText,
         requestCount: 0,
         authProfiles,
         fileName: this.document.fileName,
-      };
+      });
     } else {
       const masked = maskSensitiveVariablesForWebview(parsed.document);
       const variablePreview =
         this.options.getVariablePreview?.(parsed.document) ?? {};
-      state = {
+      const variableCompletions =
+        this.options.getVariableCompletions?.(parsed.document) ?? [];
+      state = withActiveEnv({
         mode: 'form',
         documentVersion: this.document.version,
         sourceText,
@@ -285,8 +467,9 @@ class RequestEditorDocumentSync implements Disposable {
         authProfiles,
         model: masked,
         variablePreview,
+        variableCompletions,
         fileName: this.document.fileName,
-      };
+      });
     }
 
     await this.panel.webview.postMessage({ type: 'state', state });

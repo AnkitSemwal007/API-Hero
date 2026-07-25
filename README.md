@@ -1,46 +1,70 @@
 # API Hero
 
-**REST/HTTP client for Visual Studio Code** — author `.api` requests beside your code, run them with assertions, organize collections, manage environments and auth, import OpenAPI, and review history.
+**Git-first REST/HTTP client for Visual Studio Code** — author human-readable `.api` requests beside your code, run them with assertions, organize collections as folders, manage environments and auth, import OpenAPI, and inspect responses professionally.
 
-> Marketplace extension ID: `ankitsemwal.api-hero`
+> Extension ID: **`ankitsemwal.api-hero`** · Version: **1.0.0** · License: [MIT](LICENSE)
 
-## Features
+[Documentation](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/README.md) · [Changelog](CHANGELOG.md) · [Support](SUPPORT.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
 
-- **`.api` language** — syntax highlighting, snippets, hovers, outline, diagnostics, and code lenses
-- **Request execution** — run a single request (or with assertions) with progress and a response viewer
-- **Variables & environments** — global, workspace, environment, and document variables with sensitive-value masking
-- **Authentication** — none, basic, bearer, and API key profiles; secrets via VS Code Secret Storage
-- **Assertions** — `expect` lines with Problems diagnostics and pass/fail summaries
-- **Collections** — Activity Bar explorer for workspace `.api` files; run collection, folder, or selection
-- **History** — persisted request history with search, re-run, and reveal original request
-- **OpenAPI import** — generate `.api` requests and collection structure from OpenAPI 3.x specs
+---
 
-## Screenshots
+## Why API Hero
 
-_Screenshots and banner art are not included in this release package yet._ Capture editor, Collections, Response viewer, and History for the Marketplace listing. On GitHub, asset guidance lives under `docs/marketplace/` and `docs/release/marketplace-assets.md`.
+| Principle | What you get |
+| --- | --- |
+| **UI-first** | Request Editor, Response Viewer, Env/Auth managers, Overview, History Detail, Run Report |
+| **Git-first** | Collections live as folders and `.api` files you can diff and review |
+| **Canonical source** | `.api` files are the source of truth — edit in the form or as text |
+| **Native VS Code** | Activity Bar views, Secret Storage, Problems panel, CodeLens, settings |
+| **Safe by default** | Secrets stay out of git; presentation URLs and viewers mask sensitive values |
 
-## Installation
+API Hero is for developers who want Postman-like speed **without** leaving the editor or fighting opaque binary collections.
 
-### From VSIX (local / CI)
+---
+
+## Install
+
+**Marketplace:** search **API Hero** or install extension ID `ankitsemwal.api-hero`.
+
+**From VSIX (local build):**
 
 ```bash
 npm install
 npm run package
-code --install-extension api-hero-0.6.2.vsix
+code --install-extension api-hero-1.0.0.vsix
 ```
 
-### From Marketplace
+Requires VS Code **1.90+**.
 
-_After publish:_ search for **API Hero** or install `ankitsemwal.api-hero`.
+---
 
-## Quick Start
+## Quick start (under five minutes)
 
-1. Open a folder in VS Code.
-2. Create `hello.api` (see below).
-3. Place the cursor on the request and run **API Hero: Run Request** (`Ctrl+Alt+R` / `Cmd+Alt+R`).
-4. Inspect the response panel and optional History entry.
+Open a **folder** workspace in VS Code (required for Collections). Then:
 
-## Creating your first request
+### 1. New Collection
+
+Open the **API Hero** Activity Bar → **Collections** → **New Collection** (or **API Hero: New Collection**). Fill the **Create Collection** dialog (**Name** required, **Description** optional). The collection is created under `Collections/<name>/` only after you confirm **Create** — Cancel writes nothing.
+
+### 2. New Request
+
+Choose **New Request**, set a name/method/URL in the dialog, then edit in the **Request Editor** (default for `*.api`).
+
+### 3. Set URL and Run
+
+Set or confirm the URL, then:
+
+- Click **Run** in the Request Editor toolbar, or  
+- Press **Ctrl+Alt+R** / **Cmd+Alt+R**, or  
+- Use CodeLens **Run Request**
+
+Inspect the **Response Viewer**. Successful runs appear under **History**.
+
+Environments and authentication are optional for a first public GET. Try **API Hero: Open Overview** anytime for a home screen with quick actions.
+
+### Alternate: loose `.api` file (advanced)
+
+You can also create a `.api` file anywhere in the workspace and run it the same way:
 
 ```http
 ### Hello
@@ -48,96 +72,138 @@ GET https://httpbin.org/get
 Accept: application/json
 ```
 
-Save as a `.api` file. Separators use `###`. Directives, headers, bodies, variables, and `expect` lines follow the documented grammar.
+Loose files may appear under a **Legacy** entry in Collections until you move them under `Collections/`. Prefer **New Collection** → **New Request** for the standard Git-friendly layout.
 
-## Running requests
+---
 
-| Action | Command |
-| --- | --- |
-| Run request under cursor | **API Hero: Run Request** |
-| Run with assertions | **API Hero: Run Request with Assertions** |
-| Run a collection / folder / selection | Collections view context menu |
+## Feature highlights
 
-Status bar and progress notifications show run state. Failures surface clear error messages.
+- **`.api` language** — highlighting, snippets, hover, outline, diagnostics, CodeLens
+- **Request Editor** — default custom editor for `.api` (params, headers, body, auth, variables, tests, preview)
+- **Response Viewer** — status card, pretty/raw/JSON, headers, assertions, **extraction report**; **copy**, **save**, **search**
+- **Extraction** — `@extract` / `@sensitive-extract`, Extraction Engine, Run/document/environment scopes, Request Editor **Extract** tab
+- **Collections** — Activity Bar explorer, folders, CRUD, filter, drag-and-drop, import/export folder trees
+- **Collection Runner** — run collection / folder / selection / tests with failure policy + **Run Report**
+- **History** — persisted runs, facet filters, **detail panel**, re-run, reveal original request
+- **Environments** — Environment Manager panel + status bar chip; precedence with document/workspace/global/run variables
+- **Authentication** — none / basic / bearer / API key profiles; Secret Storage; Auth Manager + preview
+- **Assertions** — `expect` lines with Problems diagnostics
+- **OpenAPI Import** — OpenAPI 3.x multi-step wizard → `.api` + collection structure
+- **Overview** — command-opened home for recent runs, collections, and quick actions
 
-## Variables
+**Not in this release:** Collection chaining (`@depends-on`), Run File (all requests in one editor), Login/Logout OAuth, cookie jar, GraphQL/gRPC/WebSocket.
 
-Configure under **Settings → API Hero**:
+---
 
-- `apiRunner.variables.global`
-- `apiRunner.variables.workspace`
-- `apiRunner.environments` + `apiRunner.activeEnvironment`
+## Screenshots & GIFs
 
-Use `{{name}}` in URLs, headers, and bodies. Mark sensitive values so UI and diagnostics mask them. Switch environments with **API Hero: Switch Environment**.
+_Screenshots and GIFs are not bundled in the VSIX yet._ Recommended captures from a real 1.0.0 build:
 
-## Authentication
+1. Request Editor + Response Viewer side by side (run affordance visible)
+2. Collections Activity Bar (filter / run optional)
+3. History view + detail panel
+4. Environment Manager or Auth Manager
+5. OpenAPI Import wizard or Collection Run Report
+6. Optional short GIF: create → run → history
 
-Define profiles in `apiRunner.authentication.profiles`. Prefer `kind: "secret"` sources (Secret Storage) over literals. Select a profile with **API Hero: Select Authentication Profile**.
+Asset guidance: [docs/marketplace/banner-placeholder.md](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/marketplace/banner-placeholder.md) · [marketplace-assets.md](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/release/marketplace-assets.md) · [marketplace-readiness-review.md](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/marketplace/marketplace-readiness-review.md)
 
-## Assertions
-
-Add expectation lines in the request block, for example:
-
-```http
-### Status OK
-GET https://httpbin.org/status/200
-
-expect status == 200
-expect responseTime < 5000
-```
-
-Run with **API Hero: Run Request with Assertions**. Failures appear in Problems under source **API Hero Assertions**.
+---
 
 ## Collections
 
-The **Collections** Activity Bar view lists `.api` files under each workspace folder. Refresh, reveal the active request, or run collection / folder / selected requests from the tree.
+Collections are workspace folders (typically under `Collections/`) plus optional markers. Create folders and requests from the tree, filter, run a collection or selection, and export/import collection directories for Git workflows.
+
+→ [Working with Collections](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/collections.md) · [Git workflow](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/git-workflow.md)
 
 ## History
 
-The **History** view stores recent runs (bounded by `apiRunner.history.maxEntries`). Open, re-run, search, delete, or clear history from the view toolbar and item menus.
+History stores metadata-safe summaries (masked presentation URLs). Open an entry for detail, re-run, reveal the original request, or copy a summary.
+
+→ [History](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/history.md)
+
+## Environments & variables
+
+Manage named environments in the **Environment Manager**. Variable precedence: **document → environment → workspace → global**. Mark sensitive variables so UI and presentation stay redacted.
+
+→ [Environments](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/environments.md) · [Variables](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/variables.md)
+
+## Authentication
+
+Create profiles (none, basic, bearer, API key) in **Manage Authentication**. Secrets use VS Code **Secret Storage**. Attach with `@auth profileName` or **Select Authentication**.
+
+→ [Authentication](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/authentication.md)
+
+## Assertions
+
+Add `expect` lines after a request. Run with assertions via CodeLens or **Run Request with Assertions**. Failures appear in the Response Viewer and **Problems**.
+
+→ [Assertions](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/assertions.md)
+
+## Response Viewer
+
+Professional inspection: status, timing, pretty/raw body, headers, assertion summary. Copy body or headers, save body to disk, search within the body.
+
+→ [Response Viewer](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/response-viewer.md)
+
+## Collection Runner
+
+Run many requests sequentially with progress UI. Configure `apiRunner.collectionRunner.failurePolicy` (`ask`, `stop-on-first-error`, `continue-on-error`, `skip-invalid-requests`). Review the **Run Report** panel when a run finishes.
+
+→ [Collection Runner](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/collection-runner.md)
 
 ## OpenAPI Import
 
-**API Hero: Import OpenAPI Specification** loads an OpenAPI 3.x JSON/YAML file (size limited by `apiRunner.import.maxFileBytes`), generates `.api` requests, and refreshes collections. Secrets become placeholders — configure Secret Storage afterward.
+**API Hero: Import OpenAPI Specification** opens a wizard: pick a spec, preview, write `.api` files and collection structure. Generation uses the same serializer as the Request Editor.
 
-## Commands
-
-All command IDs remain `apiRunner.*` (stable). Titles use the **API Hero:** prefix.
-
-Notable commands: Run Request, Run Request with Assertions, Switch Environment, Select Authentication Profile, Refresh Collections, Reveal Active Request, Run Collection / Folder / Selected Requests, History open/re-run/search/clear, Import OpenAPI Specification.
-
-Stubbed (coming soon — still registered for ID stability): Run File, Login, Logout.
+→ [OpenAPI Import](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/openapi-import.md)
 
 ## Keyboard shortcuts
 
-| Shortcut | Command |
+| Action | Shortcut |
 | --- | --- |
-| `Ctrl+Alt+R` / `Cmd+Alt+R` | Run Request (in `.api` editors) |
+| Run Request | `Ctrl+Alt+R` / `Cmd+Alt+R` (`.api` editor focused) |
 
-## FAQ
+More actions are available from the Command Palette (`API Hero: …`) and view title menus.
 
-**What is the extension ID?**  
-`ankitsemwal.api-hero` (publisher `ankitsemwal`, package `api-hero`). Command IDs and settings still use the `apiRunner.*` namespace for compatibility.
+## Configuration
 
-**Is GraphQL / WebSocket / AI supported?**  
-Not in this release. See Roadmap.
+Open **API Hero: Open Settings** or filter Settings with `@ext:ankitsemwal.api-hero`.
 
-**Where is the Marketplace icon?**  
-Shipped as `images/icon.png` (128×128) via `package.json` `"icon"`. Language file icons use the 16×16 light/dark SVGs under `images/`; the Activity Bar container currently uses `images/api-dark.svg` only.
+Notable keys: `apiRunner.requestTimeout`, `maxResponseBytes`, `history.maxEntries`, `environments`, `activeEnvironment`, `authentication.profiles`, `collectionRunner.failurePolicy`, `languageFeatures.*`.
+
+→ [Configuration reference](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/reference/configuration.md)
+
+## Comparison (short)
+
+| | API Hero | Typical SaaS API clients |
+| --- | --- | --- |
+| Storage | `.api` + folders in your repo | Proprietary cloud/local DB |
+| Diff / PR | Native Git | Export/sync friction |
+| Editor | VS Code native + custom editor | Separate app |
+| Secrets | VS Code Secret Storage | Vendor vault / plaintext risk |
+
+## Architecture overview
+
+```text
+.api source → Parser → Request builder → Variables → Auth → Executor → Response / Assertions / History
+                                      ↘ Collections tree / Runner / OpenAPI / Overview (VS Code adapters)
+```
+
+→ [Architecture](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/architecture/README.md) · [Development](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/development/README.md)
 
 ## Roadmap
 
-- Run File (all requests in editor)
-- Login / Logout UX polish for auth workflows
-- Marketplace screenshots and banner capture
-- Optional deferred activation of heavy UI modules
-
-Out of scope for current architecture: GraphQL, AI assist, WebSocket live sessions, standalone CLI.
+Near term: Marketplace screenshots/GIFs, sample collections, Walkthrough contribution, Run File, richer auth (OAuth) when ready. See [roadmap](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/product/roadmap.md).
 
 ## Contributing
 
-Issues and feature requests: [GitHub Issues](https://github.com/AnkitSemwal007/API-Hero/issues). See [SUPPORT.md](SUPPORT.md). Internal command IDs (`apiRunner.*`), configuration keys, language id `api`, and grammar `source.api-runner` remain stable for compatibility.
+See [CONTRIBUTING.md](CONTRIBUTING.md) and [development docs](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/development/README.md). Stable contribution IDs must not change casually — [stable-identifiers.md](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/release/stable-identifiers.md).
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+[MIT](LICENSE)
+
+## Support
+
+[SUPPORT.md](SUPPORT.md) · [GitHub Issues](https://github.com/AnkitSemwal007/API-Hero/issues)

@@ -39,6 +39,22 @@ export interface RequestSourceVariable {
 }
 
 /**
+ * `@extract` / `@sensitive-extract` rule for request-source round-trip.
+ * Authored `from` mirrors the directive source (e.g. `body.token`, `header X-Id`, `status`).
+ */
+export interface RequestSourceExtractionRule {
+  readonly name: string;
+  /** Source path as authored, e.g. `body.access_token`, `header X-Request-Id`, `status`. */
+  readonly from: string;
+  /** Omit → `run` on serialize/parse. */
+  readonly scope?: 'run' | 'document' | 'collection' | 'environment' | 'workspace';
+  readonly sensitive?: boolean;
+  readonly optional?: boolean;
+  readonly when?: string;
+  readonly enabled?: boolean;
+}
+
+/**
  * Body payload kinds. Multipart and binary emit reasonable stubs until the
  * Custom Text Editor owns richer editing.
  */
@@ -90,6 +106,7 @@ export interface RequestSourceDocument {
    */
   readonly expectLines?: readonly string[];
   readonly variables?: readonly RequestSourceVariable[];
+  readonly extractionRules?: readonly RequestSourceExtractionRule[];
   /**
    * Optional `@timeout` in milliseconds. Omitted from source when undefined.
    * There is no follow-redirects directive in the `.api` format.

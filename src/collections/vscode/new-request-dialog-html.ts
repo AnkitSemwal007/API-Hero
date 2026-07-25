@@ -8,6 +8,7 @@ import {
   buildNonceOnlyCsp,
   escapeAttribute,
   isWebviewMessageRecord,
+  WEBVIEW_SHARED_CSS,
 } from '../../ui/webview';
 
 export { escapeAttribute };
@@ -152,39 +153,47 @@ export function renderNewRequestDialogHtml(nonce: string): string {
 <main>
   <header>
     <h1>New Request</h1>
-    <p class="subtitle">Create a new <code>.api</code> request in a collection.</p>
+    <p class="subtitle muted">Add a request to a collection.</p>
   </header>
   <form id="form" novalidate>
-    <label class="field">
-      <span>Request name</span>
-      <input id="name" type="text" autocomplete="off" required placeholder="New Request" />
+    <label class="field name-field">
+      <span>Name</span>
+      <input id="name" type="text" autocomplete="off" required placeholder="Get users" />
     </label>
-    <div class="row">
+    <div class="row request-line" role="group" aria-label="Method and URL">
       <label class="field method">
         <span>Method</span>
-        <select id="method">${methodOptions}</select>
+        <select id="method" class="method-select method-get">${methodOptions}</select>
       </label>
       <label class="field grow">
         <span>URL</span>
-        <input id="url" type="text" autocomplete="off" required placeholder="https://httpbin.org/get" />
+        <input id="url" type="text" autocomplete="off" required placeholder="https://api.example.com/users" />
       </label>
     </div>
-    <label class="field">
-      <span>Description <em>(optional)</em></span>
-      <textarea id="description" rows="2" placeholder="Short description"></textarea>
-    </label>
-    <label class="field">
-      <span>Collection</span>
-      <select id="collection" required></select>
-    </label>
-    <label class="field">
-      <span>Folder</span>
-      <select id="folder"></select>
-    </label>
+    <fieldset class="destination">
+      <legend>Save to</legend>
+      <div class="row destination-row">
+        <label class="field grow">
+          <span>Collection</span>
+          <select id="collection" required></select>
+        </label>
+        <label class="field grow">
+          <span>Folder</span>
+          <select id="folder"></select>
+        </label>
+      </div>
+    </fieldset>
+    <details class="optional">
+      <summary>Description <span class="optional-hint">optional</span></summary>
+      <label class="field">
+        <span class="sr-only">Description</span>
+        <textarea id="description" rows="2" placeholder="Short note about this request"></textarea>
+      </label>
+    </details>
     <p id="error" class="error" hidden></p>
     <footer>
-      <button type="button" id="cancel" class="secondary">Cancel</button>
-      <button type="submit" id="create" class="primary">Create</button>
+      <button type="button" id="cancel">Cancel</button>
+      <button type="submit" id="create" class="primary">Create Request</button>
     </footer>
   </form>
 </main>
@@ -194,6 +203,7 @@ export function renderNewRequestDialogHtml(nonce: string): string {
 }
 
 const DIALOG_CSS = `
+${WEBVIEW_SHARED_CSS}
 :root { color-scheme: light dark; }
 * { box-sizing: border-box; }
 body {
@@ -202,36 +212,74 @@ body {
   background: var(--vscode-editor-background);
   font-family: var(--vscode-font-family);
   font-size: var(--vscode-font-size);
+  line-height: 1.4;
 }
-main { max-width: 560px; margin: 0 auto; padding: 20px 22px 24px; }
-header { margin-bottom: 18px; }
-h1 { margin: 0 0 6px; font-size: 1.25rem; font-weight: 600; }
-.subtitle { margin: 0; color: var(--vscode-descriptionForeground); }
-.subtitle code {
-  font-family: var(--vscode-editor-font-family);
-  font-size: .92em;
-}
-form { display: grid; gap: 14px; }
-.row { display: flex; gap: 12px; align-items: end; }
-.field { display: grid; gap: 6px; }
+main { max-width: 520px; margin: 0 auto; padding: var(--ah-space-5) var(--ah-space-4) var(--ah-space-4); }
+header { margin-bottom: var(--ah-space-4); }
+h1 { margin: 0 0 var(--ah-space-1); font-size: 1.15rem; font-weight: 600; }
+.subtitle { margin: 0; color: var(--vscode-descriptionForeground); font-size: .92em; }
+form { display: grid; gap: var(--ah-space-3); }
+.row { display: flex; gap: var(--ah-space-2); align-items: end; }
+.field { display: grid; gap: var(--ah-space-1); }
 .field.grow { flex: 1; min-width: 0; }
-.field.method { width: 118px; flex: 0 0 118px; }
-.field span { color: var(--vscode-descriptionForeground); font-size: .9em; }
-.field em { font-style: normal; opacity: .8; }
+.field.method { width: 108px; flex: 0 0 108px; }
+.field span { color: var(--vscode-descriptionForeground); font-size: .85em; }
+.name-field input { font-size: 1.05em; font-weight: 500; }
 input, select, textarea {
   width: 100%;
   color: var(--vscode-input-foreground);
   background: var(--vscode-input-background);
   border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
-  border-radius: 2px;
-  padding: 7px 9px;
+  border-radius: var(--ah-radius);
+  padding: 6px 8px;
   font: inherit;
 }
-textarea { resize: vertical; min-height: 56px; }
-input:focus, select:focus, textarea:focus {
+textarea { resize: vertical; min-height: 48px; }
+input:focus, select:focus, textarea:focus, summary:focus-visible {
   outline: 1px solid var(--vscode-focusBorder);
   outline-offset: -1px;
 }
+.destination {
+  margin: 0;
+  padding: var(--ah-space-3);
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: var(--ah-radius);
+  background: var(--vscode-sideBar-background);
+}
+.destination legend {
+  padding: 0 var(--ah-space-1);
+  color: var(--vscode-descriptionForeground);
+  font-size: .75em;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.destination-row { gap: var(--ah-space-3); }
+.optional {
+  border: none;
+  padding: 0;
+  margin: 0;
+}
+.optional summary {
+  cursor: pointer;
+  color: var(--vscode-descriptionForeground);
+  font-size: .9em;
+  user-select: none;
+  list-style: none;
+}
+.optional summary::-webkit-details-marker { display: none; }
+.optional summary::before {
+  content: '▸';
+  display: inline-block;
+  margin-right: 6px;
+  transition: transform .1s ease;
+}
+.optional[open] summary::before { transform: rotate(90deg); }
+.optional-hint {
+  opacity: .75;
+  font-size: .9em;
+}
+.optional .field { margin-top: var(--ah-space-2); }
 .error {
   margin: 0;
   color: var(--vscode-errorForeground, var(--vscode-editorError-foreground));
@@ -240,32 +288,15 @@ input:focus, select:focus, textarea:focus {
 footer {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
-  margin-top: 4px;
-  padding-top: 8px;
+  gap: var(--ah-space-2);
+  margin-top: var(--ah-space-1);
+  padding-top: var(--ah-space-3);
   border-top: 1px solid var(--vscode-panel-border);
 }
-button {
-  border: 1px solid var(--vscode-contrastBorder, transparent);
-  border-radius: 2px;
-  padding: 6px 14px;
-  font: inherit;
-  cursor: pointer;
-}
-button.primary {
-  color: var(--vscode-button-foreground);
-  background: var(--vscode-button-background);
-}
-button.primary:hover { background: var(--vscode-button-hoverBackground); }
-button.secondary {
-  color: var(--vscode-button-secondaryForeground);
-  background: var(--vscode-button-secondaryBackground);
-}
-button.secondary:hover { background: var(--vscode-button-secondaryHoverBackground); }
-button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: 2px; }
-button:disabled { opacity: .55; cursor: default; }
+footer button { min-width: 4.5rem; }
+footer button.primary { min-width: 8rem; }
 @media (max-width: 480px) {
-  .row { flex-direction: column; align-items: stretch; }
+  .row, .destination-row { flex-direction: column; align-items: stretch; }
   .field.method { width: 100%; flex: 1; }
 }
 `;
@@ -287,6 +318,12 @@ const DIALOG_SCRIPT = `
   const errorEl = document.getElementById('error');
   const createBtn = document.getElementById('create');
   const cancelBtn = document.getElementById('cancel');
+
+  function syncMethodSelect() {
+    const map = { GET: 'get', POST: 'post', PUT: 'put', PATCH: 'patch', DELETE: 'delete', HEAD: 'head', OPTIONS: 'options' };
+    const key = map[String(methodSelect.value || '').trim().toUpperCase()] || 'other';
+    methodSelect.className = 'method-select method-' + key;
+  }
 
   function showError(message) {
     if (!message) {
@@ -362,6 +399,7 @@ const DIALOG_SCRIPT = `
     if (next.defaultMethod) {
       methodSelect.value = next.defaultMethod;
     }
+    syncMethodSelect();
     fillCollections();
     fillFolders();
     showError('');
@@ -369,12 +407,20 @@ const DIALOG_SCRIPT = `
     nameInput.select();
   }
 
+  methodSelect.addEventListener('change', syncMethodSelect);
   collectionSelect.addEventListener('change', () => {
     fillFolders();
   });
 
   cancelBtn.addEventListener('click', () => {
     vscode.postMessage({ type: 'cancel' });
+  });
+
+  window.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      vscode.postMessage({ type: 'cancel' });
+    }
   });
 
   form.addEventListener('submit', (event) => {

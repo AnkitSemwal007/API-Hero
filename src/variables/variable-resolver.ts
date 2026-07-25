@@ -62,11 +62,14 @@ export interface VariableResolver {
   ): RequestResolutionResult;
 }
 
+/** Higher number wins. ADR-0001: run > document > environment > collection > workspace > global */
 const PRECEDENCE = Object.freeze({
   global: 0,
   workspace: 1,
-  environment: 2,
-  document: 3,
+  collection: 2,
+  environment: 3,
+  document: 4,
+  run: 5,
 });
 const REFERENCE = /\{\{(\$?[A-Za-z_][A-Za-z0-9_.-]*)\}\}/gu;
 const NAME = /^[A-Za-z_][A-Za-z0-9_.-]*$/u;

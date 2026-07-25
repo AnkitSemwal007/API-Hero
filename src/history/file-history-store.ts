@@ -27,6 +27,8 @@ export interface HistoryStorageFs {
    * Other I/O failures (permission, disk, etc.) must return false so callers can rethrow.
    */
   isMissingFileError(error: unknown): boolean;
+  /** Optional — rename/quarantine corrupt history before rewriting. */
+  rename?(fromUri: string, toUri: string): Promise<void>;
 }
 
 /**
@@ -37,17 +39,21 @@ export class FileHistoryStore implements HistoryRepository {
   private readonly storageRoot: string;
   private readonly fileUri: string;
   private readonly fs: HistoryStorageFs;
+  private readonly onWarning: (message: string) => void;
   private maxEntries: number;
   private cache: HistoryEntry[] | undefined;
   private writeQueue: Promise<void> = Promise.resolve();
+  private corruptWarned = false;
 
   public constructor(
     storageRoot: string,
     fs: HistoryStorageFs,
     maxEntries = 1_000,
+    onWarning: (message: string) => void = () => undefined,
   ) {
     this.storageRoot = storageRoot;
     this.fs = fs;
+    this.onWarning = onWarning;
     this.fileUri = fs.joinPath(storageRoot, STORAGE_KEYS.requestHistoryFile);
     this.maxEntries = normalizeRetention(maxEntries);
   }
@@ -144,12 +150,44 @@ export class FileHistoryStore implements HistoryRepository {
     }
     try {
       const text = Buffer.from(bytes).toString('utf8');
-      return migrateHistoryDocument(JSON.parse(text) as unknown);
+      const parsed = JSON.parse(text) as unknown;
+      if (!isUsableHistoryDocument(parsed)) {
+        await this.quarantineCorruptHistory();
+        return emptyHistoryDocument();
+      }
+      return migrateHistoryDocument(parsed);
     } catch (error) {
       if (error instanceof SyntaxError) {
+        await this.quarantineCorruptHistory();
         return emptyHistoryDocument();
       }
       throw error;
+    }
+  }
+
+  /**
+   * Renames a corrupt/unknown-schema history file to `.bak` before any write
+   * so the next persist does not silently destroy recoverable data.
+   */
+  private async quarantineCorruptHistory(): Promise<void> {
+    const backupUri = `${this.fileUri}.bak`;
+    try {
+      if (this.fs.rename !== undefined) {
+        await this.fs.rename(this.fileUri, backupUri);
+      } else {
+        const bytes = await this.fs.readFile(this.fileUri);
+        await this.fs.writeFile(backupUri, bytes);
+        // Leave the original in place until the next persist overwrites it;
+        // callers still treat the store as empty after quarantine.
+      }
+    } catch {
+      // Best-effort quarantine — empty document is still returned.
+    }
+    if (!this.corruptWarned) {
+      this.corruptWarned = true;
+      this.onWarning(
+        `API Hero: request history was corrupt or used an unknown schema; quarantined to ${backupUri}.`,
+      );
     }
   }
 
@@ -178,11 +216,13 @@ export function createFileHistoryStore(options: {
   readonly storageRoot: string;
   readonly fs: HistoryStorageFs;
   readonly maxEntries?: number;
+  readonly onWarning?: (message: string) => void;
 }): FileHistoryStore {
   return new FileHistoryStore(
     options.storageRoot,
     options.fs,
     options.maxEntries,
+    options.onWarning,
   );
 }
 
@@ -193,4 +233,16 @@ function trimEntries(
   return entries.length <= maxEntries
     ? [...entries]
     : entries.slice(0, maxEntries);
+}
+
+/** True when the on-disk document has a recognized schema envelope. */
+function isUsableHistoryDocument(raw: unknown): boolean {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+    return false;
+  }
+  const record = raw as Record<string, unknown>;
+  return (
+    record.schemaVersion === HISTORY_SCHEMA_VERSION &&
+    Array.isArray(record.entries)
+  );
 }

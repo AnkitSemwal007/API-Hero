@@ -54,6 +54,7 @@ export type {
 } from './pipeline';
 
 export {
+  rollbackWrittenFiles,
   writeImportArtifacts,
 } from './workspace-writer';
 export type {

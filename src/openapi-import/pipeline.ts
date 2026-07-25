@@ -25,6 +25,7 @@ import {
 } from './providers';
 import { maskImportSecretText } from './sanitize';
 import {
+  rollbackWrittenFiles,
   writeImportArtifacts,
   type WorkspaceFileWriter,
 } from './workspace-writer';
@@ -58,6 +59,11 @@ export interface ImportPipelineOptions {
   /** When set, only this provider is used; otherwise auto-detect. */
   readonly provider?: SpecificationImportProvider;
   readonly registry?: SpecificationImportProviderRegistry;
+  /**
+   * When true, allow writing into an existing non-empty output directory.
+   * Wizard should confirm overwrite before setting this.
+   */
+  readonly overwrite?: boolean;
 }
 
 export interface ImportPipelineResult {
@@ -229,6 +235,7 @@ export async function runImportPipeline(
     files: artifacts.files,
     writer: options.writer,
     cancellation: options.cancellation,
+    ...(options.overwrite === true ? { overwrite: true } : {}),
   });
   diagnostics.push(...written.diagnostics);
 
@@ -236,13 +243,20 @@ export async function runImportPipeline(
     return {
       summary: {
         ...cancelledSummary(written.targetDirectory, diagnostics, artifacts),
-        writtenFiles: written.writtenFiles,
+        writtenFiles: [],
       },
       artifacts,
     };
   }
 
   if (hasErrorDiagnostic(diagnostics)) {
+    if (written.writtenFiles.length > 0) {
+      await rollbackWrittenFiles(
+        options.writer,
+        written.writtenFiles,
+        written.targetDirectory,
+      );
+    }
     return {
       summary: {
         apiName: artifacts.apiName,
@@ -254,7 +268,7 @@ export async function runImportPipeline(
         variableCount: 0,
         authProfileCount: artifacts.authProfiles.length,
         environmentCount: artifacts.environments.length,
-        writtenFiles: written.writtenFiles,
+        writtenFiles: [],
         diagnostics: maskDiagnostics(diagnostics),
         cancelled: false,
         success: false,

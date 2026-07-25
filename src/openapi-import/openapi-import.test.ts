@@ -1,5 +1,14 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import {
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  rm,
+  rmdir,
+  unlink,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { performance } from 'node:perf_hooks';
@@ -155,6 +164,36 @@ function memoryWriter(root: string): WorkspaceFileWriter {
         `write escaped root: ${absolutePath}`,
       );
       await writeFile(absolutePath, content, 'utf8');
+    },
+    async deleteFile(absolutePath: string): Promise<void> {
+      await unlink(absolutePath);
+    },
+    async removeDirectory(absolutePath: string): Promise<void> {
+      await rmdir(absolutePath);
+    },
+    async exists(absolutePath: string): Promise<boolean> {
+      try {
+        await readdir(absolutePath);
+        return true;
+      } catch {
+        try {
+          await readFile(absolutePath);
+          return true;
+        } catch {
+          return false;
+        }
+      }
+    },
+    async isNonEmptyDirectory(absolutePath: string): Promise<boolean> {
+      try {
+        const entries = await readdir(absolutePath);
+        return entries.length > 0;
+      } catch {
+        return false;
+      }
+    },
+    async listDirectory(absolutePath: string): Promise<readonly string[]> {
+      return readdir(absolutePath);
     },
   };
 }
@@ -351,7 +390,87 @@ test('rejects path traversal during write via unsafe relative paths', async () =
     assert.ok(
       written.diagnostics.some((item) => item.code === 'path-traversal'),
     );
+    // Path-traversal aborts and rolls back any prior writes in the batch.
+    assert.equal(written.writtenFiles.length, 0);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('rolls back partial writes when cancelled mid-write', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'api-hero-cancel-write-'));
+  try {
+    let writes = 0;
+    const cancellation = {
+      get isCancellationRequested(): boolean {
+        return writes >= 1;
+      },
+    };
+    const base = memoryWriter(root);
+    const writer: WorkspaceFileWriter = {
+      ...base,
+      async writeFile(absolutePath, content) {
+        await base.writeFile(absolutePath, content);
+        writes += 1;
+      },
+    };
+    const written = await writeImportArtifacts({
+      targetRoot: root,
+      outputDirectoryName: 'Collections/pets',
+      files: [
+        { relativePath: 'a.api', content: 'GET /a\n' },
+        { relativePath: 'b.api', content: 'GET /b\n' },
+      ],
+      writer,
+      cancellation,
+    });
+    assert.equal(written.cancelled, true);
+    assert.equal(written.writtenFiles.length, 0);
+    const target = join(root, 'Collections', 'pets');
+    await assert.rejects(() => readdir(target));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('refuses non-empty target directory without overwrite', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'api-hero-overwrite-'));
+  try {
+    const target = join(root, 'Collections', 'pets');
+    await mkdir(target, { recursive: true });
+    await writeFile(join(target, 'existing.api'), 'GET /\n', 'utf8');
+    const written = await writeImportArtifacts({
+      targetRoot: root,
+      outputDirectoryName: 'Collections/pets',
+      files: [{ relativePath: 'new.api', content: 'GET /new\n' }],
+      writer: memoryWriter(root),
+    });
+    assert.equal(written.writtenFiles.length, 0);
+    assert.ok(written.diagnostics.some((item) => item.code === 'target-exists'));
+    assert.equal(await readFile(join(target, 'existing.api'), 'utf8'), 'GET /\n');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('overwrite clears prior artifacts before writing', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'api-hero-overwrite-clear-'));
+  try {
+    const target = join(root, 'Collections', 'pets');
+    await mkdir(join(target, 'nested'), { recursive: true });
+    await writeFile(join(target, 'orphan.api'), 'GET /orphan\n', 'utf8');
+    await writeFile(join(target, 'nested', 'old.api'), 'GET /old\n', 'utf8');
+    const written = await writeImportArtifacts({
+      targetRoot: root,
+      outputDirectoryName: 'Collections/pets',
+      files: [{ relativePath: 'fresh.api', content: 'GET /fresh\n' }],
+      writer: memoryWriter(root),
+      overwrite: true,
+    });
     assert.equal(written.writtenFiles.length, 1);
+    assert.equal(await readFile(join(target, 'fresh.api'), 'utf8'), 'GET /fresh\n');
+    await assert.rejects(() => readFile(join(target, 'orphan.api'), 'utf8'));
+    await assert.rejects(() => readFile(join(target, 'nested', 'old.api'), 'utf8'));
   } finally {
     await rm(root, { recursive: true, force: true });
   }

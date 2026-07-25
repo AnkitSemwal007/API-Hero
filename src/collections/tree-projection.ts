@@ -28,6 +28,8 @@ export interface CollectionTreeNode {
   readonly collectionId?: string;
   readonly workspaceRootId?: string;
   readonly folderId?: string;
+  /** Folder relative path (filter/tooltips); not always shown in description. */
+  readonly relativePath?: string;
   /** HTTP method for request nodes (e.g. GET), used for description/icons. */
   readonly method?: string;
 }
@@ -148,7 +150,7 @@ export function getFilteredTreeChildren(
   );
 }
 
-/** Case-insensitive match against label, description, method, and request id. */
+/** Case-insensitive match against label, description, path, method, and ids. */
 export function nodeMatchesFilter(
   node: CollectionTreeNode,
   normalizedQuery: string,
@@ -156,6 +158,7 @@ export function nodeMatchesFilter(
   const haystacks = [
     node.label,
     node.description,
+    node.relativePath,
     node.method,
     node.requestId,
   ];
@@ -217,11 +220,33 @@ function projectCollection(
 }
 
 function projectFolder(folder: Folder): CollectionTreeNode {
+  const childRequests = folder.requestIds.length;
+  const childFolders = folder.folderIds.length;
+  const countParts: string[] = [];
+  if (childRequests > 0) {
+    countParts.push(
+      childRequests === 1 ? '1 request' : `${childRequests} requests`,
+    );
+  }
+  if (childFolders > 0) {
+    countParts.push(
+      childFolders === 1 ? '1 folder' : `${childFolders} folders`,
+    );
+  }
+  const description =
+    countParts.length > 0
+      ? countParts.join(' · ')
+      : folder.relativePath.length > 0
+        ? folder.relativePath
+        : undefined;
   return {
     id: folder.id,
     kind: 'folder',
     label: folder.display.label,
-    description: folder.relativePath,
+    ...(description === undefined ? {} : { description }),
+    ...(folder.relativePath.length > 0
+      ? { relativePath: folder.relativePath }
+      : {}),
     collapsible: folder.folderIds.length > 0 || folder.requestIds.length > 0,
     collectionId: folder.collectionId,
     folderId: folder.id,
@@ -231,11 +256,13 @@ function projectFolder(folder: Folder): CollectionTreeNode {
 function projectRequest(request: RequestReference): CollectionTreeNode {
   const method = request.method.trim().toUpperCase();
   const path = request.url.trim();
+  const name = request.display.label.trim();
+  const description = formatRequestDescription(method, path);
   return {
     id: request.id,
     kind: 'request',
-    label: request.display.label,
-    description: formatRequestDescription(method, path),
+    label: name.length > 0 ? name : 'Request',
+    description: description.length > 0 ? description : undefined,
     collapsible: false,
     requestId: request.id,
     collectionId: request.collectionId,
@@ -244,7 +271,10 @@ function projectRequest(request: RequestReference): CollectionTreeNode {
   };
 }
 
-/** Formats a request tree description as `GET · /path`. */
+/**
+ * Formats description as method · path for proportional-font tree scanning
+ * (`GET · /users`, `POST · /users`).
+ */
 export function formatRequestDescription(method: string, url: string): string {
   const normalizedMethod = method.trim().toUpperCase();
   const path = url.trim();
@@ -259,11 +289,73 @@ export function findTreeNodeByRequestId(
   aggregate: WorkspaceCollections,
   requestId: string,
 ): CollectionTreeNode | undefined {
+  return findTreeNode(
+    aggregate,
+    (node) => node.kind === 'request' && node.requestId === requestId,
+  );
+}
+
+/** Locates a collection root node by collection id. */
+export function findTreeNodeByCollectionId(
+  aggregate: WorkspaceCollections,
+  collectionId: string,
+): CollectionTreeNode | undefined {
+  return findTreeNode(
+    aggregate,
+    (node) => node.kind === 'collection' && node.id === collectionId,
+  );
+}
+
+/** Locates a folder node by collection id + relative path. */
+export function findTreeNodeByFolderPath(
+  aggregate: WorkspaceCollections,
+  collectionId: string,
+  relativePath: string,
+): CollectionTreeNode | undefined {
+  const collection = aggregate.collections[collectionId];
+  if (collection === undefined) {
+    return undefined;
+  }
+  const folder = Object.values(collection.folders).find(
+    (entry) => entry.relativePath === relativePath,
+  );
+  if (folder === undefined) {
+    return undefined;
+  }
+  return findTreeNode(
+    aggregate,
+    (node) =>
+      node.kind === 'folder' &&
+      node.collectionId === collectionId &&
+      node.folderId === folder.id,
+  );
+}
+
+/** Locates a request node by absolute/file URI path. */
+export function findTreeNodeByRequestFilePath(
+  aggregate: WorkspaceCollections,
+  filePath: string,
+): CollectionTreeNode | undefined {
+  const normalized = filePath.replace(/\\/gu, '/');
+  for (const collection of Object.values(aggregate.collections)) {
+    for (const request of Object.values(collection.requests)) {
+      if (request.filePath.replace(/\\/gu, '/') === normalized) {
+        return findTreeNodeByRequestId(aggregate, request.id);
+      }
+    }
+  }
+  return undefined;
+}
+
+function findTreeNode(
+  aggregate: WorkspaceCollections,
+  predicate: (node: CollectionTreeNode) => boolean,
+): CollectionTreeNode | undefined {
   const walk = (
     parent: CollectionTreeNode | undefined,
   ): CollectionTreeNode | undefined => {
     for (const child of getTreeChildren(aggregate, parent)) {
-      if (child.kind === 'request' && child.requestId === requestId) {
+      if (predicate(child)) {
         return child;
       }
       if (child.collapsible) {

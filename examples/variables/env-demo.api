@@ -1,0 +1,6 @@
+@variable baseUrl = https://httpbin.org
+@variable userId = 42
+
+### Whoami style query
+GET {{baseUrl}}/get?userId={{userId}}
+Accept: application/json

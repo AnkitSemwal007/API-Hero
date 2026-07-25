@@ -21,6 +21,7 @@ import {
   isLegacyTreeTarget,
   joinPathKey,
   legacyCollectionIdForWorkspace,
+  nodeMatchesFilter,
   normalizeFilterQuery,
   normalizePathKey,
   normalizeRelativePath,
@@ -708,6 +709,8 @@ test('tree projection uses collections as roots', async () => {
   const children = getTreeChildren(aggregate, roots[0]);
   assert.equal(children[0]?.kind, 'folder');
   assert.equal(children[0]?.label, 'folder');
+  assert.equal(children[0]?.description, '1 request');
+  assert.equal(children[0]?.relativePath, 'folder');
   assert.equal(children.at(-1)?.kind, 'request');
 
   const folderChildren = getTreeChildren(aggregate, children[0]);
@@ -733,6 +736,23 @@ test('formatRequestDescription uses method middle-dot path', () => {
   assert.equal(formatRequestDescription('get', '/users'), 'GET · /users');
   assert.equal(formatRequestDescription('POST', ''), 'POST');
   assert.equal(formatRequestDescription('', '/x'), '/x');
+});
+
+test('nodeMatchesFilter matches folder relativePath when description is counts', () => {
+  const folder = {
+    id: 'folder:demo:nested',
+    kind: 'folder' as const,
+    label: 'nested',
+    description: '1 request',
+    relativePath: 'Collections/Demo/nested',
+    collapsible: true,
+    collectionId: 'c1',
+    folderId: 'f1',
+  };
+  assert.equal(nodeMatchesFilter(folder, 'nested'), true);
+  assert.equal(nodeMatchesFilter(folder, 'collections/demo'), true);
+  assert.equal(nodeMatchesFilter(folder, '1 request'), true);
+  assert.equal(nodeMatchesFilter(folder, 'missing'), false);
 });
 
 test('normalizeFilterQuery trims empty queries to undefined', () => {

@@ -1,0 +1,9 @@
+### Zen
+GET https://api.github.com/zen
+User-Agent: api-hero-examples
+Accept: application/vnd.github+json
+
+### Public repo
+GET https://api.github.com/repos/microsoft/vscode
+User-Agent: api-hero-examples
+Accept: application/vnd.github+json

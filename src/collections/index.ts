@@ -85,6 +85,8 @@ export {
   sanitizeDirectoryName,
   sanitizeRequestFileName,
   stripApiExtension,
+  validateCollectionDirectoryName,
+  validateDirectoryName,
 } from './mutation';
 export type {
   CollectionDirectoryEntry,
@@ -116,6 +118,9 @@ export {
 export type { NavigationIndex } from './navigation';
 
 export {
+  findTreeNodeByCollectionId,
+  findTreeNodeByFolderPath,
+  findTreeNodeByRequestFilePath,
   findTreeNodeByRequestId,
   formatRequestDescription,
   getFilteredTreeChildren,

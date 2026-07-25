@@ -25,19 +25,38 @@ VS Code adapters live in `src/request-editor/vscode/`.
 | Headers | Key / Value / Enabled (disabled → `# Name: value`) |
 | Body | none / json / text / form / raw / multipart / binary |
 | Auth | Profile dropdown → `@auth <id>` (no secrets in webview) |
-| Variables | `@variable` rows, `{{name}}` insert, read-only resolution preview |
-| Tests | Structured UI → `expect …` lines |
+| Variables | `@variable` rows, `{{name}}` insert, read-only resolution preview, IntelliSense |
+| Tests | Structured UI → `expect …` lines; assertion value field supports `{{vars}}` |
 | Settings | `@timeout` only (no invented directives) |
 | Preview | Read-only current document text |
 
+Variable IntelliSense is available in URL, headers, params, body, variables,
+and test value fields. Typing `{{` opens suggestions from the host catalog
+(`variableCompletions`); selecting a name inserts `{{name}}` without
+duplicating braces. Sensitive values never appear in the popup or inline
+resolved preview.
+
 ## Sync
 
-1. **Form → text:** webview posts `updateModel` (debounced) → host serializes →
-   full-document `WorkspaceEdit`. The written document version is recorded so
-   the resulting change event is ignored (no echo loop).
-2. **Text → form:** `onDidChangeTextDocument` (debounced) → re-parse →
-   `state` message refreshes the form.
-3. Version checks drop stale form edits when the buffer moved ahead.
+1. **Form → text:** webview posts `updateModel` (debounced 300ms). The host
+   applies immediately (no second debounce), serializing concurrent applies and
+   keeping only the latest pending model. After a successful `WorkspaceEdit`
+   (or when content is unchanged), the host posts `ack` with the new
+   `documentVersion` and redacted `sourceText` — the webview updates version /
+   Preview only and does **not** rewrite form inputs. Form-originated document
+   versions are ignored so change events do not echo into a full state refresh.
+2. **Text → form:** `onDidChangeTextDocument` (debounced) for external edits →
+   re-parse → full `state` message refreshes the form (`applyState`). Full state
+   is also sent on `ready` / init and when parse mode is not single-request.
+3. **Version mismatch:** if `updateModel.documentVersion` does not match the
+   buffer, the host posts `resubmit` with the current version. The webview
+   updates `documentVersion`, clears its debounce timer, and immediately posts
+   `updateModel` with `currentModel()` (no debounce).
+4. **`applyState` safeguards:** clears any pending form→host debounce; skips
+   overwriting the focused field; only updates fields/tables when values differ.
+   When focus is inside a table or list, the **entire** table/list is skipped
+   (not just the focused cell/row) — accepted limitation for now. Form fields
+   that were focus-skipped flush to the host on `blur` via `scheduleUpdate`.
 
 ## Multi-request files
 

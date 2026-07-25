@@ -1,5 +1,14 @@
-/** Deterministic variable scopes, ordered from lowest to highest precedence. */
-export type VariableScope = 'global' | 'workspace' | 'environment' | 'document';
+/**
+ * Deterministic variable scopes. Precedence is owned by VariableResolver.
+ * Scopes are listed low→high in prose elsewhere; do not rely on union order.
+ */
+export type VariableScope =
+  | 'global'
+  | 'workspace'
+  | 'collection'
+  | 'environment'
+  | 'document'
+  | 'run';
 
 export type VariableSource = VariableScope;
 

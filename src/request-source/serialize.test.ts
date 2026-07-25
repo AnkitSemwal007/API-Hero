@@ -191,6 +191,47 @@ GET https://httpbin.org/get
     assert.match(source, /@variable tenant=acme\n/u);
     assert.match(source, /@sensitive-variable token=sekrit\n/u);
   });
+
+  test('emits @extract / @sensitive-extract after variables before the blank line', () => {
+    const source = serializeRequestDocument({
+      name: 'Login',
+      method: 'POST',
+      url: 'https://example.test/login',
+      variables: [{ name: 'tenant', value: 'acme' }],
+      extractionRules: [
+        { name: 'accessToken', from: 'body.access_token' },
+        {
+          name: 'refreshToken',
+          from: 'body.refresh_token',
+          scope: 'environment',
+          sensitive: true,
+        },
+        {
+          name: 'productId',
+          from: 'body.data[0].id',
+          scope: 'document',
+          optional: true,
+        },
+        {
+          name: 'requestId',
+          from: 'header X-Request-Id',
+          when: 'status:2xx',
+        },
+        { name: 'code', from: 'status' },
+        {
+          name: 'disabled',
+          from: 'body.x',
+          enabled: false,
+        },
+      ],
+    });
+    assert.match(
+      source,
+      /@variable tenant=acme\n@extract accessToken from body\.access_token\n@sensitive-extract refreshToken from body\.refresh_token scope=environment\n@extract productId from body\.data\[0\]\.id scope=document optional\n@extract requestId from header X-Request-Id when=status:2xx\n@extract code from status\n\nPOST /u,
+    );
+    assert.doesNotMatch(source, /@extract disabled/u);
+    assert.doesNotMatch(source, /scope=run/u);
+  });
 });
 
 test('serializePlaceholderRequest matches Phase 1b shape', () => {

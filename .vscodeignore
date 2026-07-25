@@ -1,15 +1,47 @@
+# VCS / editor / agent
 .git/**
 .github/**
 .vscode/**
 .cursor/**
+.cursorrules
 .gitignore
-eslint.config.mjs
+
+# Source & build tooling (runtime is dist/)
 src/**
 scripts/**
-docs/**
-coverage/**
 tsconfig.json
+eslint.config.mjs
 package-lock.json
-dist/**/*.test.js
+
+# Tests & coverage
+coverage/**
+.nyc_output/**
+**/*.test.js
+**/*.test.d.ts
+**/__tests__/**
+
+# Source maps & TypeScript (ship compiled JS only)
 **/*.map
 **/*.ts
+
+# Docs / examples not required on Marketplace
+docs/**
+examples/**
+RELEASE.md
+CONTRIBUTING.md
+
+# Release artifacts, logs, temp, backups, design sources
+release/**
+*.vsix
+*.bundle
+*.tmp
+*.bak
+*.old
+*.orig
+**/*.log
+**/*.psd
+**/*.fig
+**/.DS_Store
+**/Thumbs.db
+tmp/**
+temp/**

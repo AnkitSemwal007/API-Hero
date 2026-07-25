@@ -51,10 +51,16 @@ export interface HistoryInfrastructure {
 export function createHistoryInfrastructure(
   context: ExtensionContext,
   maxEntries: number,
+  logger?: Logger,
 ): HistoryInfrastructure {
   const repository = FileHistoryRepository.fromExtensionContext(
     context,
     maxEntries,
+    logger === undefined
+      ? undefined
+      : (message) => {
+          logger.warning(message);
+        },
   );
   const inner = new DefaultHistoryRecorder(repository);
   let onRecorded: (() => Promise<void>) | undefined;
@@ -135,7 +141,14 @@ export function registerHistory(
   });
 
   const applyFilterBanner = (): void => {
-    treeView.message = describeHistoryFilter(treeProvider.getFilter());
+    const filter = treeProvider.getFilter();
+    const banner = describeHistoryFilter(filter);
+    if (banner === undefined) {
+      treeView.message = undefined;
+      return;
+    }
+    const hasMatches = filterHistoryEntries(cachedEntries, filter).length > 0;
+    treeView.message = hasMatches ? banner : `${banner} — no matches`;
   };
 
   const refresh = async (): Promise<void> => {
@@ -233,6 +246,17 @@ export function registerHistory(
       async (target?: unknown) => {
         const entry = await resolveEntry(repository, target);
         if (entry === undefined) {
+          await window.showInformationMessage(
+            'Select a history entry to delete.',
+          );
+          return;
+        }
+        const confirm = await window.showWarningMessage(
+          'Delete this history entry?',
+          { modal: true },
+          'Delete',
+        );
+        if (confirm !== 'Delete') {
           return;
         }
         const deleted = await repository.delete(entry.id);
@@ -319,8 +343,8 @@ async function promptHistoryFilter(
   entries: readonly HistoryEntry[],
 ): Promise<HistoryFilter | undefined> {
   const statusPick = await window.showQuickPick(statusFacetItems(current), {
-    title: 'Filter History — Status',
-    placeHolder: 'Filter by execution outcome',
+    title: 'Filter History',
+    placeHolder: 'Outcome',
     matchOnDescription: true,
   });
   if (statusPick === undefined) {
@@ -338,8 +362,8 @@ async function promptHistoryFilter(
   const methodPick = await window.showQuickPick(
     methodFacetItems(current, entries, status),
     {
-      title: 'Filter History — Method',
-      placeHolder: 'Filter by HTTP method',
+      title: 'Filter History',
+      placeHolder: 'HTTP method',
       matchOnDescription: true,
     },
   );
@@ -351,10 +375,10 @@ async function promptHistoryFilter(
     methodPick.id === 'all' ? undefined : methodPick.id.toUpperCase();
 
   const text = await window.showInputBox({
-    title: 'Filter History — Text',
-    prompt: 'Optional free-text filter (method, URL, name, status). Leave empty to skip.',
+    title: 'Filter History',
+    prompt: 'Filter by URL, name, or status. Clear the box to skip text filter.',
     value: current.query ?? '',
-    placeHolder: 'example.com',
+    placeHolder: 'GET /users',
   });
   if (text === undefined) {
     return undefined;

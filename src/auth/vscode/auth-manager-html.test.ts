@@ -23,6 +23,11 @@ describe('auth-manager-html', () => {
     assert.match(html, /script-src 'nonce-authNonce'/u);
     assert.match(html, /default-src 'none'/u);
     assert.match(html, /id="addProfile"/u);
+    assert.match(html, /<title>Manage Authentication<\/title>/u);
+    assert.match(html, /<h1>Authentication<\/h1>/u);
+    assert.match(html, /aria-label="Authentication navigation"/u);
+    assert.match(html, /aria-label="Add profile"/u);
+    assert.match(html, /aria-label="Profile id"/u);
     assert.match(html, /id="save"/u);
     assert.match(html, /id="duplicateProfile"/u);
     assert.match(html, /id="profileSearch"/u);

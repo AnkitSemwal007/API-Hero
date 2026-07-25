@@ -199,6 +199,86 @@ test('allows future domains to contribute rules without changing the engine', ()
   );
 });
 
+test('validates extract directives without treating them as unknown', () => {
+  const valid = validateApiDocument(
+    parseApiDocument(
+      [
+        '@extract accessToken from body.access_token',
+        '@sensitive-extract refreshToken from body.refresh_token scope=environment',
+        'GET /login',
+      ].join('\n'),
+    ).ast,
+  );
+  assert.equal(valid.valid, true);
+  assert.equal(
+    valid.diagnostics.some(
+      (diagnostic) =>
+        diagnostic.code === VALIDATION_DIAGNOSTIC_CODES.unknownDirective,
+    ),
+    false,
+  );
+
+  const malformed = validateApiDocument(
+    parseApiDocument('@extract broken-value\nGET /\n').ast,
+  );
+  assert.ok(
+    malformed.diagnostics.some(
+      (diagnostic) =>
+        diagnostic.code ===
+        VALIDATION_DIAGNOSTIC_CODES.extractionInvalidDirective,
+    ),
+  );
+
+  const forbidden = validateApiDocument(
+    parseApiDocument('@extract x from body.y scope=global\nGET /\n').ast,
+  );
+  assert.ok(
+    forbidden.diagnostics.some(
+      (diagnostic) =>
+        diagnostic.code ===
+        VALIDATION_DIAGNOSTIC_CODES.extractionForbiddenScope,
+    ),
+  );
+
+  const invalidScope = validateApiDocument(
+    parseApiDocument('@extract x from body.y scope=planet\nGET /\n').ast,
+  );
+  assert.ok(
+    invalidScope.diagnostics.some(
+      (diagnostic) =>
+        diagnostic.code === VALIDATION_DIAGNOSTIC_CODES.extractionInvalidScope,
+    ),
+  );
+
+  const invalidSource = validateApiDocument(
+    parseApiDocument('@extract x from header\nGET /\n').ast,
+  );
+  assert.ok(
+    invalidSource.diagnostics.some(
+      (diagnostic) =>
+        diagnostic.code === VALIDATION_DIAGNOSTIC_CODES.extractionInvalidSource,
+    ),
+  );
+
+  const duplicate = validateApiDocument(
+    parseApiDocument(
+      [
+        '@extract token from body.a',
+        '@extract token from body.b',
+        'GET /',
+      ].join('\n'),
+    ).ast,
+  );
+  const duplicateDiagnostic = duplicate.diagnostics.find(
+    (diagnostic) =>
+      diagnostic.code ===
+      VALIDATION_DIAGNOSTIC_CODES.extractionDuplicateVariable,
+  );
+  assert.ok(duplicateDiagnostic);
+  assert.equal(duplicateDiagnostic.severity, 'warning');
+  assert.equal(duplicate.valid, true);
+});
+
 test('scoped validation excludes unrelated request errors but keeps document semantics', () => {
   const parsed = parseApiDocument([
     '@tag global',

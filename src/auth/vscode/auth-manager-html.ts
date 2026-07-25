@@ -1,5 +1,5 @@
 /**
- * Pure HTML/CSS/JS and message helpers for the Auth Profiles Manager webview.
+ * Pure HTML/CSS/JS and message helpers for the Manage Authentication webview.
  * No `vscode` import — keeps core/tests free of the extension host.
  * Secret values never appear in state or postMessage payloads.
  */
@@ -21,6 +21,7 @@ import {
   buildNonceOnlyCsp,
   escapeAttribute,
   isWebviewMessageRecord,
+  WEBVIEW_SHARED_CSS,
 } from '../../ui/webview';
 
 export { escapeAttribute };
@@ -36,7 +37,15 @@ export interface AuthManagerSecretField {
   readonly status: 'set' | 'missing';
 }
 
-/** Editable profile row for the Auth Profiles Manager UI. */
+/** Non-secret credential source shown read-only in the manager. */
+export interface AuthManagerCredentialSource {
+  readonly field: string;
+  readonly label: string;
+  readonly kind: 'variable' | 'literal';
+  readonly detail: string;
+}
+
+/** Editable profile row for the Authentication manager UI. */
 export interface AuthManagerProfile {
   readonly id: string;
   readonly label: string;
@@ -45,6 +54,8 @@ export interface AuthManagerProfile {
   readonly apiKeyName?: string;
   readonly apiKeyLocation?: 'header' | 'query';
   readonly secretFields: readonly AuthManagerSecretField[];
+  /** Variable/literal credential sources (read-only display). */
+  readonly credentialSources?: readonly AuthManagerCredentialSource[];
 }
 
 /** Full snapshot posted between host and webview (metadata + secret status only). */
@@ -173,7 +184,7 @@ export function secretFieldsForProvider(
 ): readonly { readonly field: string; readonly label: string }[] {
   return coreSecretFieldsForProvider(providerId);
 }
-/** Builds the Auth Profiles Manager document. */
+/** Builds the Manage Authentication document. */
 export function renderAuthManagerHtml(nonce: string): string {
   const safeNonce = escapeAttribute(nonce);
   return `<!doctype html>
@@ -182,15 +193,15 @@ export function renderAuthManagerHtml(nonce: string): string {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta http-equiv="Content-Security-Policy" content="${buildNonceOnlyCsp(nonce)}">
-<title>Auth Profiles Manager</title>
+<title>Manage Authentication</title>
 <style nonce="${safeNonce}">${MANAGER_CSS}</style>
 </head>
 <body>
 <div id="app">
-  <aside>
+  <aside aria-label="Authentication navigation">
     <div class="aside-header">
-      <h1>Auth Profiles</h1>
-      <button type="button" id="addProfile" class="primary" title="Add profile">Add</button>
+      <h1>Authentication</h1>
+      <button type="button" id="addProfile" class="primary" title="Add profile" aria-label="Add profile">Add</button>
     </div>
     <label class="search-field">
       <span class="sr-only">Search profiles</span>
@@ -207,12 +218,12 @@ export function renderAuthManagerHtml(nonce: string): string {
         <button type="button" id="deleteProfile" class="danger">Delete</button>
       </div>
       <p id="defaultBadge" class="badge" hidden>Session default</p>
-      <p id="emptyHint" class="hint" hidden>Add a profile to get started.</p>
+      <p id="emptyHint" class="hint" hidden>Add a profile when an API needs credentials — optional for public endpoints.</p>
     </header>
     <section id="editor" class="editor" hidden>
       <label class="field">
         <span>Profile id</span>
-        <input id="profileId" type="text" autocomplete="off" spellcheck="false" />
+        <input id="profileId" type="text" autocomplete="off" spellcheck="false" aria-label="Profile id" />
       </label>
       <label class="field">
         <span>Provider</span>
@@ -238,11 +249,11 @@ export function renderAuthManagerHtml(nonce: string): string {
       </div>
       <section class="secrets">
         <div class="section-header">
-          <h2>Secrets</h2>
+          <h2>Credentials</h2>
         </div>
-        <p class="hint">Secrets are entered via a password prompt and stored in VS Code Secret Storage. Values never appear in this panel.</p>
+        <p class="hint">Secrets are entered via a password prompt and stored in VS Code Secret Storage. Variable and literal sources are shown read-only.</p>
         <div id="secretList" class="secret-list"></div>
-        <p id="noSecrets" class="empty" hidden>This provider does not require secrets.</p>
+        <p id="noSecrets" class="empty" hidden>This provider does not require credential fields.</p>
         <p id="missingCta" class="cta" hidden>
           <span id="missingCtaText"></span>
           <button type="button" id="missingCtaButton" class="primary">Set secret</button>
@@ -332,6 +343,10 @@ function parseProfiles(
     if (secretFields === undefined) {
       return undefined;
     }
+    const credentialSources = parseCredentialSources(record.credentialSources);
+    if (credentialSources === undefined) {
+      return undefined;
+    }
     if (
       record.apiKeyName !== undefined &&
       typeof record.apiKeyName !== 'string'
@@ -357,9 +372,43 @@ function parseProfiles(
         ? { apiKeyLocation: record.apiKeyLocation }
         : {}),
       secretFields,
+      ...(credentialSources.length > 0 ? { credentialSources } : {}),
     });
   }
   return profiles;
+}
+
+function parseCredentialSources(
+  value: unknown,
+): readonly AuthManagerCredentialSource[] | undefined {
+  if (value === undefined) {
+    return [];
+  }
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  const sources: AuthManagerCredentialSource[] = [];
+  for (const entry of value) {
+    if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) {
+      return undefined;
+    }
+    const record = entry as Record<string, unknown>;
+    if (
+      typeof record.field !== 'string' ||
+      typeof record.label !== 'string' ||
+      typeof record.detail !== 'string' ||
+      (record.kind !== 'variable' && record.kind !== 'literal')
+    ) {
+      return undefined;
+    }
+    sources.push({
+      field: record.field,
+      label: record.label,
+      kind: record.kind,
+      detail: record.detail,
+    });
+  }
+  return sources;
 }
 
 function parseSecretFields(
@@ -400,6 +449,7 @@ function slugifyProfileId(name: string): string {
 }
 
 const MANAGER_CSS = `
+${WEBVIEW_SHARED_CSS}
 :root { color-scheme: light dark; }
 * { box-sizing: border-box; }
 body {
@@ -417,7 +467,7 @@ body {
 aside {
   border-right: 1px solid var(--vscode-panel-border, var(--vscode-contrastBorder));
   background: var(--vscode-sideBar-background, var(--vscode-editor-background));
-  padding: 14px 12px 18px;
+  padding: var(--ah-space-3) var(--ah-space-3) var(--ah-space-4);
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -428,8 +478,8 @@ aside {
   justify-content: space-between;
   gap: 8px;
 }
-h1 { margin: 0; font-size: 1.05rem; font-weight: 600; }
-h2 { margin: 0; font-size: .95rem; font-weight: 600; }
+h1 { margin: 0; font-size: 13px; font-weight: 600; }
+h2 { margin: 0; font-size: 12px; font-weight: 600; }
 .profile-list {
   list-style: none;
   margin: 0;
@@ -575,54 +625,12 @@ footer {
   padding-top: 8px;
   border-top: 1px solid var(--vscode-panel-border, var(--vscode-contrastBorder));
 }
-button {
-  border: 1px solid var(--vscode-button-border, transparent);
-  border-radius: 2px;
-  padding: 5px 12px;
-  font: inherit;
-  cursor: pointer;
-}
-button.primary {
-  color: var(--vscode-button-foreground);
-  background: var(--vscode-button-background);
-}
-button.primary:hover { background: var(--vscode-button-hoverBackground); }
-button.secondary {
-  color: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
-  background: var(--vscode-button-secondaryBackground, var(--vscode-input-background));
-}
-button.secondary:hover {
-  background: var(--vscode-button-secondaryHoverBackground, var(--vscode-list-hoverBackground));
-}
-button.danger {
-  color: var(--vscode-errorForeground, var(--vscode-editorError-foreground));
-  background: transparent;
-  border-color: var(--vscode-panel-border, var(--vscode-contrastBorder));
-}
-button:focus-visible {
-  outline: 1px solid var(--vscode-focusBorder);
-  outline-offset: 1px;
-}
-button:disabled {
-  opacity: .55;
-  cursor: default;
-}
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  border: 0;
-}
 .search-field input {
   width: 100%;
   color: var(--vscode-input-foreground);
   background: var(--vscode-input-background);
   border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
-  border-radius: 2px;
+  border-radius: var(--ah-radius);
   padding: 4px 8px;
   font: inherit;
 }
@@ -631,7 +639,7 @@ button:disabled {
   margin: 0;
   padding: 10px 12px;
   border: 1px solid var(--vscode-panel-border, var(--vscode-contrastBorder));
-  border-radius: 2px;
+  border-radius: var(--ah-radius);
   background: var(--vscode-textCodeBlock-background, var(--vscode-input-background));
   font-family: var(--vscode-editor-font-family);
   font-size: var(--vscode-editor-font-size);
@@ -782,9 +790,11 @@ function renderList() {
   const list = el('profileList');
   list.innerHTML = '';
   const query = profileFilter.trim().toLowerCase();
+  let visibleCount = 0;
   for (const profile of state.profiles) {
     const haystack = ((profile.label || '') + ' ' + (profile.id || '') + ' ' + (profile.providerId || '')).toLowerCase();
     if (query && !haystack.includes(query)) continue;
+    visibleCount += 1;
     const item = document.createElement('button');
     item.type = 'button';
     item.className = 'profile-item' + (state.selectedId === profile.id ? ' active' : '');
@@ -805,6 +815,16 @@ function renderList() {
       render();
     });
     list.appendChild(item);
+  }
+  if (visibleCount === 0) {
+    const empty = document.createElement('p');
+    empty.className = 'empty';
+    empty.setAttribute('role', 'status');
+    empty.textContent =
+      state.profiles.length === 0
+        ? 'No profiles yet — optional for public APIs; click Add to create one.'
+        : 'No matching profiles.';
+    list.appendChild(empty);
   }
 }
 
@@ -846,7 +866,8 @@ function renderSecrets(profile) {
   const list = el('secretList');
   list.innerHTML = '';
   const fields = profile.secretFields || [];
-  el('noSecrets').hidden = fields.length > 0;
+  const credentialSources = profile.credentialSources || [];
+  el('noSecrets').hidden = fields.length > 0 || credentialSources.length > 0;
   const missing = fields.filter((field) => field.status === 'missing');
   const cta = el('missingCta');
   if (missing.length === 0) {
@@ -888,6 +909,22 @@ function renderSecrets(profile) {
     row.appendChild(status);
     row.appendChild(setBtn);
     row.appendChild(clearBtn);
+    list.appendChild(row);
+  }
+  for (const source of credentialSources) {
+    const row = document.createElement('div');
+    row.className = 'secret-row';
+    const label = document.createElement('span');
+    label.className = 'label';
+    label.textContent = source.label;
+    const status = document.createElement('span');
+    status.className = 'status';
+    status.textContent =
+      source.kind === 'variable'
+        ? 'Variable: {{' + source.detail + '}}'
+        : 'Literal (configured)';
+    row.appendChild(label);
+    row.appendChild(status);
     list.appendChild(row);
   }
 }

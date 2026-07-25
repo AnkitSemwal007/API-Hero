@@ -1,0 +1,7 @@
+### Expect status and JSON path
+GET https://jsonplaceholder.typicode.com/posts/1
+Accept: application/json
+
+expect status == 200
+expect body.id == 1
+expect body.userId == 1

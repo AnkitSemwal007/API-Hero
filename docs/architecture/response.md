@@ -84,9 +84,10 @@ resource roots.
 Every request, response, error, cause, header, and body string is HTML-escaped
 before insertion. Highlighting emits escaped text plus fixed class names. HTML
 and XML bodies are never mounted as markup. JSON trees use fixed generated
-elements and escaped keys/values. The only webview-to-host message is the
-payload-free `{ type: "ready" }` shape, checked by a closed validator; unknown
-commands and extra properties are ignored.
+elements and escaped keys/values. Webview-to-host messages are validated by a closed parser. Supported actions
+include `ready`, **copy body**, **save body**, **copy headers**, and in-panel
+**search** controls that operate on the already-masked presentation model.
+Unknown commands and extra properties are ignored.
 
 CSS uses VS Code foreground, background, border, focus, button, editor, and
 symbol variables. It declares light/dark color-scheme support, responsive
@@ -106,20 +107,17 @@ buffering; `0` means unlimited. Oversized downloads fail with
 `RESPONSE_TOO_LARGE` before a viewer model is built. Viewer truncation remains
 a display concern for responses that fit under that cap.
 
+## Shipped viewer actions
+
+Copy body, save body, copy headers, and body search are implemented against the
+presentation model (host clipboard / save dialog). Cookie jars, redirect-chain
+UI, response diff, and streaming body presentation remain out of scope.
+
 ## Deferred future work
 
-History, cookie details beyond Set-Cookie counts, redirect-chain UI,
-download/save/diff, and streaming body presentation remain deferred or belong
-to other subsystems. Request History is metadata-only — see
-[history.md](./history.md). Collections organization is separate — see
-[collections.md](./collections.md). Do not reintroduce unused
-store/service scaffolding ahead of those features.
-
-## Future extensions
-
-The presentation and panel seams reserve room for cookie details, redirect
-chains, richer binary previews, download, search, save, and diff. Those
-features require explicit contracts and security/privacy decisions and are not
-implemented here. They should extend the canonical execution result or derive
-new presentation projections rather than introducing another response model.
+Cookie details beyond Set-Cookie counts, redirect-chain UI, diff, and streaming
+body presentation remain deferred or belong to other subsystems. Request
+History is metadata-only — see [history.md](./history.md). Collections
+organization is separate — see [collections.md](./collections.md). Do not
+reintroduce unused store/service scaffolding ahead of those features.
 

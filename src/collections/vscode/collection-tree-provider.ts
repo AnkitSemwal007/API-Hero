@@ -1,8 +1,10 @@
 import {
   EventEmitter,
+  ThemeColor,
   ThemeIcon,
   TreeItem,
   TreeItemCollapsibleState,
+  Uri,
   type Event,
   type TreeDataProvider,
   type TreeView,
@@ -66,7 +68,7 @@ export class CollectionTreeDataProvider
     }
     view.message =
       this.filterQuery !== undefined
-        ? `Filtered: ${this.filterQuery}`
+        ? `Filtered · ${this.filterQuery}`
         : undefined;
   }
 
@@ -82,11 +84,12 @@ export class CollectionTreeDataProvider
     item.description = element.description;
     item.iconPath = iconFor(element);
     item.contextValue = contextValueFor(element, aggregate);
+    item.tooltip = tooltipFor(element, aggregate);
+    item.resourceUri = resourceUriFor(element, aggregate);
+    item.accessibilityInformation = {
+      label: accessibilityLabelFor(element),
+    };
     if (element.kind === 'request' && element.requestId !== undefined) {
-      item.tooltip =
-        element.description !== undefined && element.description.length > 0
-          ? `${element.label}\n${element.description}`
-          : element.label;
       item.command = {
         command: COMMAND_IDS.openCollectionRequest,
         title: 'Open Request',
@@ -117,8 +120,8 @@ export class CollectionTreeDataProvider
         {
           id: '__filter_empty__',
           kind: 'info',
-          label: 'No matches',
-          description: 'Clear the filter to show all collections',
+          label: 'No matching items',
+          description: 'Clear filter to show all collections',
           collapsible: false,
         },
       ];
@@ -192,6 +195,57 @@ export class CollectionTreeDataProvider
   }
 }
 
+function tooltipFor(
+  element: CollectionTreeNode,
+  aggregate: WorkspaceCollections | undefined,
+): string {
+  if (element.kind === 'collection') {
+    const collection = aggregate?.collections[element.id];
+    const lines = [element.label];
+    if (element.description !== undefined && element.description.length > 0) {
+      lines.push(element.description);
+    }
+    if (collection?.metadata.workspacePath) {
+      lines.push(collection.metadata.workspacePath);
+    }
+    if (collection?.kind === 'legacy') {
+      lines.push('Legacy files outside Collections/');
+    }
+    return lines.join('\n');
+  }
+  if (element.kind === 'folder') {
+    const lines = [element.label];
+    if (element.description !== undefined && element.description.length > 0) {
+      lines.push(element.description);
+    }
+    const collection =
+      element.collectionId !== undefined
+        ? aggregate?.collections[element.collectionId]
+        : undefined;
+    const folder =
+      collection !== undefined && element.folderId !== undefined
+        ? collection.folders[element.folderId]
+        : undefined;
+    if (folder !== undefined && folder.relativePath.length > 0) {
+      lines.push(folder.relativePath);
+    }
+    return lines.join('\n');
+  }
+  if (element.kind === 'request') {
+    const lines = [element.label];
+    if (element.description !== undefined && element.description.length > 0) {
+      lines.push(element.description);
+    }
+    return lines.join('\n');
+  }
+  if (element.kind === 'info') {
+    return element.description !== undefined
+      ? `${element.label}\n${element.description}`
+      : element.label;
+  }
+  return element.label;
+}
+
 function iconFor(element: CollectionTreeNode): ThemeIcon {
   switch (element.kind) {
     case 'workspace':
@@ -211,22 +265,24 @@ function iconFor(element: CollectionTreeNode): ThemeIcon {
 
 /**
  * Prefer hierarchy-friendly ThemeIcons. Method variants use distinct Codicons
- * when a clear mapping exists; otherwise fall back to symbol-method.
+ * with subtle charts ThemeColors when available.
  */
 function iconForMethod(method: string | undefined): ThemeIcon {
-  switch ((method ?? '').trim().toUpperCase()) {
+  const normalized = (method ?? '').trim().toUpperCase();
+  switch (normalized) {
     case 'GET':
-      return new ThemeIcon('arrow-down');
+      return new ThemeIcon('arrow-down', new ThemeColor('charts.blue'));
     case 'POST':
-      return new ThemeIcon('add');
+      return new ThemeIcon('add', new ThemeColor('charts.green'));
     case 'PUT':
+      return new ThemeIcon('edit', new ThemeColor('charts.orange'));
     case 'PATCH':
-      return new ThemeIcon('edit');
+      return new ThemeIcon('edit', new ThemeColor('charts.purple'));
     case 'DELETE':
-      return new ThemeIcon('close');
+      return new ThemeIcon('trash', new ThemeColor('charts.red'));
     case 'HEAD':
     case 'OPTIONS':
-      return new ThemeIcon('info');
+      return new ThemeIcon('info', new ThemeColor('descriptionForeground'));
     default:
       return new ThemeIcon('symbol-method');
   }
@@ -260,3 +316,70 @@ function contextValueFor(
   return element.kind;
 }
 
+function resourceUriFor(
+  element: CollectionTreeNode,
+  aggregate: WorkspaceCollections | undefined,
+): Uri | undefined {
+  if (aggregate === undefined) {
+    return undefined;
+  }
+  if (element.kind === 'collection') {
+    const collection = aggregate.collections[element.id];
+    if (collection === undefined || collection.kind !== 'native') {
+      return undefined;
+    }
+    return pathToUri(collection.rootPath);
+  }
+  if (element.kind === 'folder' && element.collectionId !== undefined) {
+    const collection = aggregate.collections[element.collectionId];
+    const folder =
+      collection !== undefined && element.folderId !== undefined
+        ? collection.folders[element.folderId]
+        : undefined;
+    if (collection === undefined || folder === undefined) {
+      return undefined;
+    }
+    const relative = folder.relativePath.replace(/\\/g, '/');
+    const absolute =
+      relative.length === 0
+        ? collection.rootPath
+        : `${collection.rootPath.replace(/\/+$/, '')}/${relative}`;
+    return pathToUri(absolute);
+  }
+  if (
+    element.kind === 'request' &&
+    element.collectionId !== undefined &&
+    element.requestId !== undefined
+  ) {
+    const collection = aggregate.collections[element.collectionId];
+    const request = collection?.requests[element.requestId];
+    if (request === undefined) {
+      return undefined;
+    }
+    return pathToUri(request.filePath);
+  }
+  return undefined;
+}
+
+function accessibilityLabelFor(element: CollectionTreeNode): string {
+  switch (element.kind) {
+    case 'collection':
+      return `Collection ${element.label}`;
+    case 'folder':
+      return `Folder ${element.label}`;
+    case 'request': {
+      const method = element.method?.trim();
+      return method !== undefined && method.length > 0
+        ? `Request ${method} ${element.label}`
+        : `Request ${element.label}`;
+    }
+    case 'info':
+      return element.label;
+    default:
+      return element.label;
+  }
+}
+
+function pathToUri(path: string): Uri {
+  return path.includes('://') ? Uri.parse(path) : Uri.file(path);
+}

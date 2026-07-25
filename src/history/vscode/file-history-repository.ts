@@ -25,19 +25,26 @@ export class FileHistoryRepository implements HistoryRepository {
   public constructor(
     storageRoot: Uri,
     maxEntries = 1_000,
+    onWarning?: (message: string) => void,
   ) {
     this.store = createFileHistoryStore({
       storageRoot: storageRoot.toString(),
       fs: createWorkspaceHistoryFs(),
       maxEntries,
+      ...(onWarning === undefined ? {} : { onWarning }),
     });
   }
 
   public static fromExtensionContext(
     context: ExtensionContext,
     maxEntries?: number,
+    onWarning?: (message: string) => void,
   ): FileHistoryRepository {
-    return new FileHistoryRepository(context.globalStorageUri, maxEntries);
+    return new FileHistoryRepository(
+      context.globalStorageUri,
+      maxEntries,
+      onWarning,
+    );
   }
 
   public append(entry: HistoryEntry): Promise<void> {
@@ -99,6 +106,11 @@ function createWorkspaceHistoryFs(): HistoryStorageFs {
         'code' in error &&
         (error as { code?: string }).code === 'FileNotFound'
       );
+    },
+    async rename(fromUri: string, toUri: string): Promise<void> {
+      await workspace.fs.rename(Uri.parse(fromUri), Uri.parse(toUri), {
+        overwrite: true,
+      });
     },
   };
 }

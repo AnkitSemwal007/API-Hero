@@ -9,6 +9,7 @@ export const COMMAND_IDS = {
   manageEnvironments: 'apiRunner.manageEnvironments',
   manageAuthProfiles: 'apiRunner.manageAuthProfiles',
   selectAuthentication: 'apiRunner.selectAuthentication',
+  initializeProjectStore: 'apiRunner.initializeProjectStore',
   refreshCollections: 'apiRunner.refreshCollections',
   filterCollections: 'apiRunner.filterCollections',
   revealActiveRequest: 'apiRunner.revealActiveRequest',

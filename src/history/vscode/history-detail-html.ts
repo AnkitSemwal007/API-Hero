@@ -14,6 +14,8 @@ import {
   escapeAttribute,
   escapeHtml,
   isWebviewMessageRecord,
+  methodBadgeClass,
+  WEBVIEW_SHARED_CSS,
 } from '../../ui/webview';
 
 export { escapeAttribute, escapeHtml };
@@ -22,6 +24,7 @@ export { escapeAttribute, escapeHtml };
 export interface HistoryDetailModel {
   readonly id: string;
   readonly method: string;
+  readonly methodBadgeClass: string;
   readonly url: string;
   readonly outcome: HistoryStatus;
   readonly outcomeLabel: string;
@@ -89,6 +92,7 @@ export function buildHistoryDetailModel(entry: HistoryEntry): HistoryDetailModel
   const model: HistoryDetailModel = {
     id: entry.id,
     method: summary.method,
+    methodBadgeClass: methodBadgeClass(summary.method),
     url: summary.url,
     outcome: summary.status,
     outcomeLabel: outcomeLabel(summary.status),
@@ -199,7 +203,7 @@ export function renderHistoryDetailHtml(nonce: string): string {
 </head>
 <body>
 <main id="root">
-  <p class="muted" id="loading">Loading history entry…</p>
+  <p class="muted loading" id="loading">Loading history entry…</p>
 </main>
 <script nonce="${safeNonce}">${DETAIL_SCRIPT}</script>
 </body>
@@ -295,6 +299,7 @@ function formatTimestamp(timestamp: string): string {
 }
 
 const DETAIL_CSS = `
+${WEBVIEW_SHARED_CSS}
 :root { color-scheme: light dark; }
 * { box-sizing: border-box; }
 body {
@@ -303,96 +308,73 @@ body {
   background: var(--vscode-editor-background);
   font-family: var(--vscode-font-family);
   font-size: var(--vscode-font-size);
+  line-height: 1.4;
 }
 main { display: flex; flex-direction: column; gap: 0; min-height: 100vh; }
+.loading { padding: var(--ah-space-4); }
 .toolbar {
-  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-  padding: 10px 16px;
+  display: flex; align-items: center; gap: var(--ah-space-2); flex-wrap: wrap;
+  padding: var(--ah-space-2) var(--ah-space-4);
   border-bottom: 1px solid var(--vscode-panel-border);
   background: var(--vscode-sideBar-background);
 }
+.toolbar .spacer { flex: 1 1 auto; min-width: var(--ah-space-2); }
 .status-card {
-  padding: 14px 16px 12px;
+  padding: var(--ah-space-4);
   border-bottom: 1px solid var(--vscode-panel-border);
   background: var(--vscode-sideBar-background);
 }
 .status-row, .request-line, .stats-summary {
-  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  display: flex; align-items: center; gap: var(--ah-space-2); flex-wrap: wrap;
 }
-.status-row { margin-bottom: 8px; }
-.request-line { color: var(--vscode-descriptionForeground); overflow-wrap: anywhere; margin-bottom: 10px; }
+.status-row { margin-bottom: var(--ah-space-2); }
+.request-line {
+  color: var(--vscode-descriptionForeground);
+  overflow-wrap: anywhere;
+  margin-bottom: var(--ah-space-3);
+  font-family: var(--vscode-editor-font-family, var(--vscode-font-family));
+}
 .request-line strong { color: var(--vscode-textLink-foreground); font-weight: 600; }
-.summary { color: var(--vscode-descriptionForeground); }
-.status-badge {
-  display: inline-flex; align-items: center;
-  border-radius: 2px; padding: 2px 8px; font-weight: 600; font-size: .9em;
-  background: var(--vscode-badge-background); color: var(--vscode-badge-foreground);
+.meta-sections { padding: var(--ah-space-3) var(--ah-space-4) var(--ah-space-4); display: flex; flex-direction: column; gap: var(--ah-space-3); }
+.meta-group h2 {
+  margin: 0 0 var(--ah-space-2);
+  font-size: .75em; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .04em;
+  color: var(--vscode-descriptionForeground);
 }
-.status-success { background: var(--vscode-testing-iconPassed); color: var(--vscode-editor-background); }
-.status-redirect { background: var(--vscode-editorWarning-foreground); color: var(--vscode-editor-background); }
-.status-error, .status-badge.status-error { background: var(--vscode-editorError-foreground); color: var(--vscode-editor-background); }
-.status-cancelled { background: var(--vscode-disabledForeground, var(--vscode-descriptionForeground)); color: var(--vscode-editor-background); }
-.status-neutral { background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); }
-.stats-summary { gap: 6px; }
-.stat-chip {
-  display: inline-flex; align-items: baseline; gap: 6px;
-  padding: 3px 8px; border-radius: 2px;
-  border: 1px solid var(--vscode-panel-border);
-  background: var(--vscode-editor-background);
-  max-width: 100%;
-}
-.stat-chip span { color: var(--vscode-descriptionForeground); font-size: .8em; text-transform: uppercase; letter-spacing: .02em; }
-.stat-chip strong { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 18rem; }
 .meta-grid {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 8px; padding: 12px 16px 16px;
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+  gap: var(--ah-space-2);
 }
 .stat {
   border: 1px solid var(--vscode-panel-border);
   background: var(--vscode-sideBar-background);
-  border-radius: 2px; padding: 8px 10px; min-width: 0;
+  border-radius: var(--ah-radius); padding: var(--ah-space-2) 10px; min-width: 0;
 }
-.stat span { display: block; color: var(--vscode-descriptionForeground); font-size: .85em; }
-.stat strong { display: block; margin-top: 2px; overflow-wrap: anywhere; }
+.stat span { display: block; color: var(--vscode-descriptionForeground); font-size: .8em; }
+.stat strong { display: block; margin-top: 2px; overflow-wrap: anywhere; font-weight: 600; }
 .error-callout {
-  margin: 0 16px 16px; padding: 12px 14px; border-radius: 2px;
+  margin: 0; padding: var(--ah-space-3) var(--ah-space-4);
+  border-radius: var(--ah-radius);
   border: 1px solid var(--vscode-inputValidation-errorBorder, var(--vscode-editorError-foreground));
   background: var(--vscode-inputValidation-errorBackground, transparent);
 }
 .error-callout h2 {
-  margin: 0 0 6px; font-size: 1em;
+  margin: 0 0 var(--ah-space-1); font-size: .95em;
   color: var(--vscode-editorError-foreground);
+  text-transform: none; letter-spacing: 0;
 }
 .error-callout p { margin: 0; overflow-wrap: anywhere; }
 .error-callout code {
   font-family: var(--vscode-editor-font-family);
 }
-.muted { color: var(--vscode-descriptionForeground); padding: 16px; }
 .notice {
-  padding: 8px 10px; margin: 0 16px 12px;
+  padding: var(--ah-space-2) 10px;
   color: var(--vscode-descriptionForeground);
-  border: 1px solid var(--vscode-panel-border);
-  background: var(--vscode-sideBar-background);
-  border-radius: 2px; overflow-wrap: anywhere;
+  font-size: .88em;
+  border-left: 2px solid var(--vscode-panel-border);
+  overflow-wrap: anywhere;
 }
-button {
-  color: var(--vscode-button-secondaryForeground);
-  background: var(--vscode-button-secondaryBackground);
-  border: 1px solid var(--vscode-contrastBorder, transparent);
-  border-radius: 2px; padding: 4px 10px; cursor: pointer; font: inherit;
-}
-button:hover:not(:disabled) { background: var(--vscode-button-secondaryHoverBackground); }
-button.primary {
-  color: var(--vscode-button-foreground);
-  background: var(--vscode-button-background);
-}
-button.primary:hover:not(:disabled) { background: var(--vscode-button-hoverBackground); }
-button.danger {
-  color: var(--vscode-button-foreground);
-  background: var(--vscode-errorForeground, var(--vscode-editorError-foreground));
-}
-button:disabled { opacity: .5; cursor: not-allowed; }
-button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: 1px; }
 `;
 
 const DETAIL_SCRIPT = `
@@ -426,17 +408,19 @@ const DETAIL_SCRIPT = `
   function render(model) {
     const chips = [
       statChip('Duration', model.durationLabel),
-      statChip('Outcome', model.outcomeLabel),
-      model.contentType ? statChip('Type', model.contentType) : '',
       model.responseSizeLabel ? statChip('Size', model.responseSizeLabel) : '',
+      model.contentType ? statChip('Type', model.contentType) : '',
     ].join('');
 
-    const meta = [
+    const contextMeta = [
       model.requestName ? stat('Name', model.requestName) : '',
       model.environmentName ? stat('Environment', model.environmentName) : '',
       model.collectionName ? stat('Collection', model.collectionName) : '',
-      model.httpStatusLabel ? stat('HTTP', model.httpStatusLabel) : '',
       stat('Completed', model.timestampLabel),
+    ].join('');
+
+    const responseMeta = [
+      model.httpStatusLabel ? stat('HTTP', model.httpStatusLabel) : '',
       model.sourceUri ? stat('Source', model.sourceUri) : '',
     ].join('');
 
@@ -448,13 +432,12 @@ const DETAIL_SCRIPT = `
         '</section>'
       : '';
 
-    const notice = '<aside class="notice">Metadata only — response bodies are not stored in history.</aside>';
-
     root.innerHTML =
-      '<div class="toolbar" role="toolbar" aria-label="History actions">' +
+      '<div class="toolbar sticky-toolbar" role="toolbar" aria-label="History actions">' +
         '<button type="button" id="rerun" class="primary"' + (model.canRerun ? '' : ' disabled') + '>Re-run</button>' +
-        '<button type="button" id="reveal"' + (model.canReveal ? '' : ' disabled') + '>Reveal original</button>' +
+        '<button type="button" id="reveal"' + (model.canReveal ? '' : ' disabled') + '>Reveal</button>' +
         '<button type="button" id="copySummary">Copy summary</button>' +
+        '<span class="spacer" aria-hidden="true"></span>' +
         '<button type="button" id="delete" class="danger">Delete</button>' +
       '</div>' +
       '<header class="status-card">' +
@@ -462,15 +445,24 @@ const DETAIL_SCRIPT = `
           '<span class="status-badge ' + escapeAttribute(model.statusBadgeClass) + '">' +
             escapeHtml(model.statusBadgeText) +
           '</span>' +
-          '<span class="summary">' + escapeHtml(model.outcomeLabel) + '</span>' +
+          '<div class="stats-summary" aria-label="Run statistics">' + chips + '</div>' +
         '</div>' +
-        '<div class="request-line"><strong>' + escapeHtml(model.method) + '</strong> <span>' +
+        '<div class="request-line"><span class="' + escapeAttribute(model.methodBadgeClass) + '">' +
+          escapeHtml(model.method) + '</span> <span>' +
           escapeHtml(model.url) + '</span></div>' +
-        '<div class="stats-summary" aria-label="Run statistics">' + chips + '</div>' +
       '</header>' +
-      notice +
-      error +
-      '<aside class="meta-grid" aria-label="History metadata">' + meta + '</aside>';
+      '<div class="meta-sections">' +
+        error +
+        '<section class="meta-group">' +
+          '<h2>Context</h2>' +
+          '<aside class="meta-grid" aria-label="Request context">' + contextMeta + '</aside>' +
+        '</section>' +
+        (responseMeta
+          ? '<section class="meta-group"><h2>Response</h2>' +
+            '<aside class="meta-grid" aria-label="Response metadata">' + responseMeta + '</aside></section>'
+          : '') +
+        '<aside class="notice muted">Metadata only — response bodies are not stored in history.</aside>' +
+      '</div>';
 
     document.getElementById('rerun').addEventListener('click', function () {
       vscode.postMessage({ type: 'rerun' });
@@ -496,7 +488,8 @@ const DETAIL_SCRIPT = `
       return;
     }
     if (data.type === 'error' && typeof data.message === 'string') {
-      root.innerHTML = '<p class="muted" role="alert">' + escapeHtml(data.message) + '</p>';
+      root.innerHTML = '<div class="empty-state" role="alert"><strong>Unable to load entry</strong>' +
+        escapeHtml(data.message) + '</div>';
     }
   });
 

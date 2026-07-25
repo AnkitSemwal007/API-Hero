@@ -6,6 +6,7 @@ import {
   window,
   workspace,
   type Disposable,
+  type TextDocument,
   type TextEditor,
 } from 'vscode';
 
@@ -16,8 +17,9 @@ import {
   findRequestById,
   type NavigationIndex,
 } from '../navigation';
-import type { CollectionTreeNode, RequestReference } from '../index';
+import { normalizePathKey, type CollectionTreeNode, type RequestReference } from '../index';
 import { REQUEST_EDITOR_VIEW_TYPE } from '../../constants';
+import { getActiveRequestEditorDocument } from '../../request-editor/vscode';
 import type { CollectionTreeDataProvider } from './collection-tree-provider';
 
 const REVEAL_DEBOUNCE_MS = 200;
@@ -123,14 +125,18 @@ export class CollectionNavigationService implements Disposable {
 
   /** Reveals the request under the active editor cursor in the tree. */
   public async revealActiveRequest(): Promise<void> {
-    const editor = window.activeTextEditor;
-    if (editor === undefined || !isApiDocument(editor)) {
+    const target = this.resolveActiveRevealTarget();
+    if (target === undefined) {
       void window.showInformationMessage(
-        'Open an API Hero (.api) file to reveal the active request.',
+        'Open an API Hero (.api) file or Request Editor to reveal the active request.',
       );
       return;
     }
-    const request = this.requestForEditor(editor);
+    const request = this.requestForUri(
+      target.uri,
+      target.offset,
+      target.fallbackToFirst,
+    );
     if (request === undefined) {
       void window.showInformationMessage(
         'Place the cursor inside a request to reveal it in Collections.',
@@ -143,6 +149,38 @@ export class CollectionNavigationService implements Disposable {
         'The active request is not present in the Collections tree yet. Try Refresh Collections.',
       );
     }
+  }
+
+  /**
+   * Prefer a focused `api` text editor; otherwise the active Request Editor
+   * (single-request files use offset 0 / first request in file).
+   */
+  private resolveActiveRevealTarget():
+    | {
+        readonly uri: string;
+        readonly offset: number;
+        readonly fallbackToFirst: boolean;
+      }
+    | undefined {
+    const editor = window.activeTextEditor;
+    if (editor !== undefined && isApiDocument(editor.document)) {
+      return {
+        uri: editor.document.uri.toString(),
+        offset: editor.document.offsetAt(editor.selection.active),
+        fallbackToFirst: false,
+      };
+    }
+
+    const tracked = getActiveRequestEditorDocument();
+    if (tracked !== undefined && isApiDocument(tracked)) {
+      return {
+        uri: tracked.uri.toString(),
+        offset: 0,
+        fallbackToFirst: true,
+      };
+    }
+
+    return undefined;
   }
 
   private resolveRequest(
@@ -173,7 +211,7 @@ export class CollectionNavigationService implements Disposable {
   }
 
   private scheduleReveal(editor: TextEditor | undefined): void {
-    if (this.revealing || editor === undefined || !isApiDocument(editor)) {
+    if (this.revealing || editor === undefined || !isApiDocument(editor.document)) {
       return;
     }
     if (this.debounceTimer !== undefined) {
@@ -202,18 +240,34 @@ export class CollectionNavigationService implements Disposable {
   }
 
   private requestForEditor(editor: TextEditor): RequestReference | undefined {
-    const offset = editor.document.offsetAt(editor.selection.active);
-    return findRequestAtOffset(
-      this.index,
+    return this.requestForUri(
       editor.document.uri.toString(),
-      offset,
+      editor.document.offsetAt(editor.selection.active),
+      false,
     );
+  }
+
+  private requestForUri(
+    filePath: string,
+    offset: number,
+    fallbackToFirst: boolean,
+  ): RequestReference | undefined {
+    const atOffset = findRequestAtOffset(this.index, filePath, offset);
+    if (atOffset !== undefined) {
+      return atOffset;
+    }
+    if (!fallbackToFirst) {
+      return undefined;
+    }
+    // Request Editor / single-request files: fall back to the first request.
+    const requests = this.index.byFile[normalizePathKey(filePath)];
+    return requests?.[0];
   }
 }
 
-function isApiDocument(editor: TextEditor): boolean {
+function isApiDocument(document: TextDocument): boolean {
   return (
-    editor.document.languageId === 'api' ||
-    editor.document.uri.path.toLowerCase().endsWith('.api')
+    document.languageId === 'api' ||
+    document.uri.path.toLowerCase().endsWith('.api')
   );
 }

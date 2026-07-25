@@ -8,6 +8,12 @@
 
 import { extractAssertionsForDocument } from '../assertions';
 import {
+  extractExtractionRulesForDocument,
+  type ExtractionRule,
+  type ExtractionSource,
+  type ExtractionWhen,
+} from '../extraction';
+import {
   AstNodeType,
   parseApiDocument,
   type ApiDocument,
@@ -23,6 +29,7 @@ import { extractDocumentVariables } from '../variables';
 import type {
   RequestSourceBody,
   RequestSourceDocument,
+  RequestSourceExtractionRule,
   RequestSourceHeader,
   RequestSourceQueryParam,
   RequestSourceVariable,
@@ -81,6 +88,7 @@ export function documentToRequestSource(
     ?.lines.map((line) => line.text.trim())
     .filter((line) => line.length > 0);
   const variables = collectVariables(document);
+  const extractionRules = collectExtractionRules(document, sourceText);
   const comments = collectLeadingComments(document, request);
 
   const methodUpper = String(request.method).toUpperCase();
@@ -108,6 +116,7 @@ export function documentToRequestSource(
       ? { expectLines }
       : {}),
     ...(variables.length > 0 ? { variables } : {}),
+    ...(extractionRules.length > 0 ? { extractionRules } : {}),
     ...(comments.length > 0 ? { comments } : {}),
   };
 
@@ -372,6 +381,70 @@ function collectVariables(document: ApiDocument): RequestSourceVariable[] {
     }
   }
   return variables;
+}
+
+function collectExtractionRules(
+  document: ApiDocument,
+  sourceText: string,
+): RequestSourceExtractionRule[] {
+  const extracted = extractExtractionRulesForDocument(document, sourceText);
+  const rules: RequestSourceExtractionRule[] = [];
+  for (const entry of extracted) {
+    for (const rule of entry.rules) {
+      rules.push(toRequestSourceExtractionRule(rule));
+    }
+  }
+  return rules;
+}
+
+function toRequestSourceExtractionRule(
+  rule: ExtractionRule,
+): RequestSourceExtractionRule {
+  return {
+    name: rule.variableName,
+    from: formatExtractionFrom(rule.source),
+    ...(rule.targetScope !== 'run' ? { scope: rule.targetScope } : {}),
+    ...(rule.sensitive ? { sensitive: true as const } : {}),
+    ...(rule.required ? {} : { optional: true as const }),
+    ...(rule.when.kind === 'always'
+      ? {}
+      : { when: formatExtractionWhen(rule.when) }),
+    ...(rule.enabled === false ? { enabled: false as const } : {}),
+  };
+}
+
+function formatExtractionFrom(source: ExtractionSource): string {
+  switch (source.kind) {
+    case 'json-path':
+      return source.path.toLowerCase().startsWith('body.')
+        ? source.path
+        : `body.${source.path}`;
+    case 'header':
+      return `header ${source.name}`;
+    case 'status':
+      return 'status';
+    default: {
+      const _exhaustive: never = source;
+      return _exhaustive;
+    }
+  }
+}
+
+function formatExtractionWhen(when: ExtractionWhen): string {
+  switch (when.kind) {
+    case 'always':
+      return '';
+    case 'status':
+      return `status:${when.spec}`;
+    case 'assertions-pass':
+      return 'assertions:pass';
+    case 'content-type':
+      return `content-type:${when.mime}`;
+    default: {
+      const _exhaustive: never = when;
+      return _exhaustive;
+    }
+  }
 }
 
 function collectLeadingComments(

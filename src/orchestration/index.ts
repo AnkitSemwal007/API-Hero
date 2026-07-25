@@ -12,6 +12,7 @@ export type {
   ExecutionStatusPresenter,
   HistoryCaptureContext,
   HistoryCaptureContextProvider,
+  PostExecutionObserver,
   RequestExecutionPipeline,
   RunAtSourceLocationOptions,
   RunAtSourceLocationResult,

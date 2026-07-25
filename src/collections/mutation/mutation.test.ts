@@ -23,6 +23,8 @@ import {
   collectionRootPath,
   sanitizeDirectoryName,
   sanitizeRequestFileName,
+  validateCollectionDirectoryName,
+  validateDirectoryName,
   type CollectionDirectoryEntry,
   type CollectionFilesystem,
 } from './index';
@@ -220,6 +222,26 @@ test('sanitize helpers reject unsafe path segments', () => {
   assert.equal(sanitizeRequestFileName(''), undefined);
 });
 
+test('validateDirectoryName reports empty and invalid names', () => {
+  assert.deepEqual(validateCollectionDirectoryName('  Pets  '), {
+    value: 'Pets',
+  });
+  assert.equal(validateDirectoryName('').error, 'Name is required.');
+  assert.equal(validateDirectoryName('   ').error, 'Name is required.');
+  assert.match(
+    validateDirectoryName('a/b', 'Collection').error ?? '',
+    /valid collection name/iu,
+  );
+  assert.match(
+    validateDirectoryName('CON', 'Folder').error ?? '',
+    /valid folder name/iu,
+  );
+  assert.match(
+    validateDirectoryName('..', 'Collection').error ?? '',
+    /valid collection name/iu,
+  );
+});
+
 test('allocateUniqueName appends numeric suffixes', () => {
   const existing = new Set(['A', 'A (2)']);
   assert.equal(
@@ -271,6 +293,44 @@ test('createCollection writes Collections/<Name>/ + marker', async () => {
     aggregate.collections[result.collectionId]?.display.label,
     'User APIs',
   );
+});
+
+test('createCollection persists optional description in marker', async () => {
+  const fs = new MemoryFs();
+  const workspaceRoot = '/ws';
+  const adapter = new MemoryScanAdapter(fs, workspaceRoot);
+  const repository = new InMemoryCollectionRepository();
+  const discovery = new CollectionDiscoveryService({
+    scanner: adapter,
+    reader: adapter,
+    repository,
+  });
+  const mutation = new CollectionMutationService({
+    filesystem: fs,
+    getSnapshot: () => discovery.snapshot,
+    refresh: () => discovery.refresh(),
+  });
+
+  const withDescription = await mutation.createCollection(
+    workspaceRoot,
+    'Documented',
+    '  Public APIs  ',
+  );
+  const documentedMarker = parseCollectionMarker(
+    await fs.readText(collectionMarkerPath(withDescription.rootPath)),
+  );
+  assert.equal(documentedMarker?.name, 'Documented');
+  assert.equal(documentedMarker?.description, 'Public APIs');
+
+  const blankDescription = await mutation.createCollection(
+    workspaceRoot,
+    'Blank',
+    '   ',
+  );
+  const blankMarker = parseCollectionMarker(
+    await fs.readText(collectionMarkerPath(blankDescription.rootPath)),
+  );
+  assert.equal(blankMarker?.description, '');
 });
 
 test('createFolder and createRequest update marker order and discovery', async () => {

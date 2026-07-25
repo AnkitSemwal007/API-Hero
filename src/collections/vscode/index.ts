@@ -10,6 +10,16 @@ export {
   openNewRequestDialog,
 } from './new-request-dialog';
 export type { NewRequestDialogResult } from './new-request-dialog';
+export { openCrudPromptDialog } from './crud-prompt-dialog';
+export type {
+  CrudPromptDialogConfig,
+  CrudPromptResult,
+} from './crud-prompt-dialog';
+export { openDestinationPickerDialog } from './destination-picker-dialog';
+export type {
+  DestinationPickerDestination,
+  DestinationPickerResult,
+} from './destination-picker-dialog';
 export {
   NodeApiFileReader,
   VsCodeApiFileReader,

@@ -87,8 +87,10 @@ export class HistoryTreeDataProvider
       );
       item.id = element.id;
       item.contextValue = 'historyGroup';
-      item.description = `${element.entries.length}`;
-      item.iconPath = new ThemeIcon('history');
+      const count = element.entries.length;
+      item.description = count === 1 ? '1 entry' : `${count} entries`;
+      item.iconPath = new ThemeIcon('calendar');
+      item.tooltip = `${element.label}\n${item.description}`;
       return item;
     }
 
@@ -137,14 +139,14 @@ export function describeHistoryFilter(filter: HistoryFilter): string | undefined
       ? filter.status
       : [filter.status];
     if (statuses.length > 0) {
-      parts.push(`status: ${statuses.join(', ')}`);
+      parts.push(statuses.join(', '));
     }
   }
   if (filter.method !== undefined && filter.method.trim().length > 0) {
-    parts.push(`method: ${filter.method.trim().toUpperCase()}`);
+    parts.push(filter.method.trim().toUpperCase());
   }
   if (filter.query !== undefined && filter.query.trim().length > 0) {
-    parts.push(`text: ${filter.query.trim()}`);
+    parts.push(`“${filter.query.trim()}”`);
   }
   if (parts.length === 0) {
     return undefined;
@@ -191,7 +193,11 @@ function describeEntry(entry: HistoryEntry): string {
   const status =
     entry.summary.statusCode !== undefined
       ? String(entry.summary.statusCode)
-      : entry.summary.status;
+      : entry.summary.status === 'success'
+        ? 'OK'
+        : entry.summary.status === 'cancelled'
+          ? 'Cancelled'
+          : 'Failed';
   return `${status} · ${formatDuration(entry.summary.durationMs)} · ${formatTime(
     entry.summary.timestamp,
   )}`;
@@ -265,8 +271,7 @@ function formatTime(timestamp: string): string {
     return timestamp;
   }
   return new Date(ms).toLocaleTimeString(undefined, {
-    hour: '2-digit',
+    hour: 'numeric',
     minute: '2-digit',
-    second: '2-digit',
   });
 }

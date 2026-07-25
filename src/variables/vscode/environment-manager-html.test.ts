@@ -24,8 +24,53 @@ describe('environment-manager-html', () => {
     assert.match(html, /id="save"/u);
     assert.match(html, /id="duplicateEnv"/u);
     assert.match(html, /id="envSearch"/u);
-    assert.match(html, /Global variables/u);
-    assert.match(html, /Workspace variables/u);
+    assert.match(html, /Global Variables/u);
+    assert.match(html, /Workspace Variables/u);
+    assert.match(html, /id="precedenceLegend"/u);
+    assert.match(
+      html,
+      /Run overrides Request overrides Environment overrides Collection overrides Workspace overrides Global/u,
+    );
+    assert.match(html, /id="activeEnvStrip"/u);
+    assert.match(html, /Active environment: None/u);
+  });
+
+  test('sidebar separates Environments from Scopes and keeps scopes out of env list', () => {
+    const html = renderEnvironmentManagerHtml('iaNonce');
+    assert.match(html, /id="environmentsHeading"[^>]*>Environments</u);
+    assert.match(html, /id="scopesHeading"[^>]*>Scopes</u);
+    assert.match(html, /aria-label="Environment Manager navigation"/u);
+    assert.match(html, /aria-label="Variable scopes"/u);
+    assert.match(html, /id="envList"[^>]*aria-label="Environments"/u);
+    assert.match(html, /id="envEmpty"/u);
+    // Scope rows (and runtime env rows) use presentation list items around options.
+    assert.match(
+      html,
+      /<ul class="scope-list"[^>]*>\s*<li role="presentation">/u,
+    );
+    assert.match(html, /wrap\.setAttribute\('role', 'presentation'\)/u);
+    const envListBlock = html.match(/<ul id="envList"[^>]*>[\s\S]*?<\/ul>/u)?.[0];
+    assert.ok(envListBlock);
+    assert.doesNotMatch(
+      envListBlock,
+      /Global Variables|Workspace Variables|scopeGlobal|scopeWorkspace/u,
+    );
+    const scopesIndex = html.indexOf('id="scopesHeading"');
+    const workspaceIndex = html.indexOf('id="scopeWorkspace"');
+    const globalIndex = html.indexOf('id="scopeGlobal"');
+    assert.ok(scopesIndex > 0);
+    assert.ok(workspaceIndex > scopesIndex);
+    assert.ok(globalIndex > workspaceIndex);
+  });
+
+  test('active environment is surfaced with badge and bold patterns', () => {
+    const html = renderEnvironmentManagerHtml('activeNonce');
+    assert.match(html, /id="activeBadge"[^>]*>Active environment</u);
+    assert.match(html, /is-active-env/u);
+    assert.match(html, /env-active-badge/u);
+    assert.match(html, /aria-current/u);
+    assert.match(html, /font-weight: 600/u);
+    assert.match(html, /textContent = 'Active'/u);
   });
 
   test('escapeAttribute neutralizes quote breakouts', () => {
@@ -69,8 +114,43 @@ describe('environment-manager-html', () => {
         ...sampleState(),
         activeEnvironmentId: 'missing',
       }) ?? '',
-      /Unknown active environment/u,
+      /Active environment "missing" is not in the list/u,
     );
+  });
+
+  test('empty activeEnvironmentId is treated as no active environment', () => {
+    assert.equal(
+      validateEnvironmentManagerState({
+        ...sampleState(),
+        activeEnvironmentId: '',
+      }),
+      undefined,
+    );
+    assert.equal(
+      validateEnvironmentManagerState({
+        ...sampleState(),
+        activeEnvironmentId: '   ',
+      }),
+      undefined,
+    );
+
+    const emptyCommit = parseEnvironmentManagerMessage({
+      type: 'commit',
+      state: { ...sampleState(), activeEnvironmentId: '' },
+    });
+    assert.equal(emptyCommit?.type, 'commit');
+    if (emptyCommit?.type === 'commit') {
+      assert.equal('activeEnvironmentId' in emptyCommit.state, false);
+    }
+
+    const whitespaceCommit = parseEnvironmentManagerMessage({
+      type: 'commit',
+      state: { ...sampleState(), activeEnvironmentId: '  \t' },
+    });
+    assert.equal(whitespaceCommit?.type, 'commit');
+    if (whitespaceCommit?.type === 'commit') {
+      assert.equal('activeEnvironmentId' in whitespaceCommit.state, false);
+    }
   });
 
   test('isValidVariableName matches settings schema', () => {
@@ -151,6 +231,44 @@ describe('environment-manager-html', () => {
     );
   });
 
+  test('restore recovers cleartext when a masked sensitive variable is renamed', () => {
+    const baseline = sampleState();
+    const renamedWhileMasked: EnvironmentManagerState = {
+      ...baseline,
+      environments: baseline.environments.map((environment) => ({
+        ...environment,
+        variables: [
+          { name: 'host', value: 'https://dev.test', sensitive: false },
+          {
+            name: 'apiToken',
+            value: MASKED_VARIABLE_VALUE,
+            sensitive: true,
+          },
+        ],
+      })),
+    };
+    const restored = restoreEnvironmentManagerState(renamedWhileMasked, baseline);
+    assert.equal(
+      restored.environments[0]?.variables.find((entry) => entry.name === 'apiToken')
+        ?.value,
+      'sekrit',
+    );
+  });
+
+  test('parseEnvironmentManagerMessage accepts dirty and setActiveEnvironment', () => {
+    assert.deepEqual(parseEnvironmentManagerMessage({ type: 'dirty', dirty: true }), {
+      type: 'dirty',
+      dirty: true,
+    });
+    assert.deepEqual(
+      parseEnvironmentManagerMessage({
+        type: 'setActiveEnvironment',
+        id: 'dev',
+      }),
+      { type: 'setActiveEnvironment', id: 'dev' },
+    );
+  });
+
   test('environment manager HTML wires search and duplicate controls', () => {
     const html = renderEnvironmentManagerHtml('envNonce');
     assert.match(html, /id="envSearch"/u);
@@ -159,6 +277,12 @@ describe('environment-manager-html', () => {
     assert.match(html, /duplicateEnv'\)\.addEventListener/u);
     assert.match(html, /envFilter/u);
     assert.match(html, / Copy'/u);
+    assert.match(html, /type: 'setActiveEnvironment'/u);
+    assert.match(html, /type: 'dirty'/u);
+    assert.match(html, /pendingActiveEnvironmentId/u);
+    assert.match(html, /previousActiveEnvironmentId/u);
+    assert.match(html, /activeEnvironmentSet/u);
+    assert.match(html, /activeEnvironmentError/u);
   });
 });
 

@@ -1,5 +1,30 @@
 dist/
 node_modules/
 coverage/
+/release/
 *.vsix
+*.bundle
+*.tmp
+*.bak
+*.old
+*.orig
 *.log
+temp/
+tmp/
+.DS_Store
+Thumbs.db
+
+# Cursor / AI workflow (local only)
+.cursor/
+.cursorrules
+.cursor-phase1-progress.json
+.cursor*.json
+
+# Internal phase implementation specs & task plans (not public ADRs)
+docs/architecture/adr/*-implementation-spec.md
+docs/architecture/adr/*-task-plan.md
+
+# Scratch / temporary planning exports
+*.scratch.md
+*.scratch.json
+docs/architecture/*-proposal.md

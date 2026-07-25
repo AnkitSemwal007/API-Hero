@@ -1,71 +1,41 @@
-# Marketplace readiness (working notes)
+# Marketplace readiness — 1.0.0
 
-Engineering Manager expansion notes for the **0.5.0** Marketplace release sprint. Product architecture is approved; this file tracks packaging, SEO, and polish — not new runtime features.
+Checklist for publishing **API Hero** `ankitsemwal.api-hero` **1.0.0** (Phase 1 complete).
 
-## Metadata / SEO applied
+## Metadata
 
-| Field | Choice |
+| Field | Expected |
 | --- | --- |
 | `displayName` | API Hero |
-| `name` | `api-hero` |
-| `publisher` | `ankitsemwal` |
-| Extension ID | `ankitsemwal.api-hero` |
-| `version` | `0.5.0` |
-| `description` | Concise REST/HTTP client pitch (`.api`, collections, variables, auth, assertions, history, OpenAPI) — no keyword stuffing |
-| `categories` | `Testing`, `Programming Languages`, `Other` (Testing first for discoverability) |
-| `keywords` | api hero, rest/http client, api testing, openapi, collections, http requests, assertions — no “alternative” keyword stuffing |
-| `repository` | `https://github.com/AnkitSemwal007/API-Hero.git` |
-| `homepage` | `https://github.com/AnkitSemwal007/API-Hero` |
-| `bugs` | `https://github.com/AnkitSemwal007/API-Hero/issues` |
-| `license` | MIT |
-| `galleryBanner` | Dark teal `#0f766e` (avoids purple cliché) |
-| `icon` | `images/icon.png` (128×128 PNG from light brand mark) |
-| `activationEvents` | Implicit via `contributes` (no explicit list added) |
+| `name` / publisher / ID | `api-hero` / `ankitsemwal` / `ankitsemwal.api-hero` |
+| `version` | `1.0.0` |
+| `description` / keywords / categories | Match shipped REST/HTTP scope (no GraphQL/OAuth claims) |
+| `icon` | `images/icon.png` (128×128) |
+| `galleryBanner` | `#0f766e` dark |
+| License / repo / bugs / homepage | MIT + GitHub links set |
 
-## Brand vs stable IDs
+## Functional claims (listing must match)
 
-User-facing strings → **API Hero**. Machine IDs unchanged — see [stable-identifiers.md](./stable-identifiers.md).
+- Request Editor default for `.api` (including **Extract** tab)
+- Collections + History Activity Bar
+- Env Manager, Auth Manager, Overview, OpenAPI wizard
+- Assertions, **extraction** (`@extract` / `@sensitive-extract`), collection runner + report, history detail
+- Stubs called out or omitted: Run File, Login, Logout; collection chaining deferred to Phase 2
+- No OAuth2, cookie jar, Code Actions, or GraphQL examples
 
-## UX polish shipped
+## Quality gates
 
-- Stub commands `apiRunner.runFile` / `login` / `logout`: titles marked `(Coming Soon)`; information message on invoke
-- `viewsWelcome` for Collections and History with refresh / import / focus command links
-- Diagnostic source labels: API Hero, API Hero Variables, API Hero Assertions
+- [ ] `npm run check` / `npm run lint` / `npm test` pass
+- [ ] `npm run package` produces a VSIX
+- [ ] Manual smoke: create request → run → response → history
+- [ ] Manual smoke: extract rule → run → extraction report → variable reuse
+- [ ] Manual smoke: manage env/auth, filter collections, OpenAPI import
+- [ ] Stable IDs unchanged ([stable-identifiers.md](./stable-identifiers.md))
 
-## Activation performance
+## Assets
 
-`activate()` remains eager to preserve DI registration order. **Do not** lazy-load core orchestrator wiring without an architecture pass.
+See [marketplace-assets.md](./marketplace-assets.md), [banner placeholder](../marketplace/banner-placeholder.md), and the full presentation audit [marketplace-readiness-review.md](../marketplace/marketplace-readiness-review.md).
 
-Safe deferred-load **candidates** for a later micro-sprint (document only for now):
+## Brand vs IDs
 
-1. Response viewer HTML factory / panel content until first successful response
-2. OpenAPI import pipeline modules until `apiRunner.importOpenApi`
-3. Collection-runner progress UI helpers until first collection run
-
-Any lazy import must keep command registration and view providers available at activation.
-
-## Packaging
-
-- Script: `npm run package` → `vsce package` (includes production deps such as `yaml`)
-- DevDependency: `@vscode/vsce`
-- `.vscodeignore` excludes `docs/**`, `scripts/**`, `coverage/**`, `src/**`, `package-lock.json`, etc.
-- Do **not** blanket-ignore `node_modules/**` — that strips runtime deps from the VSIX
-- Ships: `dist/**/*.js` (non-test), `node_modules/yaml/**`, `package.json`, `README.md`, `CHANGELOG.md`, `LICENSE`, `SUPPORT.md`, `syntaxes/`, `snippets/`, `images/` (SVGs + Marketplace `icon.png`), `language-configuration.json`
-- Local VSIX (validated): ~410 KB with `yaml`; ~215 KB without deps (broken for OpenAPI)
-
-## Publish checklist (manual)
-
-- [x] Provide 128×128 PNG and set `package.json` `icon` (`images/icon.png`)
-- [ ] Replace screenshot / banner placeholders (capture real UI; store under `docs/marketplace/` or ship under `images/` if linked from README)
-- [ ] `npm run check`; `npm run lint`; `npm test`
-- [ ] `npm run package` and smoke-install VSIX (verify OpenAPI import resolves `yaml`)
-- [ ] Publisher account `ankitsemwal` verified on Marketplace
-- [ ] Personal Access Token with Marketplace publish scope
-- [ ] `vsce publish` (out of scope for this sprint — do not publish from automation here)
-
-## Out of scope (confirmed)
-
-- GraphQL, AI, WebSocket, CLI
-- Breaking ID changes
-- Inventing new Marketplace icon art from scratch (use existing brand PNGs)
-- Architecture rewrites
+User-facing **API Hero**; machine IDs remain `apiRunner.*`.

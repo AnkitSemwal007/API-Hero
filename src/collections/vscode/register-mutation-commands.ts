@@ -1,5 +1,9 @@
 /**
- * Registers collection mutation commands (CRUD dialogs) for the Collections tree.
+ * Registers collection mutation commands for the Collections tree.
+ *
+ * Create Collection prompts for name (and optional description) before any
+ * filesystem write. Create Folder still follows Explorer create-then-rename.
+ * Name prompts use the shared CRUD webview dialog.
  */
 
 import {
@@ -12,28 +16,47 @@ import {
 } from 'vscode';
 
 import { COMMAND_IDS, REQUEST_EDITOR_VIEW_TYPE } from '../../constants';
-import type { Logger } from '../../shared';
+import { describeFilesystemFailure, type Logger } from '../../shared';
 import type { CollectionDiscoveryService } from '../discovery';
 import type { Collection } from '../models';
 import {
   CollectionMutationError,
   CollectionMutationService,
+  allocateUniqueName,
   pathBasename,
+  pathDirname,
   stripApiExtension,
+  validateCollectionDirectoryName,
+  validateDirectoryName,
   type CreateCollectionResult,
 } from '../mutation';
 import type { CollectionNameCollisionChoice } from '../transfer';
 import type { CollectionTreeNode } from '../tree-projection';
 import {
+  findTreeNodeByCollectionId,
+  findTreeNodeByFolderPath,
+  findTreeNodeByRequestFilePath,
+} from '../tree-projection';
+import { openCrudPromptDialog } from './crud-prompt-dialog';
+import { openDestinationPickerDialog } from './destination-picker-dialog';
+import {
   buildNewRequestDestinations,
   openNewRequestDialog,
 } from './new-request-dialog';
+import { getActiveProjectStoreCoordinator } from '../../project-store/vscode';
 
 export interface RegisterMutationCommandsOptions {
   readonly discovery: CollectionDiscoveryService;
   readonly mutation: CollectionMutationService;
   readonly treeView: TreeView<CollectionTreeNode>;
   readonly logger: Logger;
+}
+
+const CRUD_STATUS_MS = 3_000;
+
+/** Brief status-bar feedback for successful collection CRUD (not modal toasts). */
+function notifyCrudSuccess(message: string): void {
+  window.setStatusBarMessage(message, CRUD_STATUS_MS);
 }
 
 /** Registers mutation command handlers; returns disposables. */
@@ -49,9 +72,10 @@ export function registerMutationCommands(
     try {
       await action();
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : String(error);
-      logger.warning(`Collections ${label} failed`, { message });
+      const message = userFacingMutationFailure(error);
+      logger.warning(`Collections ${label} failed`, {
+        message: error instanceof Error ? error.message : String(error),
+      });
       void window.showErrorMessage(`API Hero: ${message}`);
     }
   };
@@ -63,14 +87,53 @@ export function registerMutationCommands(
         if (workspaceRoot === undefined) {
           return;
         }
-        const name = await promptName('Collection name', 'My APIs');
-        if (name === undefined) {
+        const existing = listNativeCollectionNames(discovery, workspaceRoot);
+        let collectionId: string | undefined;
+        const submitted = await openCrudPromptDialog({
+          title: 'Create Collection',
+          subtitle:
+            'Collections live under Collections/ in your workspace.',
+          fieldLabel: 'Name',
+          placeholder: 'My APIs',
+          initialValue: '',
+          submitLabel: 'Create',
+          descriptionFieldLabel: 'Description',
+          descriptionPlaceholder: 'Optional',
+          initialDescription: '',
+          validateName: (name) => {
+            const validated = validateCollectionDirectoryName(name);
+            return validated.error;
+          },
+          onSubmit: async (value, extras) => {
+            const validated = validateCollectionDirectoryName(value);
+            if (validated.value === undefined) {
+              throw new Error(validated.error ?? 'Name is required.');
+            }
+            if (existing.includes(validated.value)) {
+              throw new Error(
+                `A collection named "${validated.value}" already exists.`,
+              );
+            }
+            const projectStore = getActiveProjectStoreCoordinator();
+            if (projectStore !== undefined) {
+              // Initialize only after Create — Cancel must not write .apihero.
+              // Never clone workspace settings into a user-picked (possibly secondary) folder.
+              await projectStore.ensureInitialized(workspaceRoot);
+            }
+            const created = await mutation.createCollection(
+              workspaceRoot,
+              validated.value,
+              extras?.description,
+            );
+            collectionId = created.collectionId;
+            await revealCollectionNode(discovery, treeView, collectionId);
+          },
+        });
+        if (submitted === undefined || collectionId === undefined) {
           return;
         }
-        await mutation.createCollection(workspaceRoot, name);
-        void window.showInformationMessage(
-          `API Hero: Created collection "${name}".`,
-        );
+        await revealCollectionNode(discovery, treeView, collectionId);
+        notifyCrudSuccess('API Hero: Collection created');
       });
     }),
     commands.registerCommand(
@@ -85,15 +148,31 @@ export function registerMutationCommands(
             );
             return;
           }
-          const next = await promptName(
-            'Rename collection',
-            collection.display.label,
-            collection.display.label,
-          );
-          if (next === undefined) {
-            return;
+          let collectionId = collection.id;
+          const previousLabel = collection.display.label;
+          const submitted = await openCrudPromptDialog({
+            title: 'Rename Collection',
+            fieldLabel: 'Name',
+            placeholder: previousLabel,
+            initialValue: previousLabel,
+            submitLabel: 'Rename',
+            validateName: (name) => validateCollectionDirectoryName(name).error,
+            onSubmit: async (value) => {
+              if (value === previousLabel) {
+                return;
+              }
+              const result = await mutation.renameCollection(
+                collectionId,
+                value,
+              );
+              collectionId = result.collectionId;
+              await revealCollectionNode(discovery, treeView, collectionId);
+            },
+          });
+          await revealCollectionNode(discovery, treeView, collectionId);
+          if (submitted !== undefined && submitted !== previousLabel) {
+            notifyCrudSuccess('API Hero: Collection renamed');
           }
-          await mutation.renameCollection(collection.id, next);
         });
       },
     ),
@@ -118,6 +197,7 @@ export function registerMutationCommands(
             return;
           }
           await mutation.deleteCollection(collection.id);
+          notifyCrudSuccess('API Hero: Collection deleted');
         });
       },
     ),
@@ -133,7 +213,9 @@ export function registerMutationCommands(
             );
             return;
           }
-          await mutation.duplicateCollection(collection.id);
+          const result = await mutation.duplicateCollection(collection.id);
+          await revealCollectionNode(discovery, treeView, result.collectionId);
+          notifyCrudSuccess('API Hero: Collection duplicated');
         });
       },
     ),
@@ -176,8 +258,8 @@ export function registerMutationCommands(
             destinationParent,
             { collision },
           );
-          void window.showInformationMessage(
-            `API Hero: Exported "${preferredName}" to ${result.exportPath}.`,
+          notifyCrudSuccess(
+            `API Hero: Exported "${preferredName}" to ${result.exportPath}`,
           );
         });
       },
@@ -209,8 +291,8 @@ export function registerMutationCommands(
         if (result === undefined) {
           return;
         }
-        void window.showInformationMessage(
-          `API Hero: Imported collection into ${result.rootPath}.`,
+        notifyCrudSuccess(
+          `API Hero: Imported collection into ${result.rootPath}`,
         );
       });
     }),
@@ -229,15 +311,66 @@ export function registerMutationCommands(
             );
             return;
           }
-          const name = await promptName('Folder name', 'New Folder');
-          if (name === undefined) {
-            return;
-          }
-          await mutation.createFolder(
+          const existing = listSiblingFolderNames(
+            discovery,
             destination.collectionId,
             destination.folderRelativePath,
-            name,
           );
+          const defaultName = allocateUniqueName(
+            'New Folder',
+            (candidate) => existing.includes(candidate),
+          );
+          const created = await mutation.createFolder(
+            destination.collectionId,
+            destination.folderRelativePath,
+            defaultName,
+          );
+          let relativePath = created.relativePath;
+          await revealFolderNode(
+            discovery,
+            treeView,
+            destination.collectionId,
+            relativePath,
+          );
+          const submitted = await openCrudPromptDialog({
+            title: 'Rename Folder',
+            subtitle: 'Rename now, or Cancel to keep the default name.',
+            fieldLabel: 'Name',
+            placeholder: defaultName,
+            initialValue: defaultName,
+            submitLabel: 'Rename',
+            validateName: (name) => validateDirectoryName(name, 'Folder').error,
+            onSubmit: async (value) => {
+              if (value === defaultName) {
+                return;
+              }
+              const result = await mutation.renameFolder(
+                destination.collectionId,
+                relativePath,
+                value,
+              );
+              relativePath = result.relativePath;
+              await revealFolderNode(
+                discovery,
+                treeView,
+                destination.collectionId,
+                relativePath,
+              );
+            },
+          });
+          await revealFolderNode(
+            discovery,
+            treeView,
+            destination.collectionId,
+            relativePath,
+          );
+          if (submitted !== undefined) {
+            notifyCrudSuccess(
+              submitted === defaultName
+                ? 'API Hero: Folder created'
+                : 'API Hero: Folder renamed',
+            );
+          }
         });
       },
     ),
@@ -253,19 +386,42 @@ export function registerMutationCommands(
             void window.showWarningMessage('Select a folder to rename.');
             return;
           }
-          const next = await promptName(
-            'Rename folder',
-            folder.label,
-            folder.label,
-          );
-          if (next === undefined) {
-            return;
-          }
-          await mutation.renameFolder(
+          let relativePath = folder.relativePath;
+          const previousLabel = folder.label;
+          const submitted = await openCrudPromptDialog({
+            title: 'Rename Folder',
+            fieldLabel: 'Name',
+            placeholder: previousLabel,
+            initialValue: previousLabel,
+            submitLabel: 'Rename',
+            validateName: (name) => validateDirectoryName(name, 'Folder').error,
+            onSubmit: async (value) => {
+              if (value === previousLabel) {
+                return;
+              }
+              const result = await mutation.renameFolder(
+                folder.collectionId,
+                relativePath,
+                value,
+              );
+              relativePath = result.relativePath;
+              await revealFolderNode(
+                discovery,
+                treeView,
+                folder.collectionId,
+                relativePath,
+              );
+            },
+          });
+          await revealFolderNode(
+            discovery,
+            treeView,
             folder.collectionId,
-            folder.relativePath,
-            next,
+            relativePath,
           );
+          if (submitted !== undefined && submitted !== previousLabel) {
+            notifyCrudSuccess('API Hero: Folder renamed');
+          }
         });
       },
     ),
@@ -293,6 +449,7 @@ export function registerMutationCommands(
             folder.collectionId,
             folder.relativePath,
           );
+          notifyCrudSuccess('API Hero: Folder deleted');
         });
       },
     ),
@@ -308,10 +465,17 @@ export function registerMutationCommands(
             void window.showWarningMessage('Select a folder to duplicate.');
             return;
           }
-          await mutation.duplicateFolder(
+          const result = await mutation.duplicateFolder(
             folder.collectionId,
             folder.relativePath,
           );
+          await revealFolderNode(
+            discovery,
+            treeView,
+            folder.collectionId,
+            result.relativePath,
+          );
+          notifyCrudSuccess('API Hero: Folder duplicated');
         });
       },
     ),
@@ -332,41 +496,36 @@ export function registerMutationCommands(
           );
           if (destinations.length === 0) {
             void window.showWarningMessage(
-              'Create a collection under Collections/ before adding a request.',
+              'Create a collection first (New Collection), then add a request.',
             );
             return;
           }
 
-          try {
-            await openNewRequestDialog({
-              destinations,
-              ...(destination !== undefined
-                ? {
-                    preselectedCollectionId: destination.collectionId,
-                    preselectedFolderRelativePath:
-                      destination.folderRelativePath,
-                  }
-                : {}),
-              onCreate: async (result) => {
-                const written = await mutation.createRequestFromModel(
-                  result.collectionId,
-                  result.folderRelativePath,
-                  result.model,
-                );
-                await openApiFile(written.filePath);
-              },
-            });
-          } catch (error) {
-            logger.warning('New Request dialog failed; using InputBox fallback', {
-              message: error instanceof Error ? error.message : String(error),
-            });
-            await createRequestViaInputBox(
-              mutation,
-              destination ?? {
-                collectionId: destinations[0]!.collectionId,
-                folderRelativePath: destinations[0]!.folderRelativePath,
-              },
-            );
+          const created = await openNewRequestDialog({
+            destinations,
+            ...(destination !== undefined
+              ? {
+                  preselectedCollectionId: destination.collectionId,
+                  preselectedFolderRelativePath:
+                    destination.folderRelativePath,
+                }
+              : {}),
+            onCreate: async (result) => {
+              const written = await mutation.createRequestFromModel(
+                result.collectionId,
+                result.folderRelativePath,
+                result.model,
+              );
+              await openApiFile(written.filePath);
+              await revealRequestFileNode(
+                discovery,
+                treeView,
+                written.filePath,
+              );
+            },
+          });
+          if (created) {
+            notifyCrudSuccess('API Hero: Request created');
           }
         });
       },
@@ -390,16 +549,31 @@ export function registerMutationCommands(
             return;
           }
           const current = stripApiExtension(pathBasename(request.filePath));
-          const next = await promptName('Rename request', current, current);
-          if (next === undefined) {
-            return;
+          let filePath = request.filePath;
+          const submitted = await openCrudPromptDialog({
+            title: 'Rename Request',
+            fieldLabel: 'Name',
+            placeholder: current,
+            initialValue: current,
+            submitLabel: 'Rename',
+            onSubmit: async (value) => {
+              if (value === current) {
+                return;
+              }
+              const result = await mutation.renameRequest(
+                request.collectionId,
+                filePath,
+                value,
+              );
+              filePath = result.filePath;
+              await openApiFile(filePath);
+              await revealRequestFileNode(discovery, treeView, filePath);
+            },
+          });
+          await revealRequestFileNode(discovery, treeView, filePath);
+          if (submitted !== undefined && submitted !== current) {
+            notifyCrudSuccess('API Hero: Request renamed');
           }
-          const result = await mutation.renameRequest(
-            request.collectionId,
-            request.filePath,
-            next,
-          );
-          await openApiFile(result.filePath);
         });
       },
     ),
@@ -426,6 +600,8 @@ export function registerMutationCommands(
             request.filePath,
           );
           await openApiFile(result.filePath);
+          await revealRequestFileNode(discovery, treeView, result.filePath);
+          notifyCrudSuccess('API Hero: Request duplicated');
         });
       },
     ),
@@ -453,6 +629,7 @@ export function registerMutationCommands(
             request.collectionId,
             request.filePath,
           );
+          notifyCrudSuccess('API Hero: Request deleted');
         });
       },
     ),
@@ -468,17 +645,40 @@ export function registerMutationCommands(
             void window.showWarningMessage('Select a request to move.');
             return;
           }
-          const destination = await pickNativeFolderDestination(discovery);
-          if (destination === undefined) {
+          const destinations = buildNewRequestDestinations(
+            discovery.snapshot === undefined
+              ? []
+              : Object.values(discovery.snapshot.collections),
+          );
+          if (destinations.length === 0) {
+            void window.showWarningMessage(
+              'Create a collection under Collections/ before moving a request.',
+            );
             return;
           }
-          const result = await mutation.moveRequest(
-            request.collectionId,
-            request.filePath,
-            destination.collectionId,
-            destination.folderRelativePath,
-          );
-          await openApiFile(result.filePath);
+          const moved = await openDestinationPickerDialog({
+            title: 'Move Request',
+            subtitle: 'Choose a collection folder for this request.',
+            destinations,
+            submitLabel: 'Move Here',
+            onSubmit: async (destination) => {
+              const result = await mutation.moveRequest(
+                request.collectionId,
+                request.filePath,
+                destination.collectionId,
+                destination.folderRelativePath,
+              );
+              await openApiFile(result.filePath);
+              await revealRequestFileNode(
+                discovery,
+                treeView,
+                result.filePath,
+              );
+            },
+          });
+          if (moved !== undefined) {
+            notifyCrudSuccess('API Hero: Request moved');
+          }
         });
       },
     ),
@@ -501,7 +701,14 @@ function firstSelection(
   treeView: TreeView<CollectionTreeNode>,
   kind: CollectionTreeNode['kind'],
 ): CollectionTreeNode | undefined {
-  return treeView.selection.find((node) => node.kind === kind);
+  // Prefer the last selected node (active/focused item under multi-select).
+  for (let index = treeView.selection.length - 1; index >= 0; index -= 1) {
+    const node = treeView.selection[index];
+    if (node?.kind === kind) {
+      return node;
+    }
+  }
+  return undefined;
 }
 
 function resolveCollection(
@@ -632,50 +839,6 @@ function resolveCreateDestination(
   return undefined;
 }
 
-async function pickNativeFolderDestination(
-  discovery: CollectionDiscoveryService,
-): Promise<{ collectionId: string; folderRelativePath: string } | undefined> {
-  const aggregate = discovery.snapshot;
-  if (aggregate === undefined) {
-    return undefined;
-  }
-  type PickItem = {
-    label: string;
-    description?: string;
-    collectionId: string;
-    folderRelativePath: string;
-  };
-  const items: PickItem[] = [];
-  for (const collection of Object.values(aggregate.collections)) {
-    if (collection.kind !== 'native') {
-      continue;
-    }
-    items.push({
-      label: collection.display.label,
-      description: '(collection root)',
-      collectionId: collection.id,
-      folderRelativePath: '',
-    });
-    for (const folder of Object.values(collection.folders)) {
-      items.push({
-        label: `${collection.display.label} / ${folder.relativePath}`,
-        collectionId: collection.id,
-        folderRelativePath: folder.relativePath,
-      });
-    }
-  }
-  if (items.length === 0) {
-    void window.showWarningMessage(
-      'Create a collection under Collections/ before moving a request.',
-    );
-    return undefined;
-  }
-  const selected = await window.showQuickPick(items, {
-    placeHolder: 'Move request to…',
-  });
-  return selected;
-}
-
 async function pickWorkspaceRootPath(): Promise<string | undefined> {
   const folders = workspace.workspaceFolders;
   if (folders === undefined || folders.length === 0) {
@@ -693,20 +856,45 @@ async function pickWorkspaceRootPath(): Promise<string | undefined> {
   return selected?.uri.toString();
 }
 
-async function promptName(
-  prompt: string,
-  placeHolder: string,
-  value?: string,
-): Promise<string | undefined> {
-  const result = await window.showInputBox({
-    prompt,
-    placeHolder,
-    value,
-    ignoreFocusOut: true,
-    validateInput: (text) =>
-      text.trim().length === 0 ? 'Name is required' : undefined,
-  });
-  return result?.trim();
+function listNativeCollectionNames(
+  discovery: CollectionDiscoveryService,
+  workspaceRootPath: string,
+): string[] {
+  const aggregate = discovery.snapshot;
+  if (aggregate === undefined) {
+    return [];
+  }
+  const names: string[] = [];
+  for (const collection of Object.values(aggregate.collections)) {
+    if (
+      collection.kind === 'native' &&
+      collection.workspaceRootPath === workspaceRootPath
+    ) {
+      names.push(pathBasename(collection.rootPath));
+    }
+  }
+  return names;
+}
+
+function listSiblingFolderNames(
+  discovery: CollectionDiscoveryService,
+  collectionId: string,
+  parentRelativePath: string,
+): string[] {
+  const collection = discovery.snapshot?.collections[collectionId];
+  if (collection === undefined) {
+    return [];
+  }
+  const parent = parentRelativePath
+    .replace(/\\/g, '/')
+    .replace(/^\/+|\/+$/g, '');
+  const names: string[] = [];
+  for (const folder of Object.values(collection.folders)) {
+    if (pathDirname(folder.relativePath) === parent) {
+      names.push(pathBasename(folder.relativePath));
+    }
+  }
+  return names;
 }
 
 /**
@@ -791,22 +979,6 @@ function joinPath(...segments: string[]): string {
     .join('/');
 }
 
-async function createRequestViaInputBox(
-  mutation: CollectionMutationService,
-  destination: { collectionId: string; folderRelativePath: string },
-): Promise<void> {
-  const name = await promptName('Request name', 'New Request');
-  if (name === undefined) {
-    return;
-  }
-  const result = await mutation.createRequest(
-    destination.collectionId,
-    destination.folderRelativePath,
-    name,
-  );
-  await openApiFile(result.filePath);
-}
-
 /** Opens a `.api` file in the Request Editor (same path as tree open). */
 async function openApiFile(filePath: string): Promise<void> {
   const uri = filePath.includes('://')
@@ -816,5 +988,65 @@ async function openApiFile(filePath: string): Promise<void> {
     'vscode.openWith',
     uri,
     REQUEST_EDITOR_VIEW_TYPE,
+  );
+}
+
+async function revealCollectionNode(
+  discovery: CollectionDiscoveryService,
+  treeView: TreeView<CollectionTreeNode>,
+  collectionId: string,
+): Promise<void> {
+  const aggregate = discovery.snapshot;
+  if (aggregate === undefined) {
+    return;
+  }
+  const node = findTreeNodeByCollectionId(aggregate, collectionId);
+  if (node === undefined) {
+    return;
+  }
+  await treeView.reveal(node, { select: true, focus: true, expand: true });
+}
+
+async function revealFolderNode(
+  discovery: CollectionDiscoveryService,
+  treeView: TreeView<CollectionTreeNode>,
+  collectionId: string,
+  relativePath: string,
+): Promise<void> {
+  const aggregate = discovery.snapshot;
+  if (aggregate === undefined) {
+    return;
+  }
+  const node = findTreeNodeByFolderPath(aggregate, collectionId, relativePath);
+  if (node === undefined) {
+    return;
+  }
+  await treeView.reveal(node, { select: true, focus: true, expand: true });
+}
+
+async function revealRequestFileNode(
+  discovery: CollectionDiscoveryService,
+  treeView: TreeView<CollectionTreeNode>,
+  filePath: string,
+): Promise<void> {
+  const aggregate = discovery.snapshot;
+  if (aggregate === undefined) {
+    return;
+  }
+  const node = findTreeNodeByRequestFilePath(aggregate, filePath);
+  if (node === undefined) {
+    return;
+  }
+  // Keep editor focus when callers open the `.api` file after create/rename/move.
+  await treeView.reveal(node, { select: true, focus: false, expand: true });
+}
+
+function userFacingMutationFailure(error: unknown): string {
+  if (error instanceof CollectionMutationError) {
+    return error.message;
+  }
+  return (
+    describeFilesystemFailure(error) ??
+    'Something went wrong while updating collections. Check the output log for details.'
   );
 }

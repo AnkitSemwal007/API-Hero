@@ -66,9 +66,15 @@ History re-run and still opens the viewer.
 
 **Design choice:** during a collection run the response viewer is suppressed for
 every request. Completion is communicated via progress notification, status bar,
-and a secret-free summary toast. History still records each network-attempted
-(and cancelled-at-transport) request through the normal orchestrator capture
-path — including cancelled in-flight attempts that reached `execute`.
+a secret-free summary toast, and the **Collection Run Report** panel
+(`run-report-panel.ts` / `run-report-html.ts`). History still records each
+network-attempted (and cancelled-at-transport) request through the normal
+orchestrator capture path — including cancelled in-flight attempts that reached
+`execute`.
+
+Default failure policy is configurable via
+`apiRunner.collectionRunner.failurePolicy` (`ask` prompts; otherwise
+stop / continue / skip-invalid without a QuickPick).
 
 **Residual UX debt:** the orchestrator may still update the single-request
 status bar item while the collection run status bar is active (`useProgressUi`

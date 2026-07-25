@@ -37,6 +37,8 @@ export class VsCodeCollectionRunProgress
   private report:
     | ((value: { message?: string; increment?: number }) => void)
     | undefined;
+  private lastReportedPercent: number | undefined;
+  private hideTimer: ReturnType<typeof setTimeout> | undefined;
 
   public constructor() {
     this.item = window.createStatusBarItem(StatusBarAlignment.Left, 99);
@@ -47,6 +49,7 @@ export class VsCodeCollectionRunProgress
     report: (value: { message?: string; increment?: number }) => void,
   ): void {
     this.report = report;
+    this.lastReportedPercent = undefined;
   }
 
   public onProgress(event: RunProgressEvent): void {
@@ -54,14 +57,32 @@ export class VsCodeCollectionRunProgress
       return;
     }
     const label = event.current?.label;
+    // Align the displayed request index with the progress bar:
+    // request-started uses completed+1 (in flight); finished/completed use completed.
+    const displayed =
+      event.phase === 'request-started'
+        ? Math.min(event.completed + 1, event.total)
+        : event.completed;
     const message =
       event.phase === 'completed'
         ? `Finished ${event.completed}/${event.total}`
         : label === undefined
-          ? `Running ${event.completed}/${event.total}`
-          : `${event.completed + 1}/${event.total}: ${label}`;
+          ? `Running ${displayed}/${event.total}`
+          : `${displayed}/${event.total}: ${label}`;
 
-    this.report?.({ message });
+    const percent =
+      event.total > 0 ? (displayed / event.total) * 100 : undefined;
+    const increment =
+      percent === undefined
+        ? undefined
+        : Math.max(0, percent - (this.lastReportedPercent ?? 0));
+    this.lastReportedPercent =
+      percent === undefined ? this.lastReportedPercent : percent;
+
+    this.report?.({
+      message,
+      ...(increment !== undefined && increment > 0 ? { increment } : {}),
+    });
     this.item.text = `$(sync~spin) API Hero: ${message}`;
     this.item.tooltip = `Elapsed ${formatDuration(event.elapsedMs)}`;
     this.item.show();
@@ -94,7 +115,11 @@ export class VsCodeCollectionRunProgress
   }
 
   public hideSoon(delayMs = 5_000): void {
-    setTimeout(() => {
+    if (this.hideTimer !== undefined) {
+      clearTimeout(this.hideTimer);
+    }
+    this.hideTimer = setTimeout(() => {
+      this.hideTimer = undefined;
       if (!this.disposed) {
         this.item.hide();
       }
@@ -107,6 +132,10 @@ export class VsCodeCollectionRunProgress
     }
     this.disposed = true;
     this.report = undefined;
+    if (this.hideTimer !== undefined) {
+      clearTimeout(this.hideTimer);
+      this.hideTimer = undefined;
+    }
     this.item.dispose();
   }
 }

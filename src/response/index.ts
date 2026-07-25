@@ -24,6 +24,12 @@ export type {
 
   PresentedCookies,
 
+  PresentedExtraction,
+
+  PresentedExtractionOutcome,
+
+  PresentedExtractionSummary,
+
   PresentedHeader,
 
   ResponseBodyLanguage,

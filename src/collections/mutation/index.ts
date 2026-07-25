@@ -26,4 +26,6 @@ export {
   sanitizePathSegment,
   sanitizeRequestFileName,
   stripApiExtension,
+  validateCollectionDirectoryName,
+  validateDirectoryName,
 } from './paths';

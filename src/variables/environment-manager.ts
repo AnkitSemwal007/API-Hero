@@ -22,6 +22,16 @@ export interface EnvironmentChangeDisposable {
   dispose(): void;
 }
 
+/** Treats empty or whitespace-only ids as unset (no active environment). */
+export function normalizeOptionalEnvironmentId(
+  id: string | undefined,
+): string | undefined {
+  if (id === undefined || id.trim().length === 0) {
+    return undefined;
+  }
+  return id;
+}
+
 /**
  * Owns explicit environment selection. Each capture is deeply detached and
  * frozen, so an in-flight request cannot observe a later switch.
@@ -34,7 +44,9 @@ export class EnvironmentManager {
 
   public constructor(private readonly repository: VariableConfigurationRepository) {
     this.configuration = cloneSnapshot(repository.getSnapshot());
-    this.configuredEnvironmentId = this.configuration.activeEnvironmentId;
+    this.configuredEnvironmentId = normalizeOptionalEnvironmentId(
+      this.configuration.activeEnvironmentId,
+    );
     this.activeEnvironmentId = this.configuredEnvironmentId;
   }
 
@@ -47,31 +59,49 @@ export class EnvironmentManager {
   }
 
   public switchActive(id: string | undefined): void {
-    if (id !== undefined && !this.configuration.environments.some(
-      (environment) => environment.id === id,
+    const normalized = normalizeOptionalEnvironmentId(id);
+    if (normalized !== undefined && !this.configuration.environments.some(
+      (environment) => environment.id === normalized,
     )) {
-      throw new Error(`Unknown environment "${id}".`);
+      throw new Error(`Unknown environment "${normalized}".`);
     }
-    if (id === this.activeEnvironmentId) {
+    if (normalized === this.activeEnvironmentId) {
       return;
     }
-    this.activeEnvironmentId = id;
+    this.activeEnvironmentId = normalized;
     this.notify();
   }
 
   /**
    * Re-reads configuration and emits only when effective variables or the
    * active environment changed. Unrelated settings preserve session selection.
+   * Clears a stale session/configured active id that no longer exists.
    */
   public refresh(): void {
     const before = this.capture();
     const next = cloneSnapshot(this.repository.getSnapshot());
-    const configured = next.activeEnvironmentId;
-    if (configured !== this.configuredEnvironmentId) {
-      this.configuredEnvironmentId = configured;
-      this.activeEnvironmentId = configured;
+    const configured = normalizeOptionalEnvironmentId(next.activeEnvironmentId);
+    const configuredExists =
+      configured === undefined ||
+      next.environments.some((environment) => environment.id === configured);
+    const nextConfigured = configuredExists ? configured : undefined;
+
+    if (nextConfigured !== this.configuredEnvironmentId) {
+      this.configuredEnvironmentId = nextConfigured;
+      this.activeEnvironmentId = nextConfigured;
     }
     this.configuration = next;
+
+    // Drop session selection pointing at a deleted environment.
+    if (
+      this.activeEnvironmentId !== undefined &&
+      !this.configuration.environments.some(
+        (environment) => environment.id === this.activeEnvironmentId,
+      )
+    ) {
+      this.activeEnvironmentId = undefined;
+    }
+
     const after = this.capture();
     if (!environmentSnapshotsEqual(before, after)) {
       this.notify();
