@@ -2,7 +2,7 @@
 
 **Git-first REST/HTTP client for Visual Studio Code** — author human-readable `.api` requests beside your code, run them with assertions, organize collections as folders, manage environments and auth, import OpenAPI, and inspect responses professionally.
 
-> Extension ID: **`ankitsemwal.api-hero`** · Version: **1.0.0** · License: [MIT](LICENSE)
+> Extension ID: **`ankitsemwal.api-hero`** · Version: **0.2.0** · License: [MIT](LICENSE)
 
 [Documentation](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/README.md) · [Changelog](CHANGELOG.md) · [Support](SUPPORT.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
 
@@ -31,7 +31,7 @@ API Hero is for developers who want Postman-like speed **without** leaving the e
 ```bash
 npm install
 npm run package
-code --install-extension api-hero-1.0.0.vsix
+code --install-extension api-hero-0.2.0.vsix
 ```
 
 Requires VS Code **1.90+**.
@@ -97,7 +97,7 @@ Loose files may appear under a **Legacy** entry in Collections until you move th
 
 ## Screenshots & GIFs
 
-_Screenshots and GIFs are not bundled in the VSIX yet._ Recommended captures from a real 1.0.0 build:
+_Screenshots and GIFs are not bundled in the VSIX yet._ Recommended captures from a real 0.2.0 build:
 
 1. Request Editor + Response Viewer side by side (run affordance visible)
 2. Collections Activity Bar (filter / run optional)

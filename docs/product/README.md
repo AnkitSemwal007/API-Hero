@@ -14,7 +14,7 @@ Implementation is source of truth. Prefer [user docs](../user/getting-started.md
 
 Help developers author, run, assert, and review HTTP APIs without leaving the editor — with git-friendly text artifacts and secure secret handling.
 
-## What shipped in 1.0.0 (Phase 1)
+## What shipped in 0.2.0 (Phase 1)
 
 - Everything from the 0.6.x line (Request Editor, Collections, History, Env/Auth managers, OpenAPI wizard, Run Report)
 - **Extraction Engine** with `@extract` / `@sensitive-extract`
@@ -22,7 +22,7 @@ Help developers author, run, assert, and review HTTP APIs without leaving the ed
 - Variable resolution overlay (document / environment / run scopes)
 - Post-execution extraction pipeline and parser diagnostics for extract directives
 
-Not in 1.0.0: collection chaining (`@depends-on`), OAuth2, cookie jar, Code Actions, GraphQL, full Run File.
+Not in 0.2.0: collection chaining (`@depends-on`), OAuth2, cookie jar, Code Actions, GraphQL, full Run File.
 
 ## Related
 
