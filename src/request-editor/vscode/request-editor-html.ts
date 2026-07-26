@@ -76,15 +76,29 @@ export function renderRequestEditorHtml(nonce: string): string {
     <p class="hint">Method and URL stay in the top bar. Query parameters are on the Params tab.</p>
     <div class="dependencies-block">
       <h3 class="ah-section-title">Dependencies</h3>
+      <p class="hint">Auto dependencies are computed from extracts and are not written to the file. Pin converts Auto → Manual (<code>@depends-on</code>). Indexed over the whole collection; a folder or selection run may omit some Auto edges.</p>
+      <p id="dependencyProjectionError" class="hint depends-projection-error" data-testid="dependency-projection-error" hidden></p>
       <div class="field dependson-field">
-        <span>Depends on <em class="optional-hint">optional</em></span>
+        <span>Auto <em class="optional-hint">computed</em></span>
+        <div id="autoDependenciesList" class="depends-projection-list" data-testid="auto-dependencies" aria-live="polite"></div>
+      </div>
+      <div class="field dependson-field">
+        <span>Manual Depends on <em class="optional-hint">optional</em></span>
         <div id="dependsOnPicker" class="depends-picker" data-testid="depends-on-picker">
           <div id="dependsOnChips" class="depends-chips" aria-live="polite"></div>
           <input id="dependsOnSearch" type="search" placeholder="Search requests by name…" autocomplete="off" aria-label="Search dependency requests" aria-controls="dependsOnList" />
           <div id="dependsOnList" class="depends-list" role="listbox" aria-multiselectable="true" hidden></div>
         </div>
       </div>
-      <p class="hint">Select requests by name from this collection. Dependencies are stored as readable names (or Folder/Name when needed). Renaming a request updates dependents.</p>
+      <div class="field dependson-field">
+        <span>Unknown variables</span>
+        <div id="unknownVariablesList" class="depends-projection-list" data-testid="unknown-variables" aria-live="polite"></div>
+      </div>
+      <div class="field dependson-field">
+        <span>Ambiguous producers</span>
+        <div id="ambiguousProducersList" class="depends-projection-list" data-testid="ambiguous-producers" aria-live="polite"></div>
+      </div>
+      <p class="hint">Select Manual requests by name from this collection. Dependencies are stored as readable names (or Folder/Name when needed). Renaming a request updates dependents.</p>
     </div>
   </section>
   <section id="tab-headers" class="panel" role="tabpanel" hidden>
@@ -363,6 +377,42 @@ body {
 }
 .dependencies-block .ah-section-title { margin-top: 0; }
 .dependson-field { margin: 0; }
+.depends-projection-list {
+  display: grid;
+  gap: var(--ah-space-1);
+  min-height: 0;
+}
+.depends-projection-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
+  border-radius: 2px;
+  background: var(--vscode-input-background);
+}
+.depends-projection-row .dep-label {
+  font-weight: 600;
+  color: var(--vscode-foreground);
+}
+.depends-var-chip {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 2px;
+  background: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+  font-size: 11px;
+}
+.depends-projection-empty {
+  color: var(--vscode-descriptionForeground);
+  font-size: 12px;
+  margin: 0;
+}
+.depends-projection-error {
+  color: var(--vscode-errorForeground);
+  margin: 0 0 var(--ah-space-1);
+}
 .depends-picker {
   display: grid;
   gap: var(--ah-space-1);
@@ -698,6 +748,12 @@ const EDITOR_SCRIPT = `
   let dependsOnSelectedRefs = [];
   /** Catalog from host: { name, folderPath, dependRef, folderLabel? }[] */
   let dependencyCatalog = [];
+  /** ADR 0003 projection rows from host (never written to .api as Auto). */
+  let autoDependencies = [];
+  let manualDependencies = [];
+  let unknownVariables = [];
+  let ambiguousProducers = [];
+  let dependencyProjectionError = null;
 
   const el = (id) => document.getElementById(id);
 
@@ -985,6 +1041,126 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
     dependsOnSelectedRefs = dependsOnSelectedRefs.filter((ref) => ref !== dependRef);
     renderDependsOnPicker();
     scheduleUpdate();
+  }
+
+  function pinAutoDependency(dependRef) {
+    // Pin Auto → Manual: add human dependRef to dependsOn + normal save/refresh.
+    // Does not change runtime semantics (Q1 Option A / RULE 8).
+    if (!dependRef) return;
+    toggleDependsOnRef(dependRef, true);
+  }
+
+  function renderDependencyProjections() {
+    const errorEl = el('dependencyProjectionError');
+    const autoRoot = el('autoDependenciesList');
+    const unknownRoot = el('unknownVariablesList');
+    const ambiguousRoot = el('ambiguousProducersList');
+    if (!autoRoot || !unknownRoot || !ambiguousRoot) return;
+
+    if (errorEl) {
+      if (dependencyProjectionError && dependencyProjectionError.message) {
+        errorEl.hidden = false;
+        errorEl.textContent = dependencyProjectionError.message;
+      } else {
+        errorEl.hidden = true;
+        errorEl.textContent = '';
+      }
+    }
+
+    autoRoot.replaceChildren();
+    if (autoDependencies.length === 0) {
+      const empty = document.createElement('p');
+      empty.className = 'depends-projection-empty';
+      empty.textContent = 'No inferred producers for variables in this request.';
+      autoRoot.appendChild(empty);
+    } else {
+      autoDependencies.forEach((entry) => {
+        const row = document.createElement('div');
+        row.className = 'depends-projection-row';
+        const label = document.createElement('span');
+        label.className = 'dep-label';
+        label.textContent = entry.dependRef;
+        row.appendChild(label);
+        (entry.variables || []).forEach((variable) => {
+          const chip = document.createElement('span');
+          chip.className = 'depends-var-chip';
+          chip.textContent = variable;
+          row.appendChild(chip);
+        });
+        const alreadyManual = manualDependencies.some(
+          (manual) => manual.dependRef === entry.dependRef
+        );
+        if (!alreadyManual) {
+          const pin = document.createElement('button');
+          pin.type = 'button';
+          pin.className = 'secondary';
+          pin.textContent = 'Pin';
+          pin.title = 'Add as Manual @depends-on';
+          pin.addEventListener('click', () => pinAutoDependency(entry.dependRef));
+          row.appendChild(pin);
+        } else {
+          const pinned = document.createElement('span');
+          pinned.className = 'depends-var-chip';
+          pinned.textContent = 'Pinned';
+          row.appendChild(pinned);
+        }
+        autoRoot.appendChild(row);
+      });
+    }
+
+    unknownRoot.replaceChildren();
+    if (unknownVariables.length === 0) {
+      const empty = document.createElement('p');
+      empty.className = 'depends-projection-empty';
+      empty.textContent = 'No unknown variables.';
+      unknownRoot.appendChild(empty);
+    } else {
+      unknownVariables.forEach((name) => {
+        const row = document.createElement('div');
+        row.className = 'depends-projection-row';
+        const label = document.createElement('span');
+        label.className = 'dep-label';
+        label.textContent = name;
+        row.appendChild(label);
+        const ignore = document.createElement('button');
+        ignore.type = 'button';
+        ignore.className = 'ghost';
+        ignore.textContent = 'Ignore';
+        ignore.title = 'Suppress this unknown variable in this workspace';
+        ignore.addEventListener('click', () => {
+          post({ type: 'ignoreUnknownVariable', name });
+        });
+        row.appendChild(ignore);
+        unknownRoot.appendChild(row);
+      });
+    }
+
+    ambiguousRoot.replaceChildren();
+    if (ambiguousProducers.length === 0) {
+      const empty = document.createElement('p');
+      empty.className = 'depends-projection-empty';
+      empty.textContent = 'No ambiguous producers.';
+      ambiguousRoot.appendChild(empty);
+    } else {
+      ambiguousProducers.forEach((entry) => {
+        const row = document.createElement('div');
+        row.className = 'depends-projection-row';
+        const label = document.createElement('span');
+        label.className = 'dep-label';
+        label.textContent = entry.variable;
+        row.appendChild(label);
+        (entry.producers || []).forEach((producer) => {
+          const pin = document.createElement('button');
+          pin.type = 'button';
+          pin.className = 'secondary';
+          pin.textContent = 'Pin ' + producer.dependRef;
+          pin.title = 'Add ' + producer.dependRef + ' as Manual @depends-on';
+          pin.addEventListener('click', () => pinAutoDependency(producer.dependRef));
+          row.appendChild(pin);
+        });
+        ambiguousRoot.appendChild(row);
+      });
+    }
   }
 
   function renderDependsOnPicker() {
@@ -1503,7 +1679,25 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
     dependencyCatalog = Array.isArray(next.dependencyCatalog)
       ? next.dependencyCatalog.slice()
       : [];
+    autoDependencies = Array.isArray(next.autoDependencies)
+      ? next.autoDependencies.slice()
+      : [];
+    manualDependencies = Array.isArray(next.manualDependencies)
+      ? next.manualDependencies.slice()
+      : [];
+    unknownVariables = Array.isArray(next.unknownVariables)
+      ? next.unknownVariables.slice()
+      : [];
+    ambiguousProducers = Array.isArray(next.ambiguousProducers)
+      ? next.ambiguousProducers.slice()
+      : [];
+    dependencyProjectionError =
+      next.dependencyProjectionError &&
+      typeof next.dependencyProjectionError.message === 'string'
+        ? next.dependencyProjectionError
+        : null;
     setDependsOnFromModel(model.dependsOn || []);
+    renderDependencyProjections();
     setFieldValue('method', model.method || 'GET');
     syncMethodSelect();
     setFieldValue('url', model.url || '');

@@ -113,6 +113,32 @@ describe('parseExtractDirective', () => {
     }
   });
 
+  test('parses array-root body paths (body[0], body[0].id)', () => {
+    const nested = parseExtractDirective({
+      knownName: 'extract',
+      value: 'productId from body[0].id',
+    });
+    assert.equal(nested.ok, true);
+    if (nested.ok) {
+      assert.deepEqual(nested.rule.source, {
+        kind: 'json-path',
+        path: 'body[0].id',
+      });
+    }
+
+    const rootIndex = parseExtractDirective({
+      knownName: 'extract',
+      value: 'first from body[0]',
+    });
+    assert.equal(rootIndex.ok, true);
+    if (rootIndex.ok) {
+      assert.deepEqual(rootIndex.rule.source, {
+        kind: 'json-path',
+        path: 'body[0]',
+      });
+    }
+  });
+
   test('rejects invalid names, sources, and scopes', () => {
     assert.equal(
       parseExtractDirective({ knownName: 'extract', value: '' }).ok,
@@ -150,6 +176,21 @@ describe('parseExtractDirective', () => {
     if (!emptyHeader.ok) {
       assert.match(emptyHeader.reason, /invalid-source/u);
     }
+
+    const invalidArrayRoot = parseExtractDirective({
+      knownName: 'extract',
+      value: 'x from body[abc]',
+    });
+    assert.equal(invalidArrayRoot.ok, false);
+    if (!invalidArrayRoot.ok) {
+      assert.match(invalidArrayRoot.reason, /malformed: source must be/u);
+    }
+
+    const bareBody = parseExtractDirective({
+      knownName: 'extract',
+      value: 'x from body',
+    });
+    assert.equal(bareBody.ok, false);
 
     const forbidden = parseExtractDirective({
       knownName: 'extract',

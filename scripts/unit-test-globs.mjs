@@ -19,6 +19,7 @@ export const UNIT_TEST_GLOBS = Object.freeze([
   'dist/collection-runner/*.test.js',
   'dist/collection-runner/vscode/*.test.js',
   'dist/dependencies/*.test.js',
+  'dist/regression/*.test.js',
   'dist/history/*.test.js',
   'dist/history/vscode/*.test.js',
   'dist/language-support/core/*.test.js',

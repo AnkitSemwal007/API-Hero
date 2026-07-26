@@ -23,8 +23,11 @@ export {
 } from './request-editor-messages';
 export type {
   RequestEditorAuthProfileOption,
+  RequestEditorAmbiguousProducer,
+  RequestEditorAutoDependency,
   RequestEditorDependencyCatalogEntry,
   RequestEditorInboundMessage,
+  RequestEditorManualDependency,
   RequestEditorMode,
   RequestEditorOutboundMessage,
   RequestEditorState,

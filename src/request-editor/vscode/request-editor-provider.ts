@@ -38,7 +38,10 @@ import {
   redactSensitiveVariablesInSource,
   restoreSensitiveVariablesFromBaseline,
   type RequestEditorAuthProfileOption,
+  type RequestEditorAutoDependency,
+  type RequestEditorAmbiguousProducer,
   type RequestEditorDependencyCatalogEntry,
+  type RequestEditorManualDependency,
   type RequestEditorState,
 } from './request-editor-messages';
 
@@ -59,6 +62,24 @@ export interface RequestEditorProviderOptions {
   readonly getDependencyCatalog?: (
     documentPath: string,
   ) => readonly RequestEditorDependencyCatalogEntry[];
+  /**
+   * ADR 0003 editor projection over `buildDependencyGraph` for the open
+   * document's collection. Optional — when absent, Auto/Unknown sections stay empty.
+   */
+  readonly getVariableDependencyProjection?: (
+    documentPath: string,
+  ) => Promise<{
+    readonly autoDependencies: readonly RequestEditorAutoDependency[];
+    readonly manualDependencies: readonly RequestEditorManualDependency[];
+    readonly unknownVariables: readonly string[];
+    readonly ambiguousProducers: readonly RequestEditorAmbiguousProducer[];
+    readonly dependencyProjectionError?: {
+      readonly code: string;
+      readonly message: string;
+    };
+  } | undefined>;
+  /** Persist Q3 unknown-variable ignore (workspace Memento). */
+  readonly ignoreUnknownVariable?: (name: string) => Promise<void> | void;
   /**
    * After the open request's `@name` changes, cascade rewrite dependents'
    * `@depends-on` tokens across the collection.
@@ -206,6 +227,11 @@ class RequestEditorDocumentSync implements Disposable {
     }
     if (message.type === 'manageEnvironments') {
       await commands.executeCommand(COMMAND_IDS.manageEnvironments);
+      return;
+    }
+    if (message.type === 'ignoreUnknownVariable') {
+      await this.options.ignoreUnknownVariable?.(message.name);
+      await this.postState();
       return;
     }
     if (message.type === 'run') {
@@ -531,6 +557,15 @@ class RequestEditorDocumentSync implements Disposable {
       const dependencyCatalog = toWebviewDependencyCatalog(
         this.options.getDependencyCatalog?.(this.document.uri.fsPath) ?? [],
       );
+      const projection =
+        (await this.options.getVariableDependencyProjection?.(
+          this.document.uri.toString(),
+        )) ?? {
+          autoDependencies: [],
+          manualDependencies: [],
+          unknownVariables: [],
+          ambiguousProducers: [],
+        };
       state = withActiveEnv({
         mode: 'form',
         documentVersion: this.document.version,
@@ -541,6 +576,15 @@ class RequestEditorDocumentSync implements Disposable {
         variablePreview,
         variableCompletions,
         dependencyCatalog,
+        autoDependencies: projection.autoDependencies,
+        manualDependencies: projection.manualDependencies,
+        unknownVariables: projection.unknownVariables,
+        ambiguousProducers: projection.ambiguousProducers,
+        ...(projection.dependencyProjectionError === undefined
+          ? {}
+          : {
+              dependencyProjectionError: projection.dependencyProjectionError,
+            }),
         fileName: this.document.fileName,
       });
     }
