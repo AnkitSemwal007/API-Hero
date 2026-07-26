@@ -4,6 +4,7 @@ import type {
   ExtractionWhen,
   VariableWriteTargetScope,
 } from './models';
+import { isExtractableJsonPath } from './shared/json-path';
 
 const VARIABLE_NAME = /^[A-Za-z_][A-Za-z0-9_.-]*$/u;
 
@@ -145,19 +146,29 @@ function parseSource(
     return { ok: true, source: { kind: 'header', name } };
   }
 
-  if (sourceText.toLowerCase().startsWith('body.')) {
-    const path = sourceText.slice('body.'.length);
-    if (path.trim().length === 0) {
+  const lower = sourceText.toLowerCase();
+  if (lower.startsWith('body.') || lower.startsWith('body[')) {
+    if (
+      lower.startsWith('body.') &&
+      sourceText.slice('body.'.length).trim().length === 0
+    ) {
       return { ok: false, reason: 'invalid-source: empty path' };
     }
-    // Keep authored `body.…` so shared JSONPath can strip the prefix.
+    if (!isExtractableJsonPath(sourceText)) {
+      return {
+        ok: false,
+        reason:
+          'malformed: source must be body.<path>, body[…], header <name>, or status',
+      };
+    }
+    // Keep authored `body.…` / `body[…]` so shared JSONPath can strip the prefix.
     return { ok: true, source: { kind: 'json-path', path: sourceText } };
   }
 
   return {
     ok: false,
     reason:
-      'malformed: source must be body.<path>, header <name>, or status',
+      'malformed: source must be body.<path>, body[…], header <name>, or status',
   };
 }
 

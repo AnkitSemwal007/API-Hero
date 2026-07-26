@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-07-26
+
+Intelligent Variable & Dependency Autofill (ADR 0003), array-root `@extract` paths, and a FakeStore-oriented regression catalog.
+
+### Added
+
+- **Intelligent Variable & Dependency Autofill** — Request Editor projects Auto / Manual / Unknown / Ambiguous from the same `buildDependencyGraph` the Collection Runner uses ([ADR 0003](docs/architecture/adr/0003-intelligent-variable-dependency-autofill.md))
+- **Pin Auto → Manual** — writes human `@depends-on` only; Auto never persists to `.api`
+- **Unknown variable Ignore** — workspace-level suppression
+- **Regression suite** — TC001–TC038 under `src/regression/` (chaining, FakeStore mocked flow, serialize/pin, graph)
+
+### Fixed
+
+- **`@extract … from body[0].id`** (and other array-root `body[…]` paths) no longer rejected as malformed
+
+### Unchanged
+
+- Collection Runner enrich / execute path (no second dependency engine)
+- Multi-producer runtime semantics (Q1 Option A: all producers + last-write-wins)
+
+### Tests
+
+- Unit + regression catalog green before package
+
 ## [2.1.3] - 2026-07-26
 
 Human-readable request dependencies (Option C), Create Variable / extract polish, and related fixes. Published as **2.1.3** because Marketplace already has an immutable **2.1.2**.

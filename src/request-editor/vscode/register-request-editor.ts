@@ -4,6 +4,7 @@
 
 import {
   commands,
+  Uri,
   window,
   workspace,
   type Disposable,
@@ -14,12 +15,21 @@ import {
 import { COMMAND_IDS } from '../../constants';
 import {
   normalizePathKey,
+  type Collection,
   type CollectionDiscoveryService,
+  type Folder,
+  type RequestReference,
   type WorkspaceCollections,
 } from '../../collections';
 import type { ExecutionOrchestrator } from '../../orchestration';
 import type { RequestSourceDocument } from '../../request-source';
 import type { VariableDefinition } from '../../models';
+import {
+  analyzeCollectionDependencies,
+  isProjectionFailure,
+  projectVariableDependencies,
+  type RequestDependencyAnalysis,
+} from '../../dependencies';
 import {
   MASKED_VARIABLE_VALUE,
   VARIABLE_SCOPE_UI,
@@ -39,12 +49,21 @@ import type {
   RequestEditorVariableCompletion,
 } from './request-editor-messages';
 
+/** Workspace Memento key for Q3 unknown-variable suppression (ADR 0003). */
+const IGNORED_UNKNOWN_VARIABLES_KEY =
+  'apiHero.dependencies.ignoredUnknownVariables';
+
 export interface RegisterRequestEditorOptions {
   readonly context: ExtensionContext;
   readonly orchestrator: ExecutionOrchestrator;
   readonly getAuthProfiles: () => readonly RequestEditorAuthProfileOption[];
   readonly variableResolver: DefaultVariableResolver;
   readonly getExternalVariableDefinitions: () => readonly VariableDefinition[];
+  /**
+   * Static scope names (env/workspace/collection/global) for Unknown filtering
+   * only — must not create dependency edges (Q2).
+   */
+  readonly getStaticVariableNames?: () => ReadonlySet<string>;
   /** Active environment display name for Variables-tab discoverability. */
   readonly getActiveEnvironmentLabel?: () => string | undefined;
   /** Collections discovery for same-collection Depends-on picker. */
@@ -62,6 +81,8 @@ export function registerRequestEditor(
 ): RequestEditorRegistration {
   const { context, orchestrator } = options;
   const completionService = new VariableCompletionService(options.variableResolver);
+  /** Content-fingerprint analysis cache (RULE 9) — reused across postState. */
+  const analysisCache = new Map<string, RequestDependencyAnalysis>();
 
   const provider = new RequestEditorProvider({
     getAuthProfiles: options.getAuthProfiles,
@@ -89,6 +110,19 @@ export function registerRequestEditor(
         documentPath,
         ...(currentRequestId !== undefined ? { currentRequestId } : {}),
       });
+    },
+    getVariableDependencyProjection: async (documentUri) =>
+      buildVariableDependencyProjection({
+        aggregate: options.discovery?.snapshot,
+        documentUri,
+        analysisCache,
+        getStaticVariableNames: options.getStaticVariableNames,
+        getIgnoredVariableNames: () =>
+          readIgnoredUnknownVariables(context),
+        readText: (filePath) => readApiTextPreferOpen(filePath),
+      }),
+    ignoreUnknownVariable: async (name) => {
+      await persistIgnoredUnknownVariable(context, name);
     },
     cascadeDependRefRename: async ({ documentPath, oldName, newName }) =>
       cascadeDependRefRenameOnNameChange({
@@ -125,6 +159,152 @@ export function registerRequestEditor(
 
   context.subscriptions.push(...disposables);
   return { viewType: REQUEST_EDITOR_VIEW_TYPE, disposables };
+}
+
+async function buildVariableDependencyProjection(options: {
+  readonly aggregate: WorkspaceCollections | undefined;
+  readonly documentUri: string;
+  readonly analysisCache: Map<string, RequestDependencyAnalysis>;
+  readonly getStaticVariableNames?: () => ReadonlySet<string>;
+  readonly getIgnoredVariableNames: () => ReadonlySet<string>;
+  readonly readText: (filePath: string) => Promise<string>;
+}): Promise<
+  | {
+      readonly autoDependencies: readonly {
+        readonly dependRef: string;
+        readonly fromRequestId: string;
+        readonly variables: readonly string[];
+      }[];
+      readonly manualDependencies: readonly {
+        readonly dependRef: string;
+        readonly fromRequestId: string;
+      }[];
+      readonly unknownVariables: readonly string[];
+      readonly ambiguousProducers: readonly {
+        readonly variable: string;
+        readonly producers: readonly {
+          readonly dependRef: string;
+          readonly requestId: string;
+        }[];
+      }[];
+      readonly dependencyProjectionError?: {
+        readonly code: string;
+        readonly message: string;
+      };
+    }
+  | undefined
+> {
+  const collection = findCollectionForDocumentPath(
+    options.aggregate,
+    options.documentUri,
+  );
+  if (collection === undefined) {
+    return undefined;
+  }
+
+  const focusRequestId = findRequestIdForDocumentPath(
+    options.aggregate,
+    options.documentUri,
+  );
+  if (focusRequestId === undefined) {
+    return undefined;
+  }
+
+  const requests = Object.values(collection.requests);
+  const labelByRequestId = new Map<string, string>();
+  const folderPathByRequestId = new Map<string, string>();
+  for (const request of requests) {
+    labelByRequestId.set(request.id, request.display.label);
+    folderPathByRequestId.set(request.id, folderPathFor(collection, request));
+  }
+
+  const analyses = await analyzeCollectionDependencies({
+    requests: requests.map((request) => ({
+      requestId: request.id,
+      filePath: request.filePath,
+      offset: request.range.start.offset,
+    })),
+    readText: options.readText,
+    analysisCache: options.analysisCache,
+  });
+
+  const projected = projectVariableDependencies({
+    analyses,
+    labelByRequestId,
+    folderPathByRequestId,
+    focusRequestId,
+    staticVariableNames: options.getStaticVariableNames?.(),
+    ignoredVariableNames: options.getIgnoredVariableNames(),
+  });
+
+  if (isProjectionFailure(projected)) {
+    return {
+      autoDependencies: [],
+      manualDependencies: [],
+      unknownVariables: [],
+      ambiguousProducers: [],
+      dependencyProjectionError: {
+        code: projected.code,
+        message: projected.message,
+      },
+    };
+  }
+
+  return {
+    autoDependencies: projected.auto,
+    manualDependencies: projected.manual,
+    unknownVariables: projected.unknownVariables,
+    ambiguousProducers: projected.ambiguousProducers,
+  };
+}
+
+async function readApiTextPreferOpen(filePath: string): Promise<string> {
+  const uri = filePath.includes('://')
+    ? Uri.parse(filePath)
+    : Uri.file(filePath);
+  const open = workspace.textDocuments.find(
+    (document) =>
+      document.uri.toString() === uri.toString() ||
+      normalizePathKey(document.uri.fsPath) === normalizePathKey(uri.fsPath),
+  );
+  if (open !== undefined) {
+    return open.getText();
+  }
+  const bytes = await workspace.fs.readFile(uri);
+  return Buffer.from(bytes).toString('utf8');
+}
+
+function readIgnoredUnknownVariables(
+  context: ExtensionContext,
+): ReadonlySet<string> {
+  const stored = context.workspaceState.get<unknown>(
+    IGNORED_UNKNOWN_VARIABLES_KEY,
+  );
+  if (!Array.isArray(stored)) {
+    return new Set();
+  }
+  return new Set(
+    stored.filter(
+      (entry): entry is string =>
+        typeof entry === 'string' && entry.trim().length > 0,
+    ),
+  );
+}
+
+async function persistIgnoredUnknownVariable(
+  context: ExtensionContext,
+  name: string,
+): Promise<void> {
+  const trimmed = name.trim();
+  if (trimmed.length === 0) {
+    return;
+  }
+  const next = new Set(readIgnoredUnknownVariables(context));
+  next.add(trimmed);
+  await context.workspaceState.update(
+    IGNORED_UNKNOWN_VARIABLES_KEY,
+    [...next].sort((left, right) => left.localeCompare(right)),
+  );
 }
 
 async function runRequestDocument(
@@ -211,6 +391,23 @@ async function pickApiDocument(): Promise<TextDocument | undefined> {
   return picked?.document;
 }
 
+function findCollectionForDocumentPath(
+  aggregate: WorkspaceCollections | undefined,
+  documentPath: string,
+): Collection | undefined {
+  if (aggregate === undefined) {
+    return undefined;
+  }
+  for (const collection of Object.values(aggregate.collections)) {
+    for (const request of Object.values(collection.requests)) {
+      if (pathsMatch(request.filePath, documentPath)) {
+        return collection;
+      }
+    }
+  }
+  return undefined;
+}
+
 function findRequestIdForDocumentPath(
   aggregate: WorkspaceCollections | undefined,
   documentPath: string,
@@ -218,13 +415,36 @@ function findRequestIdForDocumentPath(
   if (aggregate === undefined) {
     return undefined;
   }
-  const key = normalizePathKey(documentPath);
   for (const collection of Object.values(aggregate.collections)) {
     for (const request of Object.values(collection.requests)) {
-      if (normalizePathKey(request.filePath) === key) {
+      if (pathsMatch(request.filePath, documentPath)) {
         return request.id;
       }
     }
   }
   return undefined;
+}
+
+function pathsMatch(left: string, right: string): boolean {
+  if (normalizePathKey(left) === normalizePathKey(right)) {
+    return true;
+  }
+  try {
+    const leftFs = left.includes('://') ? Uri.parse(left).fsPath : left;
+    const rightFs = right.includes('://') ? Uri.parse(right).fsPath : right;
+    return normalizePathKey(leftFs) === normalizePathKey(rightFs);
+  } catch {
+    return false;
+  }
+}
+
+function folderPathFor(
+  collection: Collection,
+  request: RequestReference,
+): string {
+  if (request.folderId === undefined) {
+    return '';
+  }
+  const folder: Folder | undefined = collection.folders[request.folderId];
+  return folder?.relativePath ?? '';
 }

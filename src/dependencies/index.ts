@@ -53,4 +53,18 @@ export {
   analyzeRunPlanDependencies,
   type AnalyzeRunPlanDependenciesPorts,
 } from './analyze-plan';
+export {
+  analyzeCollectionDependencies,
+  contentFingerprint,
+  isProjectionFailure,
+  projectVariableDependencies,
+  type AmbiguousProducerView,
+  type AnalyzeCollectionDependenciesOptions,
+  type AutoDependencyView,
+  type CollectionDependencyRequestRef,
+  type ManualDependencyView,
+  type ProjectVariableDependenciesOptions,
+  type ProjectVariableDependenciesResult,
+  type VariableDependencyProjection,
+} from './variable-dependency-facade';
 

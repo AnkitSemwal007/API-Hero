@@ -218,6 +218,11 @@ test('validates extract directives without treating them as unknown', () => {
     false,
   );
 
+  const arrayRoot = validateApiDocument(
+    parseApiDocument('@extract productId from body[0].id\nGET /\n').ast,
+  );
+  assert.equal(arrayRoot.valid, true);
+
   const malformed = validateApiDocument(
     parseApiDocument('@extract broken-value\nGET /\n').ast,
   );

@@ -63,12 +63,14 @@ sequenceDiagram
 | ADR | Status | Topic |
 | --- | --- | --- |
 | [ADR-0001](./adr/0001-variables-extraction-auth-dependencies.md) | Accepted | Variables, Response Extraction, Variable Manager, Authentication, Request Dependencies, Create Variable From Response |
+| [ADR-0002](./adr/0002-authored-request-ids.md) | Accepted | Human-readable `@depends-on` refs; runtime discovery IDs only |
+| [ADR-0003](./adr/0003-intelligent-variable-dependency-autofill.md) | Accepted | Autofill is editor projection of one dependency engine; Auto never persisted |
 | [P0 Implementation Spec](./adr/0001-phase-0-implementation-spec.md) | Ready | Exact Phase 0 build checklist (files, APIs, tests) — not an ADR |
 | [P1 Implementation Spec](./adr/0001-phase-1-implementation-spec.md) | Ready | Exact Phase 1 extraction build checklist — not an ADR |
 | [P1 Task Plan](./adr/0001-phase-1-task-plan.md) | Ready | Developer tasks P1-001…019 for tracking / sequential commits |
 | [P2 Implementation Spec](./adr/0001-phase-2-implementation-spec.md) | Complete | Collection runner store, `@depends-on`, graph, collection variables |
 
-**ADR-0001 is authoritative** for extraction, run/collection scopes, auth-vs-variables boundaries, dependency chaining, and related UI. Domain docs below describe the **shipped** system; where they conflict with ADR-0001 on future work, the ADR wins until those docs are updated during implementation. Implement Phase 0 / Phase 1 only from their implementation specs.
+**ADR-0001** is authoritative for extraction, scopes, auth-vs-variables, and dependency chaining fundamentals. **ADR-0002** governs persisted depend refs. **ADR-0003** governs Intelligent Variable & Dependency Autofill (one engine, projection-only editor, no Auto persistence). Domain docs describe the **shipped** system; where they conflict with these ADRs on future work, the ADRs win until docs are updated during implementation.
 
 ## Domain docs
 

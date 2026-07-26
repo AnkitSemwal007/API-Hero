@@ -49,6 +49,28 @@ export interface RequestEditorDependencyCatalogEntry {
   readonly legacyAuthoredId?: string;
 }
 
+/** Auto (inferred) producer row — projection only; never serialized. */
+export interface RequestEditorAutoDependency {
+  readonly dependRef: string;
+  readonly fromRequestId: string;
+  readonly variables: readonly string[];
+}
+
+/** Manual (`@depends-on`) producer row from the graph projection. */
+export interface RequestEditorManualDependency {
+  readonly dependRef: string;
+  readonly fromRequestId: string;
+}
+
+/** Ambiguous extract producers for one consumed variable (Q1 Option A). */
+export interface RequestEditorAmbiguousProducer {
+  readonly variable: string;
+  readonly producers: readonly {
+    readonly dependRef: string;
+    readonly requestId: string;
+  }[];
+}
+
 export type RequestEditorMode = 'form' | 'multi' | 'empty';
 
 export interface RequestEditorState {
@@ -62,6 +84,22 @@ export interface RequestEditorState {
   readonly variableCompletions?: readonly RequestEditorVariableCompletion[];
   /** Same-collection requests for the Depends-on name picker (excludes self). */
   readonly dependencyCatalog?: readonly RequestEditorDependencyCatalogEntry[];
+  /** Inferred producer→consumer edges for the open request (not written to file). */
+  readonly autoDependencies?: readonly RequestEditorAutoDependency[];
+  /** Explicit `@depends-on` edges for the open request. */
+  readonly manualDependencies?: readonly RequestEditorManualDependency[];
+  /** Consumed vars with no extract producer and not in static scopes. */
+  readonly unknownVariables?: readonly string[];
+  /** Variables with multiple in-collection extract producers. */
+  readonly ambiguousProducers?: readonly RequestEditorAmbiguousProducer[];
+  /**
+   * When whole-collection graph build fails (ambiguous/unknown Manual
+   * `@depends-on` target), surface the engine message (RULE 7).
+   */
+  readonly dependencyProjectionError?: {
+    readonly code: string;
+    readonly message: string;
+  };
   /** Display name of the active environment, when one is selected. */
   readonly activeEnvironmentLabel?: string;
   readonly fileName?: string;
@@ -79,7 +117,11 @@ export type RequestEditorInboundMessage =
   | { readonly type: 'switchEnvironment' }
   | { readonly type: 'selectAuthentication' }
   | { readonly type: 'manageAuthProfiles' }
-  | { readonly type: 'manageEnvironments' };
+  | { readonly type: 'manageEnvironments' }
+  | {
+      readonly type: 'ignoreUnknownVariable';
+      readonly name: string;
+    };
 
 export type RequestEditorOutboundMessage =
   | { readonly type: 'init'; readonly state: RequestEditorState }
@@ -131,6 +173,12 @@ export function parseRequestEditorMessage(
     record.type === 'manageEnvironments'
   ) {
     return { type: record.type };
+  }
+  if (record.type === 'ignoreUnknownVariable') {
+    if (typeof record.name !== 'string' || record.name.trim().length === 0) {
+      return undefined;
+    }
+    return { type: 'ignoreUnknownVariable', name: record.name.trim() };
   }
   if (record.type !== 'updateModel') {
     return undefined;

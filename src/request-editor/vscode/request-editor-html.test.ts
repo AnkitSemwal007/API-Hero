@@ -80,7 +80,17 @@ describe('request editor webview helpers', () => {
     assert.match(html, /id="dependsOnList"/u);
     assert.match(html, /class="dependencies-block"/u);
     assert.match(html, />Dependencies</u);
-    assert.match(html, /Select requests by name from this collection/u);
+    assert.match(html, /data-testid="auto-dependencies"/u);
+    assert.match(html, /data-testid="unknown-variables"/u);
+    assert.match(html, /data-testid="ambiguous-producers"/u);
+    assert.match(html, /Auto dependencies are computed/u);
+    assert.match(html, /whole collection/u);
+    assert.match(html, /Manual Depends on/u);
+    assert.match(html, /pinAutoDependency/u);
+    assert.match(html, /dependencyProjectionError/u);
+    assert.match(html, /renderDependencyProjections/u);
+    assert.match(html, /ignoreUnknownVariable/u);
+    assert.match(html, /Select Manual requests by name from this collection/u);
     assert.match(html, /dependsOnSelectedRefs/u);
     assert.match(html, /dependencyCatalog/u);
     assert.match(html, /displayLabelForDependsToken/u);
@@ -260,6 +270,23 @@ describe('request editor webview helpers', () => {
         variables: [{ name: 'a', value: 'b', sensitive: true }],
       })?.method,
       'POST',
+    );
+  });
+
+  test('parseRequestEditorMessage accepts ignoreUnknownVariable', () => {
+    assert.deepEqual(
+      parseRequestEditorMessage({
+        type: 'ignoreUnknownVariable',
+        name: ' ghost ',
+      }),
+      { type: 'ignoreUnknownVariable', name: 'ghost' },
+    );
+    assert.equal(
+      parseRequestEditorMessage({
+        type: 'ignoreUnknownVariable',
+        name: '   ',
+      }),
+      undefined,
     );
   });
 

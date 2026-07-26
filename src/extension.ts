@@ -487,6 +487,7 @@ export async function activate(context: ExtensionContext): Promise<void> {
     variableResolver,
     getExternalVariableDefinitions: () =>
       externalVariableContext().definitions,
+    getStaticVariableNames: staticVariableNamesForRun,
     getActiveEnvironmentLabel: () => {
       const activeId = environmentManager.activeId;
       if (activeId === undefined) {
