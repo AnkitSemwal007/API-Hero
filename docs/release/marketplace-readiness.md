@@ -1,6 +1,6 @@
-# Marketplace readiness — 2.1.2
+# Marketplace readiness — 2.1.3
 
-Checklist for publishing **API Hero** `ankitsemwal.api-hero` **2.1.2** (patch: array-root JSON path fix for Create Variable / Copy Value).
+Checklist for publishing **API Hero** `ankitsemwal.api-hero` **2.1.3** (patch: array-root JSON path fix for Create Variable / Copy Value).
 
 ## Metadata
 
@@ -8,7 +8,7 @@ Checklist for publishing **API Hero** `ankitsemwal.api-hero` **2.1.2** (patch: a
 | --- | --- |
 | `displayName` | API Hero |
 | `name` / publisher / ID | `api-hero` / `ankitsemwal` / `ankitsemwal.api-hero` |
-| `version` | `2.1.2` |
+| `version` | `2.1.3` |
 | `description` / keywords / categories | Match shipped REST/HTTP scope (no GraphQL/OAuth claims) |
 | `icon` | `images/icon.png` (128×128) |
 | `galleryBanner` | `#0f766e` dark |
@@ -26,7 +26,7 @@ Checklist for publishing **API Hero** `ankitsemwal.api-hero` **2.1.2** (patch: a
 ## Quality gates
 
 - [x] `npm run check` / `npm run lint` / `npm test` pass (684 unit tests)
-- [x] `npm run package:fast` produces `release/api-hero-2.1.2.vsix`
+- [x] `npm run package:fast` produces `release/api-hero-2.1.3.vsix`
 - [x] Stable IDs unchanged ([stable-identifiers.md](./stable-identifiers.md))
 - [ ] Manual smoke: create request → run → response → history
 - [ ] Manual smoke: extract rule → run → extraction report → variable reuse

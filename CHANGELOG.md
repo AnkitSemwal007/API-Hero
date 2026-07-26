@@ -7,9 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [2.1.2] - 2026-07-26
+## [2.1.3] - 2026-07-26
 
-Human-readable request dependencies (Option C), Create Variable / extract polish, and array-root JSON path fixes.
+Human-readable request dependencies (Option C), Create Variable / extract polish, and related fixes. Published as **2.1.3** because Marketplace already has an immutable **2.1.2**.
 
 ### Added
 
@@ -25,9 +25,7 @@ Human-readable request dependencies (Option C), Create Variable / extract polish
 
 ### Fixed
 
-- Create Variable / Copy Value for JSON **array-root** bodies (`body[0]`, `body[0].id`) via shared `stripBodyPrefix`
 - Leading `@` on depends-on entries (e.g. `@New Request`) stripped so spaced names resolve
-- Host `handleCreateVariable` rejects non-extractable JSON paths before persist
 
 ### Unchanged
 
@@ -37,6 +35,23 @@ Human-readable request dependencies (Option C), Create Variable / extract polish
 ### Tests
 
 - **727** unit tests passing
+
+## [2.1.2] - 2026-07-26
+
+Patch release — fixes JSON array-root path handling for Create Variable / Copy Value that shipped broken in the published 2.1.1 VSIX. (Immutable on Marketplace; follow-on work ships as 2.1.3.)
+
+### Fixed
+
+- Create Variable / Copy Value for JSON **array-root** bodies (`body[0]`, `body[0].id`) via shared `stripBodyPrefix` in `json-path.ts`, used consistently by `resolveCreateVariableValue` and host Copy Value resolution
+- Host `handleCreateVariable` now rejects non-extractable JSON paths before persist, instead of silently writing an unusable rule
+
+### Unchanged
+
+- Stable `apiRunner.*` command IDs, configuration keys, and Secret Storage patterns
+
+### Tests
+
+- Array-root path coverage for `stripBodyPrefix`, `resolveCreateVariableValue`, and Create Variable host gate
 
 ## [2.1.1] - 2026-07-26
 
