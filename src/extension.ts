@@ -25,7 +25,9 @@ import {
   requestKeyFor,
 } from './extraction';
 import { registerExtraction } from './extraction/vscode';
+import { normalizePathKey } from './collections';
 import { registerCollections } from './collections/vscode';
+import { createCollectionRunVariableContext } from './collection-runner';
 import { registerCollectionRunner } from './collection-runner/vscode';
 import {
   createHistoryInfrastructure,
@@ -67,13 +69,18 @@ import {
   VsCodeResponsePanelFactory,
 } from './response/vscode-response-panel';
 import { Logger, fireAndForget } from './shared';
+import type { VariableDefinition } from './models';
 import {
   DefaultVariableResolver,
   EnvironmentManager,
   extractDocumentVariables,
+  FilesystemCollectionVariableStore,
   InMemoryRunVariableStore,
 } from './variables';
-import { registerEnvironments } from './variables/vscode';
+import {
+  createCollectionVariableStorePorts,
+  registerEnvironments,
+} from './variables/vscode';
 import { registerAuth } from './auth/vscode';
 import { registerOverview } from './overview/vscode';
 import { registerProjectStore } from './project-store/vscode';
@@ -101,6 +108,59 @@ export async function activate(context: ExtensionContext): Promise<void> {
   const variableResolver = new DefaultVariableResolver();
   const runtimeOverlay = new InMemoryRuntimeVariableOverlay();
   const runVariableStore = new InMemoryRunVariableStore();
+  // Phase 2: one process-wide holder for the active collection run's store +
+  // identity (§3.6), and the filesystem-backed collection variable store
+  // consulted by both the writer (extraction) and the resolver (below).
+  const collectionRunVariableContext = createCollectionRunVariableContext();
+  const collectionVariableStore = new FilesystemCollectionVariableStore(
+    createCollectionVariableStorePorts(),
+  );
+  const collectionVariableCache = new Map<string, readonly VariableDefinition[]>();
+  let activeCollectionRunVariables: readonly VariableDefinition[] = [];
+  /**
+   * Resolves the owning collection's root path for a single-request source
+   * (§8.3 "Single request in a collection file"). Filled in once Collections
+   * discovery is registered; returns `undefined` until then.
+   */
+  let resolveCollectionRootPathForSource: (
+    sourceId: string,
+  ) => string | undefined = () => undefined;
+  /**
+   * Best-effort synchronous lookup for collection variable definitions.
+   * `getVariableContext` / `externalVariableContext` are synchronous, so a
+   * cache miss triggers a background refresh and resolves with `[]` for the
+   * current call — the next resolution picks up the loaded values.
+   */
+  const collectionDefinitionsForSource = (
+    sourceId: string | undefined,
+  ): readonly VariableDefinition[] => {
+    if (collectionRunVariableContext.isActive()) {
+      return activeCollectionRunVariables;
+    }
+    if (sourceId === undefined || sourceId.length === 0) {
+      return [];
+    }
+    const rootPath = resolveCollectionRootPathForSource(sourceId);
+    if (rootPath === undefined) {
+      return [];
+    }
+    const key = normalizePathKey(rootPath);
+    const cached = collectionVariableCache.get(key);
+    if (cached === undefined) {
+      fireAndForget(
+        collectionVariableStore.load(rootPath).then((definitions) => {
+          collectionVariableCache.set(key, definitions);
+        }),
+        (error: unknown) => {
+          logger.warning('Failed to load collection variables', {
+            message: error instanceof Error ? error.message : String(error),
+          });
+        },
+      );
+      return [];
+    }
+    return cached;
+  };
   const authenticationProfileRepository =
     new VsCodeAuthenticationProfileRepository();
   const authenticationProfiles = new AuthenticationProfileManager(
@@ -119,23 +179,75 @@ export async function activate(context: ExtensionContext): Promise<void> {
   const authenticationSecrets = new DefaultAuthenticationSecretRepository(
     secretStorage,
   );
+  /**
+   * Active run-scope definitions: collection-run store while a collection
+   * execute is active, otherwise the session store (Phase 1 single-request).
+   * Must match CompositeVariableWriter.resolveRunStore (§8.2 / §9.3).
+   */
+  const activeRunDefinitions = (): readonly VariableDefinition[] =>
+    collectionRunVariableContext.getRunStore()?.toDefinitions() ??
+    runVariableStore.toDefinitions();
+
+  /** Reload collection defs into the active-run snapshot after a persist. */
+  const refreshActiveCollectionVariables = async (): Promise<void> => {
+    if (!collectionRunVariableContext.isActive()) {
+      return;
+    }
+    const rootPath = collectionRunVariableContext.getCollectionRootPath();
+    if (rootPath === undefined) {
+      return;
+    }
+    try {
+      const definitions = await collectionVariableStore.load(
+        rootPath,
+        collectionRunVariableContext.getCollectionId(),
+      );
+      activeCollectionRunVariables = definitions;
+      collectionVariableCache.set(normalizePathKey(rootPath), definitions);
+    } catch (error: unknown) {
+      logger.warning('Failed to refresh collection variables after write', {
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  };
+
+  /**
+   * Names of variables statically defined outside the run store — env
+   * (global/workspace/active) + active collection variables (§6.7). Evaluated
+   * fresh per pre-flight check so mid-run collection variable refreshes are
+   * visible to `CollectionRunnerService`'s dependency skip logic.
+   */
+  const staticVariableNamesForRun = (): ReadonlySet<string> => {
+    const capture = environmentManager.capture();
+    const names = new Set<string>();
+    for (const variable of capture.globalVariables) {
+      names.add(variable.name);
+    }
+    for (const variable of capture.workspaceVariables) {
+      names.add(variable.name);
+    }
+    for (const variable of capture.active?.variables ?? []) {
+      names.add(variable.name);
+    }
+    for (const variable of activeCollectionRunVariables) {
+      names.add(variable.name);
+    }
+    return names;
+  };
+
   /** Global + workspace + active env (+ optional overlay/run for IntelliSense). */
   const externalVariableContext = (requestKey?: string) => {
     const snapshot = environmentManager.capture();
-    const key =
-      requestKey ??
-      requestKeyFor(
-        window.activeTextEditor?.document.uri.toString() ?? '',
-        0,
-      );
+    const sourceId = window.activeTextEditor?.document.uri.toString() ?? '';
+    const key = requestKey ?? requestKeyFor(sourceId, 0);
     return {
       definitions: [
         ...snapshot.globalVariables,
         ...snapshot.workspaceVariables,
-        // collection: empty until Phase 2
+        ...collectionDefinitionsForSource(sourceId),
         ...(snapshot.active?.variables ?? []),
         ...runtimeOverlay.getDefinitions({ requestKey: key }),
-        ...runVariableStore.toDefinitions(),
+        ...activeRunDefinitions(),
       ],
     };
   };
@@ -158,6 +270,9 @@ export async function activate(context: ExtensionContext): Promise<void> {
     environmentManager,
     overlay: runtimeOverlay,
     runStore: runVariableStore,
+    collectionVariableStore,
+    collectionRunContext: collectionRunVariableContext,
+    onCollectionVariablePersisted: refreshActiveCollectionVariables,
   });
   /**
    * Single capture-context provider for history. Filled after
@@ -193,11 +308,11 @@ export async function activate(context: ExtensionContext): Promise<void> {
         definitions: [
           ...snapshot.globalVariables,
           ...snapshot.workspaceVariables,
-          // collection: empty until Phase 2
+          ...collectionDefinitionsForSource(document.sourceId),
           ...(snapshot.active?.variables ?? []),
           ...extractDocumentVariables(document).definitions,
           ...runtimeOverlay.getDefinitions({ requestKey: key }),
-          ...runVariableStore.toDefinitions(),
+          ...activeRunDefinitions(),
         ],
       };
     },
@@ -266,6 +381,21 @@ export async function activate(context: ExtensionContext): Promise<void> {
     new ApiRequestCodeLensProvider(),
   );
   const collectionsRegistration = registerCollections(context, logger);
+  resolveCollectionRootPathForSource = (sourceId) => {
+    const snapshot = collectionsRegistration.discovery.snapshot;
+    if (snapshot === undefined) {
+      return undefined;
+    }
+    const target = normalizePathKey(sourceId);
+    for (const collection of Object.values(snapshot.collections)) {
+      for (const request of Object.values(collection.requests)) {
+        if (normalizePathKey(request.filePath) === target) {
+          return collection.rootPath;
+        }
+      }
+    }
+    return undefined;
+  };
   const historyRegistration = registerHistory({
     context,
     logger,
@@ -284,6 +414,12 @@ export async function activate(context: ExtensionContext): Promise<void> {
     setRequestStatusSuppressed: (suppressed) => {
       executionStatusPresenter.setSuppressed(suppressed);
     },
+    collectionRunContext: collectionRunVariableContext,
+    collectionVariableStore,
+    setActiveCollectionVariables: (variables) => {
+      activeCollectionRunVariables = variables;
+    },
+    getStaticVariableNames: staticVariableNamesForRun,
   });
   registerOpenApiImport({
     context,

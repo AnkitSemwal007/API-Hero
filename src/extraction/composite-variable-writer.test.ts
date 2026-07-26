@@ -77,25 +77,135 @@ describe('CompositeVariableWriter', () => {
     assert.deepEqual(environment.writes, [request]);
   });
 
-  test('collection and workspace return UNSUPPORTED_SCOPE', async () => {
+  test('collection returns UNSUPPORTED_SCOPE when no collection writer is configured', async () => {
     const writer = new CompositeVariableWriter({
       overlay: new InMemoryRuntimeVariableOverlay(),
       runStore: new InMemoryRunVariableStore(),
       environment: new FakeEnvironmentWriter(),
     });
 
-    for (const scope of ['collection', 'workspace'] as const) {
-      const result = await writer.write({
-        name: 'x',
-        value: '1',
-        scope,
-        sensitive: false,
-      });
-      assert.equal(result.ok, false);
-      if (!result.ok) {
-        assert.equal(result.code, 'UNSUPPORTED_SCOPE');
-      }
+    const result = await writer.write({
+      name: 'x',
+      value: '1',
+      scope: 'collection',
+      sensitive: false,
+    });
+    assert.equal(result.ok, false);
+    if (!result.ok) {
+      assert.equal(result.code, 'UNSUPPORTED_SCOPE');
     }
+  });
+
+  test('workspace returns UNSUPPORTED_SCOPE', async () => {
+    const writer = new CompositeVariableWriter({
+      overlay: new InMemoryRuntimeVariableOverlay(),
+      runStore: new InMemoryRunVariableStore(),
+      environment: new FakeEnvironmentWriter(),
+    });
+
+    const result = await writer.write({
+      name: 'x',
+      value: '1',
+      scope: 'workspace',
+      sensitive: false,
+    });
+    assert.equal(result.ok, false);
+    if (!result.ok) {
+      assert.equal(result.code, 'UNSUPPORTED_SCOPE');
+    }
+  });
+
+  test('routes collection writes to the configured collection writer', async () => {
+    const collection = new FakeEnvironmentWriter();
+    const writer = new CompositeVariableWriter({
+      overlay: new InMemoryRuntimeVariableOverlay(),
+      runStore: new InMemoryRunVariableStore(),
+      environment: new FakeEnvironmentWriter(),
+      collection,
+    });
+
+    const request: VariableWriteRequest = {
+      name: 'collectionToken',
+      value: 'c1',
+      scope: 'collection',
+      sensitive: true,
+    };
+    const result = await writer.write(request);
+
+    assert.deepEqual(result, { ok: true });
+    assert.deepEqual(collection.writes, [request]);
+  });
+
+  test('propagates a failed collection writer result', async () => {
+    const collection = new FakeEnvironmentWriter();
+    collection.result = {
+      ok: false,
+      code: 'PERSIST_FAILED',
+      message: 'no collection context',
+    };
+    const writer = new CompositeVariableWriter({
+      overlay: new InMemoryRuntimeVariableOverlay(),
+      runStore: new InMemoryRunVariableStore(),
+      environment: new FakeEnvironmentWriter(),
+      collection,
+    });
+
+    const result = await writer.write({
+      name: 'x',
+      value: '1',
+      scope: 'collection',
+      sensitive: false,
+    });
+    assert.equal(result.ok, false);
+    if (!result.ok) {
+      assert.equal(result.code, 'PERSIST_FAILED');
+    }
+  });
+
+  test('resolveRunStore routes run writes to the active collection run store', async () => {
+    const sessionStore = new InMemoryRunVariableStore();
+    const collectionRunStore = new InMemoryRunVariableStore();
+    const writer = new CompositeVariableWriter({
+      overlay: new InMemoryRuntimeVariableOverlay(),
+      runStore: sessionStore,
+      environment: new FakeEnvironmentWriter(),
+      resolveRunStore: () => collectionRunStore,
+    });
+
+    const result = await writer.write({
+      name: 'accessToken',
+      value: 'xyz',
+      scope: 'run',
+      sensitive: false,
+    });
+
+    assert.deepEqual(result, { ok: true });
+    assert.equal(sessionStore.toDefinitions().length, 0);
+    assert.deepEqual(collectionRunStore.toDefinitions(), [
+      { name: 'accessToken', value: 'xyz', scope: 'run', sensitive: false },
+    ]);
+  });
+
+  test('resolveRunStore returning undefined falls back to the session run store', async () => {
+    const sessionStore = new InMemoryRunVariableStore();
+    const writer = new CompositeVariableWriter({
+      overlay: new InMemoryRuntimeVariableOverlay(),
+      runStore: sessionStore,
+      environment: new FakeEnvironmentWriter(),
+      resolveRunStore: () => undefined,
+    });
+
+    const result = await writer.write({
+      name: 'accessToken',
+      value: 'xyz',
+      scope: 'run',
+      sensitive: false,
+    });
+
+    assert.deepEqual(result, { ok: true });
+    assert.deepEqual(sessionStore.toDefinitions(), [
+      { name: 'accessToken', value: 'xyz', scope: 'run', sensitive: false },
+    ]);
   });
 
   test('invalid names return INVALID_NAME', async () => {

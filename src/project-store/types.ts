@@ -46,6 +46,8 @@ export interface VariablesLocalDocument {
   readonly schemaVersion: number;
   readonly workspace: Readonly<Record<string, string>>;
   readonly environments: Readonly<Record<string, Readonly<Record<string, string>>>>;
+  /** Optional; absent on read ⇒ {}. Backward compatible (P2). */
+  readonly collections?: Readonly<Record<string, Readonly<Record<string, string>>>>;
 }
 
 /** Settings projection used as migration input (never includes secret values). */

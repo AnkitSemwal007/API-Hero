@@ -15,12 +15,20 @@ import {
   CONFIGURATION_SECTION,
   DEFAULT_CONFIGURATION,
 } from '../../constants';
+import {
+  analyzeRunPlanDependencies,
+  enrichRunPlanWithDependencies,
+} from '../../dependencies';
+import type { VariableDefinition } from '../../models';
 import type { ExecutionOrchestrator } from '../../orchestration';
 import type { Logger } from '../../shared';
+import { InMemoryRunVariableStore, type CollectionVariableStore } from '../../variables';
 import {
   CollectionRunnerService,
   buildRunPlan,
   listFailurePolicies,
+  type CollectionRunVariableContext,
+  type DependenciesExtension,
   type FailurePolicyKind,
   type RunPlanTarget,
   type RunSummary,
@@ -56,6 +64,28 @@ export interface RegisterCollectionRunnerOptions {
    * so only the Collection Runner progress/status UI is visible.
    */
   readonly setRequestStatusSuppressed?: (suppressed: boolean) => void;
+  /**
+   * Composition-owned holder swapped for the duration of one execute (§3.6,
+   * §5.1). `CompositeVariableWriter` / `getVariableContext` in `extension.ts`
+   * consult it while a run is active.
+   */
+  readonly collectionRunContext: CollectionRunVariableContext;
+  /** Loaded once per run and cached on `collectionRunContext.begin` (§8.3). */
+  readonly collectionVariableStore: CollectionVariableStore;
+  /**
+   * Lets `extension.ts` merge the active run's collection variables into
+   * variable resolution for the run's duration (§8.2). Cleared in `finally`.
+   */
+  readonly setActiveCollectionVariables: (
+    variables: readonly VariableDefinition[],
+  ) => void;
+  /**
+   * Names of variables statically defined outside the run store (env,
+   * collection, workspace, global — §6.7). Consulted per pre-flight check so
+   * a static definition prevents an incorrect dependency skip even when the
+   * run store is empty (e.g. after a failed producer).
+   */
+  readonly getStaticVariableNames: () => ReadonlySet<string>;
 }
 
 /**
@@ -77,12 +107,17 @@ export function registerCollectionRunner(
     context,
     getHistoryCaptureContext,
     setRequestStatusSuppressed,
+    collectionRunContext,
+    collectionVariableStore,
+    setActiveCollectionVariables,
+    getStaticVariableNames,
   } = options;
   const progressUi = new VsCodeCollectionRunProgress();
   const reportPanel = new CollectionRunReportPanel();
+  const sourceReader = new VsCodeCollectionRunSourceReader();
   const runner = new CollectionRunnerService({
     executor: orchestrator,
-    sourceReader: new VsCodeCollectionRunSourceReader(),
+    sourceReader,
     progress: progressUi,
   });
 
@@ -130,9 +165,56 @@ export function registerCollectionRunner(
       return;
     }
 
+    const collectionRootPath = aggregate.collections[plan.collectionId]?.rootPath;
+    if (collectionRootPath === undefined) {
+      await window.showErrorMessage(
+        'API Hero: The collection for this run is no longer available.',
+      );
+      return;
+    }
+
+    // Discovery → buildRunPlan (membership DFS) → analyze produces/consumes/
+    // depends-on → enrich. On CYCLE / AMBIGUOUS / UNKNOWN targets, abort
+    // before any request executes (§5.1, §6.5).
+    const analyses = await analyzeRunPlanDependencies(plan, {
+      readText: (filePath) => sourceReader.readText(filePath),
+    });
+    const enrichment = enrichRunPlanWithDependencies({
+      membershipPlan: plan,
+      analyses,
+    });
+    if (!enrichment.ok) {
+      await window.showErrorMessage(`API Hero: ${enrichment.message}`);
+      return;
+    }
+    const enrichedPlan = enrichment.plan;
+
     activeRun = new AbortController();
     const controller = activeRun;
     setRequestStatusSuppressed?.(true);
+
+    // Fresh per-run store (never the session store) + active collection
+    // context for the duration of this execute only (§5.1, §5.2, §5.5).
+    const runVariableStore = new InMemoryRunVariableStore();
+    let collectionVariables: readonly VariableDefinition[];
+    try {
+      collectionVariables = await collectionVariableStore.load(
+        collectionRootPath,
+        enrichedPlan.collectionId,
+      );
+    } catch (error) {
+      logger.warning('Failed to load collection variables for run', {
+        message: error instanceof Error ? error.message : String(error),
+      });
+      collectionVariables = [];
+    }
+    setActiveCollectionVariables(collectionVariables);
+    collectionRunContext.begin({
+      runId: enrichedPlan.runId,
+      collectionId: enrichedPlan.collectionId,
+      collectionRootPath,
+      runStore: runVariableStore,
+    });
     try {
       const summary = await withCollectionRunProgress(
         title,
@@ -145,12 +227,14 @@ export function registerCollectionRunner(
           }
           try {
             return await runner.execute({
-              plan,
+              plan: enrichedPlan,
               signal: controller.signal,
               historyCaptureContext: {
                 ...getHistoryCaptureContext(),
-                collectionName: plan.collectionName,
+                collectionName: enrichedPlan.collectionName,
               },
+              runVariableStore,
+              staticVariableNames: getStaticVariableNames,
             });
           } finally {
             progressSignal.removeEventListener('abort', onAbort);
@@ -158,6 +242,14 @@ export function registerCollectionRunner(
         },
       );
       await presentSummary(summary, progressUi, reportPanel);
+      const reorderedCount = countReorderedRequests(
+        enrichedPlan.extensions?.dependencies,
+      );
+      if (reorderedCount > 0) {
+        void window.showInformationMessage(
+          `Reordered ${reorderedCount} requests for dependencies`,
+        );
+      }
       logger.info('Collection run finished', {
         runId: summary.runId,
         status: summary.status,
@@ -172,6 +264,10 @@ export function registerCollectionRunner(
         'API Hero could not complete the collection run.',
       );
     } finally {
+      // Always end + clear, including abort and policy stop (§5.4, §13).
+      runVariableStore.clear();
+      collectionRunContext.end(enrichedPlan.runId);
+      setActiveCollectionVariables([]);
       setRequestStatusSuppressed?.(false);
       if (activeRun === controller) {
         activeRun = undefined;
@@ -266,6 +362,23 @@ export function registerCollectionRunner(
 
   context.subscriptions.push(...disposables);
   return disposables;
+}
+
+/** Counts positions where execution order differs from membership order (§6.6, §10.2). */
+function countReorderedRequests(
+  dependencies: DependenciesExtension | undefined,
+): number {
+  if (dependencies === undefined || !dependencies.reordered) {
+    return 0;
+  }
+  const { originalOrder, executionOrder } = dependencies;
+  let count = 0;
+  for (let index = 0; index < executionOrder.length; index += 1) {
+    if (executionOrder[index] !== originalOrder[index]) {
+      count += 1;
+    }
+  }
+  return count;
 }
 
 async function presentSummary(

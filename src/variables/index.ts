@@ -42,3 +42,18 @@ export {
   type RunVariableStore,
   InMemoryRunVariableStore,
 } from './run-variable-store';
+export {
+  COLLECTION_VARIABLES_SCHEMA_VERSION,
+  emptyCollectionVariablesDocument,
+  parseCollectionVariablesDocument,
+  serializeCollectionVariablesDocument,
+} from './collection-variables-document';
+export type { CollectionVariablesDocument } from './collection-variables-document';
+export {
+  FilesystemCollectionVariableStore,
+  collectionVariablesDocumentPath,
+} from './collection-variable-store';
+export type {
+  CollectionVariableStore,
+  CollectionVariableStorePorts,
+} from './collection-variable-store';

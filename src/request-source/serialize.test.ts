@@ -91,6 +91,30 @@ GET https://httpbin.org/get
     );
   });
 
+  test('serializes @depends-on after extraction rules and before the request line', () => {
+    const source = serializeRequestDocument({
+      name: 'Products',
+      method: 'GET',
+      url: 'https://example.test/products',
+      extractionRules: [{ name: 'accessToken', from: 'body.access_token' }],
+      dependsOn: ['Login', 'Cart'],
+    });
+    assert.match(
+      source,
+      /@extract accessToken from body\.access_token\n@depends-on Login, Cart\n\nGET/u,
+    );
+  });
+
+  test('omits @depends-on when the list is empty or blank', () => {
+    const source = serializeRequestDocument({
+      name: 'Products',
+      method: 'GET',
+      url: 'https://example.test/products',
+      dependsOn: ['   '],
+    });
+    assert.doesNotMatch(source, /@depends-on/u);
+  });
+
   test('serializes form, text, raw, multipart, and binary bodies', () => {
     // Form fields are joined with `&` so runtime parseParameters can split them.
     const formSource = serializeRequestDocument({

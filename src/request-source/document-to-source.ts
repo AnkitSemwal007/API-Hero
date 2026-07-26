@@ -7,6 +7,7 @@
  */
 
 import { extractAssertionsForDocument } from '../assertions';
+import { parseDependsOnDirective } from '../dependencies/parse-depends-on';
 import {
   extractExtractionRulesForDocument,
   type ExtractionRule,
@@ -89,6 +90,7 @@ export function documentToRequestSource(
     .filter((line) => line.length > 0);
   const variables = collectVariables(document);
   const extractionRules = collectExtractionRules(document, sourceText);
+  const dependsOn = collectDependsOn(document, request);
   const comments = collectLeadingComments(document, request);
 
   const methodUpper = String(request.method).toUpperCase();
@@ -117,6 +119,7 @@ export function documentToRequestSource(
       : {}),
     ...(variables.length > 0 ? { variables } : {}),
     ...(extractionRules.length > 0 ? { extractionRules } : {}),
+    ...(dependsOn.length > 0 ? { dependsOn } : {}),
     ...(comments.length > 0 ? { comments } : {}),
   };
 
@@ -381,6 +384,20 @@ function collectVariables(document: ApiDocument): RequestSourceVariable[] {
     }
   }
   return variables;
+}
+
+function collectDependsOn(
+  document: ApiDocument,
+  request: RequestNode,
+): string[] {
+  // Last @depends-on wins when multiple are present (matches directive
+  // semantics — depends-on is not a singleton directive).
+  const value = directiveValue(document, request, 'depends-on');
+  if (value === undefined) {
+    return [];
+  }
+  const parsed = parseDependsOnDirective(value);
+  return parsed.ok ? [...parsed.names] : [];
 }
 
 function collectExtractionRules(

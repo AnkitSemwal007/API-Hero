@@ -88,6 +88,51 @@ describe('collection-run-report-html', () => {
     assert.equal(model.rows[1]?.assertionsLabel, '1/2 (1 failed)');
     assert.match(model.failurePolicyLabel, /Continue/u);
     assert.equal(model.rows[0]?.canOpen, true);
+    assert.equal(model.reordered, false);
+    assert.deepEqual(model.dependencyEdges, []);
+    assert.deepEqual(model.unresolvedConsumes, []);
+  });
+
+  test('buildCollectionRunReportModel surfaces dependency order, produced vars, and skip reasons', () => {
+    const model = buildCollectionRunReportModel(sampleDependencySummary());
+    assert.equal(model.reordered, true);
+    assert.deepEqual(
+      model.dependencyEdges.map((edge) => edge.label),
+      ['Login → Products (accessToken)'],
+    );
+    assert.deepEqual(model.unresolvedConsumes, [
+      { variable: 'orderId', requestLabel: 'Invoice' },
+    ]);
+    assert.equal(model.rows[0]?.producedVariablesLabel, undefined);
+    assert.equal(model.rows[0]?.outcomeLabel, 'Failed');
+    assert.equal(model.rows[1]?.skipReason, 'Missing run variable: accessToken (producer Login failed)');
+    assert.equal(model.rows[1]?.producedVariablesLabel, undefined);
+  });
+
+  test('producedVariablesLabel formats names only, never values', () => {
+    const base = sampleSummary();
+    const withProduce: RunSummary = {
+      ...base,
+      results: [
+        {
+          ...base.results[0]!,
+          producedVariables: ['accessToken', 'userId'],
+        },
+        ...base.results.slice(1),
+      ],
+    };
+    const model = buildCollectionRunReportModel(withProduce);
+    assert.equal(model.rows[0]?.producedVariablesLabel, '+accessToken, +userId');
+  });
+
+  test('renderCollectionRunReportHtml shell includes dependency report hooks', () => {
+    const html = renderCollectionRunReportHtml('reportNonce');
+    assert.match(html, /Execution order/);
+    assert.match(html, /Reordered/);
+    assert.match(html, /Dependencies/);
+    assert.match(html, /Unresolved/);
+    assert.match(html, /vars-produced/);
+    assert.match(html, /skip-reason/);
   });
 
   test('formatDuration handles missing and large values', () => {
@@ -140,6 +185,112 @@ describe('collection-run-report-html', () => {
     assert.equal(prompted, 1);
   });
 });
+
+function sampleDependencySummary(): RunSummary {
+  return {
+    runId: 'run_2',
+    plan: {
+      runId: 'run_2',
+      mode: CollectionRunMode.Collection,
+      collectionId: 'collection:demo',
+      collectionName: 'Demo',
+      failurePolicy: FailurePolicyKind.ContinueOnError,
+      createdAt: '2026-07-21T10:00:00.000Z',
+      requests: [
+        {
+          requestId: 'req_login',
+          collectionId: 'collection:demo',
+          filePath: 'file:///demo/login.api',
+          offset: 0,
+          label: 'Login',
+          method: 'POST',
+          url: 'https://example.test/login',
+          ordinal: 0,
+        },
+        {
+          requestId: 'req_products',
+          collectionId: 'collection:demo',
+          filePath: 'file:///demo/products.api',
+          offset: 0,
+          label: 'Products',
+          method: 'GET',
+          url: 'https://example.test/products',
+          ordinal: 1,
+        },
+        {
+          requestId: 'req_invoice',
+          collectionId: 'collection:demo',
+          filePath: 'file:///demo/invoice.api',
+          offset: 0,
+          label: 'Invoice',
+          method: 'GET',
+          url: 'https://example.test/invoices',
+          ordinal: 2,
+        },
+      ],
+      extensions: {
+        dependencies: {
+          nodes: [],
+          edges: [
+            {
+              fromRequestId: 'req_login',
+              toRequestId: 'req_products',
+              kind: 'implicit',
+              variable: 'accessToken',
+            },
+          ],
+          reordered: true,
+          originalOrder: ['req_products', 'req_login', 'req_invoice'],
+          executionOrder: ['req_login', 'req_products', 'req_invoice'],
+          cycles: [],
+          unresolvedConsumes: [
+            { requestId: 'req_invoice', variable: 'orderId' },
+          ],
+        },
+      },
+    },
+    results: [
+      {
+        requestId: 'req_login',
+        ordinal: 0,
+        label: 'Login',
+        outcome: RequestRunOutcomeKind.Failed,
+        durationMs: 90,
+        statusCode: 500,
+      },
+      {
+        requestId: 'req_products',
+        ordinal: 1,
+        label: 'Products',
+        outcome: RequestRunOutcomeKind.Skipped,
+        message: 'Missing run variable: accessToken (producer Login failed)',
+        skipReason: 'Missing run variable: accessToken (producer Login failed)',
+      },
+      {
+        requestId: 'req_invoice',
+        ordinal: 2,
+        label: 'Invoice',
+        outcome: RequestRunOutcomeKind.Skipped,
+        message: 'Missing run variable: orderId',
+        skipReason: 'Missing run variable: orderId',
+      },
+    ],
+    statistics: {
+      total: 3,
+      passed: 0,
+      failed: 1,
+      skipped: 2,
+      cancelled: 0,
+      durationMs: 90,
+      averageResponseTimeMs: 90,
+      assertionsPassed: 0,
+      assertionsFailed: 0,
+      assertionsTotal: 0,
+    },
+    completedAt: '2026-07-21T10:00:01.000Z',
+    status: CollectionRunStatus.Completed,
+  };
+}
 
 function sampleSummary(): RunSummary {
   return {

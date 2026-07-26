@@ -1,8 +1,8 @@
-import { hasAssertionFailures, type TestReport } from '../assertions';
 import type { ExecutionResult } from '../execution';
 import { MASKED_VARIABLE_VALUE } from '../variables';
 import { createDefaultExtractorRegistry } from './extractors/registry';
 import type {
+  ExtractionAssertionReport,
   ExtractionContext,
   ExtractionEngine,
   ExtractionOutcome,
@@ -181,11 +181,11 @@ function statusMatches(statusCode: number, spec: string): boolean {
   return Number.isInteger(exact) && statusCode === exact;
 }
 
-function assertionsPass(report: TestReport | undefined): boolean {
+function assertionsPass(report: ExtractionAssertionReport | undefined): boolean {
   if (report === undefined) {
     return true;
   }
-  return !hasAssertionFailures(report);
+  return report.summary.failed === 0 && report.summary.malformed === 0;
 }
 
 function contentTypeContains(

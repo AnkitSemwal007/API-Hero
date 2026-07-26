@@ -17,4 +17,9 @@ export const VALIDATION_DIAGNOSTIC_CODES = Object.freeze({
   extractionForbiddenScope: 'extraction.forbidden-scope',
   extractionDuplicateVariable: 'extraction.duplicate-variable',
   extractionInvalidSource: 'extraction.invalid-source',
+  dependsOnInvalid: 'dependencies.invalid-depends-on',
+  dependsOnUnknownTarget: 'dependencies.unknown-target',
+  dependsOnAmbiguousTarget: 'dependencies.ambiguous-target',
+  dependsOnDuplicateName: 'dependencies.duplicate-name',
+  dependsOnSelfDepends: 'dependencies.self-depends',
 } as const);

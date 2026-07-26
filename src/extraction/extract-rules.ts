@@ -25,6 +25,8 @@ export function extractExtractionRulesForDocument(
   _sourceText: string,
   _options?: ExtractExtractionRulesOptions,
 ): readonly RequestExtractionRules[] {
+  void _sourceText;
+  void _options;
   return document.requests.map((request, requestIndex) => {
     const block = readRequestBlock(request.metadata.requestBlock, requestIndex);
     const directives = [

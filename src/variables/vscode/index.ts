@@ -27,3 +27,4 @@ export type {
   EnvironmentsRegistration,
   RegisterEnvironmentsOptions,
 } from './register-environments';
+export { createCollectionVariableStorePorts } from './collection-variable-store-adapter';

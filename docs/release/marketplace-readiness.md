@@ -1,6 +1,6 @@
 # Marketplace readiness — 0.2.1
 
-Checklist for publishing **API Hero** `ankitsemwal.api-hero` **0.2.1** (Phase 1 complete).
+Checklist for publishing **API Hero** `ankitsemwal.api-hero` **0.2.1** (Phase 1 + Phase 2).
 
 ## Metadata
 
@@ -19,8 +19,8 @@ Checklist for publishing **API Hero** `ankitsemwal.api-hero` **0.2.1** (Phase 1 
 - Request Editor default for `.api` (including **Extract** tab)
 - Collections + History Activity Bar
 - Env Manager, Auth Manager, Overview, OpenAPI wizard
-- Assertions, **extraction** (`@extract` / `@sensitive-extract`), collection runner + report, history detail
-- Stubs called out or omitted: Run File, Login, Logout; collection chaining deferred to Phase 2
+- Assertions, **extraction** (`@extract` / `@sensitive-extract`), **collection chaining** (`@depends-on`), collection variables, collection runner + report, history detail
+- Stubs called out or omitted: Run File, Login, Logout
 - No OAuth2, cookie jar, Code Actions, or GraphQL examples
 
 ## Quality gates
@@ -29,6 +29,7 @@ Checklist for publishing **API Hero** `ankitsemwal.api-hero` **0.2.1** (Phase 1 
 - [ ] `npm run package` produces a VSIX
 - [ ] Manual smoke: create request → run → response → history
 - [ ] Manual smoke: extract rule → run → extraction report → variable reuse
+- [ ] Manual smoke: collection chaining (`@depends-on` / extract token → dependent request; cycle blocks; collection-scope extract persists)
 - [ ] Manual smoke: manage env/auth, filter collections, OpenAPI import
 - [ ] Stable IDs unchanged ([stable-identifiers.md](./stable-identifiers.md))
 

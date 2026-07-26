@@ -3,6 +3,10 @@ export type {
   CollectionRunExtensionBag,
   CollectionRunMode,
   CollectionRunStatus,
+  DependenciesExtension,
+  DependencyEdge,
+  DependencyEdgeKind,
+  DependencyNodeMeta,
   FailurePolicyKind,
   PlannedRequest,
   RequestRunOutcomeKind,
@@ -13,6 +17,7 @@ export type {
   RunProgressPhase,
   RunStatistics,
   RunSummary,
+  VariablesPerRunExtension,
 } from './models';
 export {
   CollectionRunMode as CollectionRunModes,
@@ -42,3 +47,9 @@ export type {
   ExecuteRunOptions,
 } from './collection-runner';
 export { CollectionRunnerService } from './collection-runner';
+
+export type {
+  CollectionRunVariableContext,
+  CollectionRunVariableContextBeginOptions,
+} from './run-variable-context';
+export { createCollectionRunVariableContext } from './run-variable-context';

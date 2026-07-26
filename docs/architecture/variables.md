@@ -17,9 +17,9 @@ GET {{host}}/users
 Authorization: Bearer {{token}}
 ```
 
-Definitions are effective in this highest-to-lowest order: document, active
-environment, workspace, global. Shadowing across scopes is intentional.
-Duplicate names within one scope are errors. Variable names match
+Definitions are effective in this highest-to-lowest order: run, document,
+active environment, collection, workspace, global. Shadowing across scopes is
+intentional. Duplicate names within one scope are errors. Variable names match
 `[A-Za-z_][A-Za-z0-9_.-]*`. Values are strings and may contain references.
 Request-scoped definitions and operating-system environment variables are not
 supported.
@@ -66,7 +66,28 @@ environment after execute. See
 [ADR-0001 Phase 1](./adr/0001-phase-1-implementation-spec.md). Extracted `run`
 and overlay values are merged into `getVariableContext` for the next single
 request; environment writes refresh Environment Manager. Collection-scope
-writes remain unsupported until Phase 2.
+writes are persisted by `CollectionVariableWriter` (below) once a collection
+run supplies collection context; outside an active collection run,
+collection-scope writes fail with `PERSIST_FAILED`.
+
+### Collection variables (Phase 2)
+
+Each collection may define its own variable bag, persisted alongside the
+collection at `Collections/<Name>/api-hero.variables.json`
+(`COLLECTION_VARIABLES_FILENAME`, schema version 1). Non-sensitive values are
+written in the tracked file; sensitive values are redacted there (empty
+string + `sensitive: true`) and their real values live in the gitignored
+`.apihero/local/variables.local.json` overlay under
+`collections[collectionId][name]`, matching the existing environment/workspace
+redaction pattern. `collectionId` is the same stable id discovery already
+computes from the collection root path (`collection:<path>`).
+
+`FilesystemCollectionVariableStore` (`src/variables/collection-variable-store.ts`)
+owns load/upsert/refresh: a missing or corrupt tracked file yields `[]`
+(never throws), and `load` merges the sensitive overlay before returning
+`VariableDefinition[]` with `scope: 'collection'`. Precedence is unchanged —
+collection sits between workspace and environment:
+`run > document > environment > collection > workspace > global`.
 
 The resolver creates a new deeply frozen `RuntimeRequest`. URL and body content
 remain authoritative; query and form projections are rebuilt from resolved
@@ -100,8 +121,8 @@ fuzzy "Did you mean" suggestion.
 `VariableCompletionService` (`src/variables/variable-completion-service.ts`) is
 the reusable IntelliSense catalog for text editors and the Request Editor:
 
-- Merges scopes with resolver precedence (document → environment → workspace →
-  global)
+- Merges scopes with resolver precedence (run → document → environment →
+  collection → workspace → global)
 - Caches effective items by definition fingerprint (refresh on env/workspace/
   global/document/project changes only)
 - Fuzzy-filters names without rebuilding the catalog
@@ -136,8 +157,10 @@ the Activity Bar (Collections + History only).
 
 ## Exclusions
 
-This subsystem does not implement authentication, history, collections,
-OpenAPI, AI, operating-system variables, built-in value evaluation, secret
-persistence for variables, or request-scoped definitions. Node's existing
-`node:test` runner remains authoritative; adding Vitest would create a second
-runner and duplicate the established test infrastructure.
+This subsystem does not implement authentication, history, OpenAPI, AI,
+operating-system variables, built-in value evaluation, secret persistence for
+variables, or request-scoped definitions. Collection *discovery*, mutation,
+and the runner belong to the Collections and Collection Runner subsystems —
+only the collection variable store and writer described above live here.
+Node's existing `node:test` runner remains authoritative; adding Vitest would
+create a second runner and duplicate the established test infrastructure.

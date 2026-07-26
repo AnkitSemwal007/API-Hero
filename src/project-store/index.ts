@@ -50,6 +50,10 @@ export {
   parseWorkspaceDocument,
 } from './parse';
 export {
+  readVariablesLocalOverlay,
+  writeVariablesLocalOverlay,
+} from './variables-local';
+export {
   ProjectStoreService,
 } from './project-store-service';
 export type { ProjectStoreServiceOptions } from './project-store-service';

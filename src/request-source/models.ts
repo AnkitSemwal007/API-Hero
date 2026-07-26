@@ -107,6 +107,8 @@ export interface RequestSourceDocument {
   readonly expectLines?: readonly string[];
   readonly variables?: readonly RequestSourceVariable[];
   readonly extractionRules?: readonly RequestSourceExtractionRule[];
+  /** Request `@name` labels listed by `@depends-on` (display names), in authored order. */
+  readonly dependsOn?: readonly string[];
   /**
    * Optional `@timeout` in milliseconds. Omitted from source when undefined.
    * There is no follow-redirects directive in the `.api` format.

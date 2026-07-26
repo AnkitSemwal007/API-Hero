@@ -31,7 +31,7 @@ API Hero is for developers who want Postman-like speed **without** leaving the e
 ```bash
 npm install
 npm run package
-code --install-extension api-hero-0.2.1.vsix
+code --install-extension release/api-hero-0.2.1.vsix
 ```
 
 Requires VS Code **1.90+**.
@@ -83,15 +83,15 @@ Loose files may appear under a **Legacy** entry in Collections until you move th
 - **Response Viewer** — status card, pretty/raw/JSON, headers, assertions, **extraction report**; **copy**, **save**, **search**
 - **Extraction** — `@extract` / `@sensitive-extract`, Extraction Engine, Run/document/environment scopes, Request Editor **Extract** tab
 - **Collections** — Activity Bar explorer, folders, CRUD, filter, drag-and-drop, import/export folder trees
-- **Collection Runner** — run collection / folder / selection / tests with failure policy + **Run Report**
+- **Collection Runner** — run collection / folder / selection / tests with failure policy + **Run Report**; **collection chaining** (`@depends-on`, produces/consumes) reorders and runs dependent requests with a shared run store
 - **History** — persisted runs, facet filters, **detail panel**, re-run, reveal original request
-- **Environments** — Environment Manager panel + status bar chip; precedence with document/workspace/global/run variables
+- **Environments** — Environment Manager panel + status bar chip; precedence with run/document/environment/collection/workspace/global variables
 - **Authentication** — none / basic / bearer / API key profiles; Secret Storage; Auth Manager + preview
 - **Assertions** — `expect` lines with Problems diagnostics
 - **OpenAPI Import** — OpenAPI 3.x multi-step wizard → `.api` + collection structure
 - **Overview** — command-opened home for recent runs, collections, and quick actions
 
-**Not in this release:** Collection chaining (`@depends-on`), Run File (all requests in one editor), Login/Logout OAuth, cookie jar, GraphQL/gRPC/WebSocket.
+**Not in this release:** Run File (all requests in one editor), Login/Logout OAuth, cookie jar, GraphQL/gRPC/WebSocket.
 
 ---
 
@@ -124,7 +124,7 @@ History stores metadata-safe summaries (masked presentation URLs). Open an entry
 
 ## Environments & variables
 
-Manage named environments in the **Environment Manager**. Variable precedence: **document → environment → workspace → global**. Mark sensitive variables so UI and presentation stay redacted.
+Manage named environments in the **Environment Manager**. Variable precedence: **run → document → environment → collection → workspace → global**. Mark sensitive variables so UI and presentation stay redacted.
 
 → [Environments](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/environments.md) · [Variables](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/variables.md)
 

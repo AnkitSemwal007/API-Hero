@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.2.1] - 2026-07-26
 
-Phase 1 release checkpoint — response variable extraction and the post-execution extraction pipeline (same product scope as 0.2.0, tagged for Phase 2 kickoff).
+Phase 1 + Phase 2 release — response variable extraction and collection chaining.
 
 ### Added
 
@@ -20,7 +20,20 @@ Phase 1 release checkpoint — response variable extraction and the post-executi
 - **Response Viewer extraction report** — report-only section parallel to assertions
 - **Extraction pipeline** — post-execute observer order (history → extraction → assertion presentation)
 - **Parser enhancements** — extract-directive validation and diagnostic codes
-- **Test suite improvements** — unit coverage for extraction engine, pipeline, parser, Request Editor, and Response Viewer
+- **Collection chaining** — `@depends-on`, produces/consumes edges, cycle/ambiguous/unknown-target detection, topo-ordered plan enrichment
+- **Collection Runner per-run store** — shared run-scope variables across a collection run, isolated from the single-request session store
+- **Collection variables** — `Collections/<Name>/api-hero.variables.json` with a sensitive local overlay; `scope=collection` extraction writes
+- **Collection Run Report dependency reporting** — produced var names, text dependency edges, skip reasons, execution order + Reordered badge, unresolved list; reorder toast (`Reordered N requests for dependencies`); cycle block notification with label path
+- **Pre-flight dependency skip honors static definitions** — a request is only skipped for a missing produced variable when it is absent from the run store **and** not statically defined by env/collection/workspace/global
+- **Test suite improvements** — unit and integration coverage for extraction, dependency graph, collection variables, and collection runner chaining
+
+### Fixed
+
+- Legacy (workspace-root) collection runs now read back sensitive collection variables written during the same run — the overlay lookup uses the run's actual `collectionId` instead of always recomputing it from the root path
+- Sensitive collection-variable upserts now fail loudly instead of silently redacting the tracked file when the local overlay cannot be written (no workspace folder)
+- Corrected a stale "until Phase 2+" message on unsupported workspace-scope writes
+- Required / malformed extraction failures during a collection run map to `Failed` so `stop-on-first-error` stops (P2 §9.4)
+- Lint cleanup: unused parameters and a useless assignment
 
 ### Unchanged
 
@@ -29,7 +42,7 @@ Phase 1 release checkpoint — response variable extraction and the post-executi
 
 ### Tests
 
-- **559** unit tests passing
+- **649** unit tests passing
 
 ## [0.2.0] - 2026-07-26
 

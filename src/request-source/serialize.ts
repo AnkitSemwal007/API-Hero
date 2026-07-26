@@ -3,7 +3,7 @@
  *
  * Layout (aligned with OpenAPI `generateRequestSource`):
  * - optional `#` comments
- * - `@name`, optional `@description`, `@auth`, `@variable`, `@extract`
+ * - `@name`, optional `@description`, `@auth`, `@variable`, `@extract`, `@depends-on`
  * - METHOD url(?query)
  * - headers (disabled → `# Name: value`)
  * - blank line + body
@@ -73,6 +73,13 @@ export function serializeRequestDocument(
     if (line !== undefined) {
       lines.push(line);
     }
+  }
+
+  const dependsOn = (document.dependsOn ?? [])
+    .map((name) => singleLine(name))
+    .filter((name) => name.length > 0);
+  if (dependsOn.length > 0) {
+    lines.push(`@depends-on ${dependsOn.join(', ')}`);
   }
 
   // Blank line before the request line (matches Phase 1b placeholder / hand-written feel).

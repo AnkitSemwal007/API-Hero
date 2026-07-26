@@ -10,16 +10,24 @@ const VARIABLE_NAME = /^[A-Za-z_][A-Za-z0-9_.-]*$/u;
 
 export interface CompositeVariableWriterOptions {
   readonly overlay: RuntimeVariableOverlay;
-  readonly runStore: RunVariableStore;
+  readonly runStore: RunVariableStore; // session default
   readonly environment: VariableWriter;
+  readonly collection?: VariableWriter;
+  /**
+   * When a collection run is active, returns that run's store; otherwise
+   * undefined so writes fall back to the session `runStore`.
+   */
+  readonly resolveRunStore?: () => RunVariableStore | undefined;
 }
 
 /**
- * Routes writes to overlay (document), session run store, or environment writer.
- * Collection/workspace scopes return UNSUPPORTED_SCOPE until Phase 2+.
+ * Routes writes to overlay (document), run store (session or active
+ * collection run), environment writer, or collection writer. Workspace
+ * remains UNSUPPORTED_SCOPE (ADR).
  *
- * Phase 2 will hand run-store lifecycle to Collection Runner; this writer keeps
- * the session singleton semantics for single-request P1.
+ * `resolveRunStore` lets the Collection Runner (Phase 2) substitute a
+ * per-run store for the duration of one execute without changing the
+ * session singleton semantics used by single-request P1.
  */
 export class CompositeVariableWriter implements VariableWriter {
   public constructor(private readonly options: CompositeVariableWriterOptions) {}
@@ -46,22 +54,27 @@ export class CompositeVariableWriter implements VariableWriter {
         this.options.overlay.set({ requestKey }, request);
         return { ok: true };
       }
-      case 'run':
-        // Session-lived store; Collection Runner owns lifecycle in Phase 2.
-        this.options.runStore.set(
-          request.name,
-          request.value,
-          request.sensitive,
-        );
+      case 'run': {
+        const runStore = this.options.resolveRunStore?.() ?? this.options.runStore;
+        runStore.set(request.name, request.value, request.sensitive);
         return { ok: true };
+      }
       case 'environment':
         return this.options.environment.write(request);
       case 'collection':
+        if (this.options.collection === undefined) {
+          return {
+            ok: false,
+            code: 'UNSUPPORTED_SCOPE',
+            message: 'Variable scope "collection" has no collection writer configured.',
+          };
+        }
+        return this.options.collection.write(request);
       case 'workspace':
         return {
           ok: false,
           code: 'UNSUPPORTED_SCOPE',
-          message: `Variable scope "${request.scope}" is not supported until Phase 2+.`,
+          message: 'Workspace-scope writes are not supported.',
         };
       default:
         return {

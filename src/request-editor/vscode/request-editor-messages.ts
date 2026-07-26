@@ -207,6 +207,9 @@ export function parseRequestSourceDocument(
   if (record.comments !== undefined && !isStringArray(record.comments)) {
     return undefined;
   }
+  if (record.dependsOn !== undefined && !isStringArray(record.dependsOn)) {
+    return undefined;
+  }
 
   const model: RequestSourceDocument = {
     name: record.name,
@@ -230,6 +233,7 @@ export function parseRequestSourceDocument(
     ...(variables !== null ? { variables } : {}),
     ...(extractionRules !== null ? { extractionRules } : {}),
     ...(isStringArray(record.comments) ? { comments: record.comments } : {}),
+    ...(isStringArray(record.dependsOn) ? { dependsOn: record.dependsOn } : {}),
   };
   return model;
 }

@@ -1,6 +1,7 @@
 export {
   VALIDATION_DIAGNOSTIC_CODES,
   defaultValidationRules,
+  dependsOnDirectiveValidationRule,
   directiveValidationRule,
   extractDirectiveValidationRule,
   headerValidationRule,

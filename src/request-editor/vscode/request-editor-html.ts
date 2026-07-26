@@ -74,6 +74,14 @@ export function renderRequestEditorHtml(nonce: string): string {
       </div>
     </div>
     <p class="hint">Method and URL stay in the top bar. Query parameters are on the Params tab.</p>
+    <div class="dependencies-block">
+      <h3 class="ah-section-title">Dependencies</h3>
+      <label class="field dependson-field">
+        <span>Depends on <em class="optional-hint">optional</em></span>
+        <input id="dependsOn" type="text" placeholder="Login, Products" aria-label="Depends on (comma-separated request names)" />
+      </label>
+      <p class="hint">Comma-separated request <code>@name</code> values this request depends on. Writes <code>@depends-on</code>.</p>
+    </div>
   </section>
   <section id="tab-headers" class="panel" role="tabpanel" hidden>
     <div class="table-toolbar">
@@ -276,6 +284,7 @@ export function emptyRequestEditorModel(): RequestSourceDocument {
     expectLines: [],
     variables: [],
     extractionRules: [],
+    dependsOn: [],
   };
 }
 
@@ -339,6 +348,12 @@ body {
   gap: var(--ah-space-1);
   align-items: center;
 }
+.dependencies-block {
+  max-width: 36rem;
+  margin-bottom: var(--ah-space-2);
+}
+.dependencies-block .ah-section-title { margin-top: 0; }
+.dependson-field { margin: 0; }
 .panels {
   padding: var(--ah-space-3);
   flex: 1;
@@ -608,7 +623,8 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
       body: { type: 'none' },
       expectLines: [],
       variables: [],
-      extractionRules: []
+      extractionRules: [],
+      dependsOn: []
     };
   }
 
@@ -624,6 +640,7 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
     model.variables = readVariables();
     model.extractionRules = readExtractionRules();
     model.expectLines = readExpectLines();
+    model.dependsOn = readDependsOn();
     const timeoutRaw = el('timeoutMs').value.trim();
     if (timeoutRaw.length > 0 && Number.isFinite(Number(timeoutRaw))) {
       model.timeoutMs = Math.max(0, Math.floor(Number(timeoutRaw)));
@@ -737,6 +754,13 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
       return;
     }
     renderExtractionRules(rows || []);
+  }
+
+  function readDependsOn() {
+    return el('dependsOn').value
+      .split(',')
+      .map((entry) => entry.trim())
+      .filter((entry) => entry.length > 0);
   }
 
   function readExpectLines() {
@@ -1180,6 +1204,7 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
     const model = next.model || defaultModel();
     setFieldValue('name', model.name || '');
     setFieldValue('description', model.description || '');
+    setFieldValue('dependsOn', (model.dependsOn || []).join(', '));
     setFieldValue('method', model.method || 'GET');
     syncMethodSelect();
     setFieldValue('url', model.url || '');
@@ -1251,7 +1276,7 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
     button.addEventListener('click', () => setTab(button.getAttribute('data-tab')));
   });
 
-  ['name', 'description', 'method', 'url', 'timeoutMs', 'authProfile', 'bodyType',
+  ['name', 'description', 'dependsOn', 'method', 'url', 'timeoutMs', 'authProfile', 'bodyType',
     'bodyText', 'rawContentType', 'multipartBoundary', 'binaryNote'].forEach((id) => {
     bindChange(el(id));
   });
