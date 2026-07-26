@@ -24,12 +24,14 @@ Switching updates the session active environment. Persistence of the environment
 
 Effective definitions (highest wins):
 
-1. **Request** (`@variable` / `@sensitive-variable` in the `.api` file — document scope)
-2. Active **Environment**
-3. **Workspace** (`apiRunner.variables.workspace`)
-4. **Global** (`apiRunner.variables.global`)
+1. **Run** (extracted during the current request run, or the Collection Runner's shared per-run store)
+2. **Request** (`@variable` / `@sensitive-variable` in the `.api` file — document scope)
+3. Active **Environment**
+4. **Collection** (`Collections/<Name>/api-hero.variables.json`, with sensitive values in a local overlay)
+5. **Workspace** (`apiRunner.variables.workspace`)
+6. **Global** (`apiRunner.variables.global`)
 
-One-line reminder: Request overrides Environment overrides Workspace overrides Global.
+One-line reminder: Run overrides Request overrides Environment overrides Collection overrides Workspace overrides Global.
 
 Reference values as `{{name}}` in URLs, headers, and bodies.
 

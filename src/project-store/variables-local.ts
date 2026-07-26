@@ -31,10 +31,12 @@ export function parseVariablesLocalDocument(
     Number.isInteger(record.schemaVersion)
       ? record.schemaVersion
       : PROJECT_STORE_SCHEMA_VERSION;
+  const collections = parseEnvironmentMaps(record.collections);
   return {
     schemaVersion,
     workspace: parseStringMap(record.workspace),
     environments: parseEnvironmentMaps(record.environments),
+    ...(record.collections === undefined ? {} : { collections }),
   };
 }
 
@@ -66,6 +68,9 @@ export async function writeVariablesLocalOverlay(
       schemaVersion: document.schemaVersion,
       workspace: document.workspace,
       environments: document.environments,
+      ...(document.collections === undefined
+        ? {}
+        : { collections: document.collections }),
     }),
   );
 }

@@ -7,6 +7,7 @@ import {
   CollectionRunStatus,
   FailurePolicyKind,
   RequestRunOutcomeKind,
+  type DependencyEdge,
   type FailurePolicyKind as FailurePolicyKindType,
   type RequestRunOutcomeKind as OutcomeKind,
   type RunSummary,
@@ -41,6 +42,21 @@ export interface CollectionRunReportRow {
   readonly message?: string;
   readonly canOpen: boolean;
   readonly isFailure: boolean;
+  /** `+accessToken, +userId` — extracted variable names only, never values (§10.1). */
+  readonly producedVariablesLabel?: string;
+  /** Secret-free reason a dependent request was skipped (§10.1, §6.7). */
+  readonly skipReason?: string;
+}
+
+/** One `producer → consumer` dependency edge rendered as text (§10.1). */
+export interface CollectionRunReportEdge {
+  readonly label: string;
+}
+
+/** One unresolved-consume entry rendered as `variable — request` text (§10.1). */
+export interface CollectionRunReportUnresolvedConsume {
+  readonly variable: string;
+  readonly requestLabel: string;
 }
 
 /** Serializable view model posted to the Collection Run Report webview. */
@@ -60,6 +76,12 @@ export interface CollectionRunReportModel {
   readonly cancelled: number;
   readonly total: number;
   readonly rows: readonly CollectionRunReportRow[];
+  /** True when the dependency-aware execution order differs from plan membership order (§6.6, §10.1). */
+  readonly reordered: boolean;
+  /** Text-only dependency edges, e.g. `Login → Products (accessToken)` (§10.1). No graph rendering. */
+  readonly dependencyEdges: readonly CollectionRunReportEdge[];
+  /** Variables consumed with no in-plan producer at enrich time (§6.7, §10.1). */
+  readonly unresolvedConsumes: readonly CollectionRunReportUnresolvedConsume[];
 }
 
 export type CollectionRunReportInboundMessage =
@@ -98,6 +120,10 @@ export function buildCollectionRunReportModel(
   const plannedByOrdinal = new Map(
     summary.plan.requests.map((request) => [request.ordinal, request]),
   );
+  const labelByRequestId = new Map(
+    summary.plan.requests.map((request) => [request.requestId, request.label]),
+  );
+  const dependencies = summary.plan.extensions?.dependencies;
   const stats = summary.statistics;
   const rows: CollectionRunReportRow[] = summary.results.map((result) => {
     const planned =
@@ -130,6 +156,17 @@ export function buildCollectionRunReportModel(
       ...(result.message === undefined ? {} : { message: result.message }),
       canOpen: result.requestId.trim().length > 0,
       isFailure: result.outcome === RequestRunOutcomeKind.Failed,
+      ...((): Partial<CollectionRunReportRow> => {
+        const producedVariablesLabel = formatProducedVariablesLabel(
+          result.producedVariables,
+        );
+        return producedVariablesLabel === undefined
+          ? {}
+          : { producedVariablesLabel };
+      })(),
+      ...(result.skipReason === undefined
+        ? {}
+        : { skipReason: result.skipReason }),
     };
   });
 
@@ -156,6 +193,16 @@ export function buildCollectionRunReportModel(
     cancelled: stats.cancelled,
     total: stats.total,
     rows,
+    reordered: dependencies?.reordered ?? false,
+    dependencyEdges: (dependencies?.edges ?? []).map((edge) => ({
+      label: formatDependencyEdgeLabel(edge, labelByRequestId),
+    })),
+    unresolvedConsumes: (dependencies?.unresolvedConsumes ?? []).map(
+      (entry) => ({
+        variable: entry.variable,
+        requestLabel: labelByRequestId.get(entry.requestId) ?? entry.requestId,
+      }),
+    ),
   };
 }
 
@@ -272,6 +319,28 @@ function formatAssertions(
   return `${pass}/${total}`;
 }
 
+/** Formats produced variable names for a row as `+varA, +varB` — names only, never values (§10.1, §13). */
+function formatProducedVariablesLabel(
+  producedVariables: readonly string[] | undefined,
+): string | undefined {
+  if (producedVariables === undefined || producedVariables.length === 0) {
+    return undefined;
+  }
+  return producedVariables.map((name) => `+${name}`).join(', ');
+}
+
+/** Formats one dependency edge as text, e.g. `Login → Products (accessToken)` (§10.1). */
+function formatDependencyEdgeLabel(
+  edge: DependencyEdge,
+  labelByRequestId: ReadonlyMap<string, string>,
+): string {
+  const from = labelByRequestId.get(edge.fromRequestId) ?? edge.fromRequestId;
+  const to = labelByRequestId.get(edge.toRequestId) ?? edge.toRequestId;
+  return edge.variable === undefined
+    ? `${from} → ${to}`
+    : `${from} → ${to} (${edge.variable})`;
+}
+
 function formatSummaryLine(summary: RunSummary): string {
   const { statistics: stats, status } = summary;
   const verb = statusLabel(status).toLowerCase();
@@ -383,6 +452,8 @@ main { display: flex; flex-direction: column; min-height: 100vh; }
   font-size: .75em; font-weight: 600;
   text-transform: uppercase; letter-spacing: .04em;
 }
+.header .section-label { margin: var(--ah-space-3) 0 var(--ah-space-2); }
+.header .status-badge { text-transform: none; letter-spacing: normal; }
 .table-wrap { overflow: auto; padding: 0 0 var(--ah-space-4); }
 table {
   width: 100%; border-collapse: collapse;
@@ -418,9 +489,24 @@ td.assertions-fail { color: var(--vscode-testing-iconFailed, var(--vscode-errorF
   color: var(--vscode-descriptionForeground);
   font-size: .88em; overflow-wrap: anywhere; margin-top: var(--ah-space-1);
 }
+.message.skip-reason { color: var(--vscode-editorWarning-foreground); }
+.vars-produced {
+  color: var(--vscode-charts-green, var(--vscode-terminal-ansiGreen, #89d185));
+  font-size: .85em; overflow-wrap: anywhere; margin-top: 2px;
+  font-family: var(--vscode-editor-font-family, var(--vscode-font-family));
+}
 .row-actions { display: flex; gap: var(--ah-space-1); flex-wrap: wrap; white-space: nowrap; }
 .row-actions button { padding: 2px 8px; font-size: .9em; }
 input[type="checkbox"] { accent-color: var(--vscode-focusBorder); }
+.dependency-list, .unresolved-list {
+  margin: 0 0 var(--ah-space-2); padding: 0; list-style: none;
+  color: var(--vscode-descriptionForeground); font-size: .88em;
+}
+.dependency-list li, .unresolved-list li {
+  padding: 2px 0; overflow-wrap: anywhere;
+  font-family: var(--vscode-editor-font-family, var(--vscode-font-family));
+}
+.unresolved-list li { color: var(--vscode-editorWarning-foreground); }
 `;
 
 const REPORT_SCRIPT = `
@@ -470,6 +556,9 @@ const REPORT_SCRIPT = `
     ].join('');
 
     const rows = visibleRows();
+    const orderBadge = model.reordered
+      ? ' <span class="status-badge status-neutral">Reordered</span>'
+      : '';
     const body = rows.length === 0
       ? '<div class="empty-state" id="empty" role="status">' +
         '<strong>' + (filterFailed ? 'No failures' : 'No requests') + '</strong>' +
@@ -477,8 +566,8 @@ const REPORT_SCRIPT = `
           ? 'This run has no failed requests. Clear “Failed only” to see the full results.'
           : 'This collection run did not include any requests.') +
         '</div>'
-      : '<p class="section-label">Results</p>' +
-        '<div class="table-wrap"><table aria-label="Collection run results">' +
+      : '<p class="section-label">Execution order' + orderBadge + '</p>' +
+        '<div class="table-wrap"><table aria-label="Collection run execution order">' +
         '<thead><tr>' +
         '<th scope="col">#</th>' +
         '<th scope="col">Status</th>' +
@@ -492,8 +581,13 @@ const REPORT_SCRIPT = `
             ? '<div class="meta"><span class="' + escapeAttribute(row.methodBadgeClass) + '">' +
               escapeHtml(row.method) + '</span> ' + escapeHtml(row.url) + '</div>'
             : '';
-          const message = row.message
-            ? '<div class="message">' + escapeHtml(row.message) + '</div>'
+          const message = row.skipReason
+            ? '<div class="message skip-reason">' + escapeHtml(row.skipReason) + '</div>'
+            : row.message
+              ? '<div class="message">' + escapeHtml(row.message) + '</div>'
+              : '';
+          const producedVariables = row.producedVariablesLabel
+            ? '<div class="vars-produced">' + escapeHtml(row.producedVariablesLabel) + '</div>'
             : '';
           return '<tr data-request-id="' + escapeAttribute(row.requestId) + '" tabindex="0"' +
             (row.isFailure ? ' class="row-fail"' : '') + '>' +
@@ -501,7 +595,7 @@ const REPORT_SCRIPT = `
             '<td><span class="status-badge ' + escapeAttribute(row.statusBadgeClass) + '">' +
               escapeHtml(row.statusBadgeText) + '</span></td>' +
             '<td class="request-cell"><div class="label">' + escapeHtml(row.label) + '</div>' +
-              meta + message + '</td>' +
+              meta + producedVariables + message + '</td>' +
             '<td>' + escapeHtml(row.durationLabel) + '</td>' +
             '<td class="' + (row.isFailure && row.assertionsLabel && /fail/i.test(row.assertionsLabel) ? 'assertions-fail' : '') + '">' + escapeHtml(row.assertionsLabel) + '</td>' +
             '<td class="row-actions">' +
@@ -512,6 +606,24 @@ const REPORT_SCRIPT = `
             '</td></tr>';
         }).join('') +
         '</tbody></table></div>';
+
+    const dependenciesSection = model.dependencyEdges.length === 0
+      ? ''
+      : '<p class="section-label">Dependencies</p>' +
+        '<ul class="dependency-list" aria-label="Dependency edges">' +
+        model.dependencyEdges.map(function (edge) {
+          return '<li>' + escapeHtml(edge.label) + '</li>';
+        }).join('') +
+        '</ul>';
+
+    const unresolvedSection = model.unresolvedConsumes.length === 0
+      ? ''
+      : '<p class="section-label">Unresolved</p>' +
+        '<ul class="unresolved-list" aria-label="Unresolved variables">' +
+        model.unresolvedConsumes.map(function (entry) {
+          return '<li>' + escapeHtml(entry.variable) + ' — ' + escapeHtml(entry.requestLabel) + '</li>';
+        }).join('') +
+        '</ul>';
 
     root.innerHTML =
       '<div class="toolbar" role="toolbar" aria-label="Report filters">' +
@@ -525,6 +637,8 @@ const REPORT_SCRIPT = `
           (model.cancelled > 0 ? ' · ' + model.cancelled + ' cancelled' : '') +
         '</p>' +
         '<div class="stats-summary" aria-label="Run statistics">' + chips + '</div>' +
+        dependenciesSection +
+        unresolvedSection +
       '</header>' +
       body;
 

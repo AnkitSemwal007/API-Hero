@@ -346,7 +346,7 @@ class RequestEditorDocumentSync implements Disposable {
     edit.replace(this.document.uri, fullRange, nextText);
     const nextVersion = this.document.version + 1;
     this.ignoredVersions.add(nextVersion);
-    let applied = false;
+    let applied: boolean;
     try {
       applied = await workspace.applyEdit(edit);
     } catch (error) {

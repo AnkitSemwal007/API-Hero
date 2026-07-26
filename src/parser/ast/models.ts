@@ -117,6 +117,7 @@ export const KNOWN_DIRECTIVE_NAMES = [
   'sensitive-variable',
   'extract',
   'sensitive-extract',
+  'depends-on',
 ] as const;
 
 export type KnownDirectiveName = (typeof KNOWN_DIRECTIVE_NAMES)[number];

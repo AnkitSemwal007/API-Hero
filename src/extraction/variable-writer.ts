@@ -1,8 +1,10 @@
-import type { VariableWriteRequest, VariableWriteResult } from './models';
+import type {
+  VariableWriteRequest,
+  VariableWriteResult,
+  VariableWriter,
+} from './models';
 
-export interface VariableWriter {
-  write(request: VariableWriteRequest): Promise<VariableWriteResult>;
-}
+export type { VariableWriter } from './models';
 
 /**
  * P0 stub. Always returns NOT_IMPLEMENTED.
@@ -10,6 +12,7 @@ export interface VariableWriter {
  */
 export class NoOpVariableWriter implements VariableWriter {
   public async write(_request: VariableWriteRequest): Promise<VariableWriteResult> {
+    void _request;
     return {
       ok: false,
       code: 'NOT_IMPLEMENTED',

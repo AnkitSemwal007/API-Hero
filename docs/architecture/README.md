@@ -66,7 +66,7 @@ sequenceDiagram
 | [P0 Implementation Spec](./adr/0001-phase-0-implementation-spec.md) | Ready | Exact Phase 0 build checklist (files, APIs, tests) — not an ADR |
 | [P1 Implementation Spec](./adr/0001-phase-1-implementation-spec.md) | Ready | Exact Phase 1 extraction build checklist — not an ADR |
 | [P1 Task Plan](./adr/0001-phase-1-task-plan.md) | Ready | Developer tasks P1-001…019 for tracking / sequential commits |
-| [P2 Implementation Spec](./adr/0001-phase-2-implementation-spec.md) | Ready | Collection runner store, `@depends-on`, graph, collection variables |
+| [P2 Implementation Spec](./adr/0001-phase-2-implementation-spec.md) | Complete | Collection runner store, `@depends-on`, graph, collection variables |
 
 **ADR-0001 is authoritative** for extraction, run/collection scopes, auth-vs-variables boundaries, dependency chaining, and related UI. Domain docs below describe the **shipped** system; where they conflict with ADR-0001 on future work, the ADR wins until those docs are updated during implementation. Implement Phase 0 / Phase 1 only from their implementation specs.
 

@@ -44,22 +44,74 @@ export const CollectionRunStatus = {
 export type CollectionRunStatus =
   (typeof CollectionRunStatus)[keyof typeof CollectionRunStatus];
 
+/** Kind of edge recorded between two requests in a dependency graph. */
+export type DependencyEdgeKind = 'implicit' | 'explicit';
+
 /**
- * Reserved bags for deferred runner features. Values stay opaque; this sprint
- * never populates them. Do not scaffold competing modules for these keys.
+ * One directed dependency edge: `fromRequestId` must execute before
+ * `toRequestId`. `variable` is present for implicit (produces/consumes) edges;
+ * absent for explicit `@depends-on` edges with no associated variable.
+ */
+export interface DependencyEdge {
+  readonly fromRequestId: string;
+  readonly toRequestId: string;
+  readonly kind: DependencyEdgeKind;
+  readonly variable?: string;
+}
+
+/** Per-request produces/consumes/depends-on summary attached to a dependency graph. */
+export interface DependencyNodeMeta {
+  readonly requestId: string;
+  readonly produces: readonly string[];
+  readonly consumes: readonly string[];
+  readonly dependsOnNames: readonly string[];
+}
+
+/** Typed `extensions.dependencies` bag populated by `enrichRunPlanWithDependencies`. */
+export interface DependenciesExtension {
+  readonly nodes: readonly DependencyNodeMeta[];
+  readonly edges: readonly DependencyEdge[];
+  readonly reordered: boolean;
+  readonly originalOrder: readonly string[];
+  readonly executionOrder: readonly string[];
+  readonly cycles: readonly (readonly string[])[];
+  readonly unresolvedConsumes: readonly {
+    readonly requestId: string;
+    readonly variable: string;
+  }[];
+}
+
+/**
+ * Typed `extensions.variablesPerRun` bag — enrich-time snapshot of declared
+ * produces per request (`storeKind` + `producedByRequest`). Not a live store
+ * dump; actual extractions names live on {@link RequestRunResult.producedVariables}.
+ */
+export interface VariablesPerRunExtension {
+  readonly storeKind: 'in-memory';
+  readonly producedByRequest: Readonly<Record<string, readonly string[]>>;
+}
+
+/**
+ * Reserved bags for deferred runner features. `dependencies` and
+ * `variablesPerRun` are typed (Phase 2); other keys stay opaque until their
+ * owning feature lands. Do not scaffold competing modules for these keys.
  */
 export interface CollectionRunExtensionBag {
   readonly parallel?: Readonly<Record<string, unknown>>;
   readonly conditional?: Readonly<Record<string, unknown>>;
-  readonly dependencies?: Readonly<Record<string, unknown>>;
-  readonly variablesPerRun?: Readonly<Record<string, unknown>>;
+  readonly dependencies?: DependenciesExtension;
+  readonly variablesPerRun?: VariablesPerRunExtension;
   readonly ci?: Readonly<Record<string, unknown>>;
   readonly cli?: Readonly<Record<string, unknown>>;
   readonly reports?: Readonly<Record<string, unknown>>;
   readonly assertions?: Readonly<Record<string, unknown>>;
   readonly ai?: Readonly<Record<string, unknown>>;
   readonly export?: Readonly<Record<string, unknown>>;
-  readonly [key: string]: Readonly<Record<string, unknown>> | undefined;
+  readonly [key: string]:
+    | Readonly<Record<string, unknown>>
+    | DependenciesExtension
+    | VariablesPerRunExtension
+    | undefined;
 }
 
 /** One request step inside an ordered {@link RunPlan}. */
@@ -76,6 +128,12 @@ export interface PlannedRequest {
   readonly url: string;
   /** Zero-based order within the plan. */
   readonly ordinal: number;
+  /** Variable names this request's enabled extract rules may produce (Phase 2). */
+  readonly produces?: readonly string[];
+  /** Variable names referenced via `{{name}}` that need external resolution (Phase 2). */
+  readonly consumes?: readonly string[];
+  /** Request ids resolved from this request's `@depends-on` names (Phase 2). */
+  readonly dependsOnRequestIds?: readonly string[];
 }
 
 /**
@@ -111,6 +169,17 @@ export interface RequestRunResult {
   readonly assertionsPassed?: number;
   readonly assertionsFailed?: number;
   readonly assertionsTotal?: number;
+  /** Variable names actually extracted for this attempt (Phase 2). */
+  readonly producedVariables?: readonly string[];
+  /** Secret-free reason this request was skipped due to a dependency (Phase 2). */
+  readonly skipReason?: string;
+  /**
+   * True when the extraction report had any failed or malformed outcome
+   * (including optional write failures). Report/UI flag only — stop/fail
+   * policy uses {@link RequestRunOutcomeKind.Failed} after required/malformed
+   * mapping (§9.4), not this flag alone.
+   */
+  readonly extractionFailed?: boolean;
 }
 
 /** Aggregate counts and timing for a finished run. */

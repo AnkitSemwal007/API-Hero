@@ -4,6 +4,8 @@
 .vscode/**
 .cursor/**
 .cursorrules
+.cursor-phase1-progress.json
+.cursor*.json
 .gitignore
 
 # Source & build tooling (runtime is dist/)

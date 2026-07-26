@@ -70,6 +70,17 @@ describe('request editor webview helpers', () => {
     assert.match(html, /Env: None/u);
     assert.match(html, /id="extractTable"/u);
     assert.match(html, /Add extraction/u);
+    assert.match(html, /id="dependsOn"/u);
+    assert.match(html, /class="dependencies-block"/u);
+    assert.match(html, />Dependencies</u);
+    assert.match(html, /Writes <code>@depends-on<\/code>/u);
+    // Depends-on field lives on the Request tab, not a new tab.
+    const requestTabAt = html.indexOf('id="tab-request"');
+    const dependsOnFieldAt = html.indexOf('id="dependsOn"');
+    const headersTabAt = html.indexOf('id="tab-headers"');
+    assert.ok(
+      dependsOnFieldAt > requestTabAt && dependsOnFieldAt < headersTabAt,
+    );
     assert.match(
       html,
       /Default scope is Run\. Environment writes persist\. Request writes are session overlay for this request\./u,
@@ -146,6 +157,10 @@ describe('request editor webview helpers', () => {
 
   test('emptyRequestEditorModel includes extractionRules array', () => {
     assert.deepEqual(emptyRequestEditorModel().extractionRules, []);
+  });
+
+  test('emptyRequestEditorModel includes dependsOn array', () => {
+    assert.deepEqual(emptyRequestEditorModel().dependsOn, []);
   });
 
   test('createRequestEditorAck and resubmit shape outbound sync messages', () => {
@@ -227,6 +242,35 @@ describe('request editor webview helpers', () => {
         variables: [{ name: 'a', value: 'b', sensitive: true }],
       })?.method,
       'POST',
+    );
+  });
+
+  test('parseRequestSourceDocument round-trips dependsOn', () => {
+    assert.deepEqual(
+      parseRequestSourceDocument({
+        name: 'Invoice',
+        method: 'GET',
+        url: 'https://example.test',
+        dependsOn: ['Login', 'Products'],
+      })?.dependsOn,
+      ['Login', 'Products'],
+    );
+    assert.equal(
+      parseRequestSourceDocument({
+        name: 'Invoice',
+        method: 'GET',
+        url: 'https://example.test',
+        dependsOn: ['Login', 1],
+      }),
+      undefined,
+    );
+    assert.equal(
+      parseRequestSourceDocument({
+        name: 'Invoice',
+        method: 'GET',
+        url: 'https://example.test',
+      })?.dependsOn,
+      undefined,
     );
   });
 

@@ -79,18 +79,33 @@ export interface ExtractionReport {
   readonly malformedCount: number;
 }
 
+/** Minimal assertion summary extraction needs — avoids importing assertions (cycle). */
+export interface ExtractionAssertionSummary {
+  readonly failed: number;
+  readonly malformed: number;
+}
+
+export interface ExtractionAssertionReport {
+  readonly summary: ExtractionAssertionSummary;
+}
+
 export interface ExtractionContext {
   readonly result: import('../execution').ExecutionResult;
-  readonly assertionReport?: import('../assertions').TestReport;
+  readonly assertionReport?: ExtractionAssertionReport;
   readonly requestKey: string;
   readonly activeEnvironmentId?: string;
+}
+
+/** Port for persisting extracted values. Implementations live in writer modules. */
+export interface VariableWriter {
+  write(request: VariableWriteRequest): Promise<VariableWriteResult>;
 }
 
 export interface ExtractionEngine {
   apply(
     rules: readonly ExtractionRule[],
     context: ExtractionContext,
-    writer: import('./variable-writer').VariableWriter,
+    writer: VariableWriter,
   ): Promise<ExtractionReport>;
 }
 

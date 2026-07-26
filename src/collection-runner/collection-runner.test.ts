@@ -350,6 +350,117 @@ test('stop-on-first-error skips remaining requests', async () => {
   assert.equal(summary.results[2]?.outcome, RequestRunOutcomeKinds.Skipped);
 });
 
+test('success with required extraction failure maps to Failed and stop-on-first-error stops', async () => {
+  const executor = new FakeExecutor();
+  executor.outcomes = [
+    {
+      outcome: 'success',
+      durationMs: 5,
+      statusCode: 200,
+      extraction: {
+        outcomes: [
+          {
+            rule: {
+              id: 'e1',
+              variableName: 'token',
+              source: { kind: 'json-path', path: 'body.token' },
+              targetScope: 'run',
+              sensitive: false,
+              required: true,
+              enabled: true,
+              when: { kind: 'always' },
+            },
+            kind: 'failed',
+            reason: 'path not found',
+          },
+        ],
+        extractedCount: 0,
+        failedCount: 1,
+        skippedCount: 0,
+        malformedCount: 0,
+      },
+    },
+    { outcome: 'success', durationMs: 5, statusCode: 200 },
+  ];
+  const runner = new CollectionRunnerService({
+    executor,
+    sourceReader: new FakeSourceReader(),
+  });
+  const plan = buildRunPlan({
+    aggregate: sampleAggregate(),
+    target: {
+      mode: CollectionRunModes.SelectedRequests,
+      collectionId: 'collection:ws',
+      requestIds: ['r1', 'r2'],
+    },
+    failurePolicy: FailurePolicyKinds.StopOnFirstError,
+  });
+
+  const summary = await runner.execute({ plan });
+
+  assert.equal(executor.calls.length, 1);
+  assert.equal(summary.status, 'stopped');
+  assert.equal(summary.results[0]?.outcome, RequestRunOutcomeKinds.Failed);
+  assert.equal(summary.results[0]?.message, 'Extraction failed.');
+  assert.equal(summary.results[0]?.extractionFailed, true);
+  assert.equal(summary.results[1]?.outcome, RequestRunOutcomeKinds.Skipped);
+  assert.equal(summary.statistics.failed, 1);
+  assert.equal(summary.statistics.skipped, 1);
+  assert.equal(summary.statistics.passed, 0);
+});
+
+test('success with optional-only extraction skip stays Passed', async () => {
+  const executor = new FakeExecutor();
+  executor.outcomes = [
+    {
+      outcome: 'success',
+      durationMs: 5,
+      statusCode: 200,
+      extraction: {
+        outcomes: [
+          {
+            rule: {
+              id: 'e1',
+              variableName: 'optionalToken',
+              source: { kind: 'json-path', path: 'body.missing' },
+              targetScope: 'run',
+              sensitive: false,
+              required: false,
+              enabled: true,
+              when: { kind: 'always' },
+            },
+            kind: 'skipped',
+            reason: 'path not found',
+          },
+        ],
+        extractedCount: 0,
+        failedCount: 0,
+        skippedCount: 1,
+        malformedCount: 0,
+      },
+    },
+  ];
+  const runner = new CollectionRunnerService({
+    executor,
+    sourceReader: new FakeSourceReader(),
+  });
+  const plan = buildRunPlan({
+    aggregate: sampleAggregate(),
+    target: {
+      mode: CollectionRunModes.SelectedRequests,
+      collectionId: 'collection:ws',
+      requestIds: ['r1'],
+    },
+    failurePolicy: FailurePolicyKinds.StopOnFirstError,
+  });
+
+  const summary = await runner.execute({ plan });
+
+  assert.equal(summary.results[0]?.outcome, RequestRunOutcomeKinds.Passed);
+  assert.equal(summary.statistics.passed, 1);
+  assert.equal(summary.statistics.failed, 0);
+});
+
 test('continue-on-error runs every request', async () => {
   const executor = new FakeExecutor();
   executor.outcomes = [

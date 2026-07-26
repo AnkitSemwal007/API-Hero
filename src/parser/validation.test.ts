@@ -279,6 +279,105 @@ test('validates extract directives without treating them as unknown', () => {
   assert.equal(duplicate.valid, true);
 });
 
+test('validates @depends-on directives', () => {
+  const valid = validateApiDocument(
+    parseApiDocument(
+      [
+        '@name Login',
+        'GET /login',
+        '###',
+        '@name Products',
+        '@depends-on Login',
+        'GET /products',
+      ].join('\n'),
+    ).ast,
+  );
+  assert.equal(valid.valid, true);
+  assert.equal(
+    valid.diagnostics.some(
+      (diagnostic) => diagnostic.code === VALIDATION_DIAGNOSTIC_CODES.unknownDirective,
+    ),
+    false,
+  );
+
+  const selfDepends = validateApiDocument(
+    parseApiDocument(
+      ['@name Login', '@depends-on Login', 'GET /login'].join('\n'),
+    ).ast,
+  );
+  assert.ok(
+    selfDepends.diagnostics.some(
+      (diagnostic) => diagnostic.code === VALIDATION_DIAGNOSTIC_CODES.dependsOnSelfDepends,
+    ),
+  );
+  assert.equal(selfDepends.valid, false);
+
+  const unknownTarget = validateApiDocument(
+    parseApiDocument(
+      ['@name Products', '@depends-on Login', 'GET /products'].join('\n'),
+    ).ast,
+  );
+  const unknownDiagnostic = unknownTarget.diagnostics.find(
+    (diagnostic) => diagnostic.code === VALIDATION_DIAGNOSTIC_CODES.dependsOnUnknownTarget,
+  );
+  assert.ok(unknownDiagnostic);
+  assert.equal(unknownDiagnostic.severity, 'warning');
+  assert.equal(unknownTarget.valid, true);
+
+  const ambiguousTarget = validateApiDocument(
+    parseApiDocument(
+      [
+        '@name Login',
+        'GET /login-a',
+        '###',
+        '@name Login',
+        'GET /login-b',
+        '###',
+        '@name Products',
+        '@depends-on Login',
+        'GET /products',
+      ].join('\n'),
+    ).ast,
+  );
+  assert.ok(
+    ambiguousTarget.diagnostics.some(
+      (diagnostic) => diagnostic.code === VALIDATION_DIAGNOSTIC_CODES.dependsOnAmbiguousTarget,
+    ),
+  );
+  assert.equal(ambiguousTarget.valid, false);
+
+  const duplicateName = validateApiDocument(
+    parseApiDocument(
+      [
+        '@name Login',
+        'GET /login',
+        '###',
+        '@name Products',
+        '@depends-on Login, Login',
+        'GET /products',
+      ].join('\n'),
+    ).ast,
+  );
+  const duplicateDiagnostic = duplicateName.diagnostics.find(
+    (diagnostic) => diagnostic.code === VALIDATION_DIAGNOSTIC_CODES.dependsOnDuplicateName,
+  );
+  assert.ok(duplicateDiagnostic);
+  assert.equal(duplicateDiagnostic.severity, 'warning');
+  assert.equal(duplicateName.valid, true);
+
+  const invalid = validateApiDocument(
+    parseApiDocument(
+      ['@depends-on Login, , Products', 'GET /products'].join('\n'),
+    ).ast,
+  );
+  assert.ok(
+    invalid.diagnostics.some(
+      (diagnostic) => diagnostic.code === VALIDATION_DIAGNOSTIC_CODES.dependsOnInvalid,
+    ),
+  );
+  assert.equal(invalid.valid, false);
+});
+
 test('scoped validation excludes unrelated request errors but keeps document semantics', () => {
   const parsed = parseApiDocument([
     '@tag global',

@@ -18,6 +18,7 @@ export const DIRECTIVES = [
   '@sensitive-variable',
   '@extract',
   '@sensitive-extract',
+  '@depends-on',
 ] as const;
 
 /** Directives that may occur once in a request block. */
@@ -85,4 +86,6 @@ export const HOVER_DOCUMENTATION: Readonly<Record<string, string>> = {
     'Extracts a response value into a variable: @extract name from body.path|header Name|status [scope=…] [when=…] [optional]. Default scope is run.',
   '@sensitive-extract':
     'Like @extract, but marks the extracted variable as sensitive (masked in UI and reports).',
+  '@depends-on':
+    'Declares explicit run-order dependencies on other requests by @name, comma-separated: @depends-on Login, Products.',
 };

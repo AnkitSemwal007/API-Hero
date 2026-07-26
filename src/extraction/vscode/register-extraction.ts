@@ -1,8 +1,10 @@
 import type { ExtensionContext } from 'vscode';
 
-import type { EnvironmentManager } from '../../variables';
+import type { CollectionRunVariableContext } from '../../collection-runner';
+import type { CollectionVariableStore, EnvironmentManager } from '../../variables';
 import type { EnvironmentManagerState } from '../../variables/vscode';
 import {
+  CollectionVariableWriter,
   CompositeVariableWriter,
   DefaultExtractionEngine,
   EnvironmentVariableWriter,
@@ -18,6 +20,19 @@ export interface RegisterExtractionOptions {
   readonly environmentManager: EnvironmentManager;
   readonly overlay: InMemoryRuntimeVariableOverlay;
   readonly runStore: InMemoryRunVariableStore;
+  /** Persists `scope=collection` writes (Phase 2). */
+  readonly collectionVariableStore: CollectionVariableStore;
+  /**
+   * Composition-owned holder for the active collection run's store + identity
+   * (Phase 2, §3.6). Consulted per write so `run` writes land in the active
+   * collection run's store and `collection` writes resolve the right root.
+   */
+  readonly collectionRunContext: CollectionRunVariableContext;
+  /**
+   * Called after a successful `scope=collection` persist so the active-run
+   * resolver snapshot can pick up mid-run collection extracts (§9.3).
+   */
+  readonly onCollectionVariablePersisted?: () => Promise<void>;
 }
 
 export interface RegisterExtractionResult {
@@ -33,17 +48,43 @@ export interface RegisterExtractionResult {
 export function registerExtraction(
   options: RegisterExtractionOptions,
 ): RegisterExtractionResult {
-  const { environmentManager, overlay, runStore } = options;
+  const {
+    environmentManager,
+    overlay,
+    runStore,
+    collectionVariableStore,
+    collectionRunContext,
+    onCollectionVariablePersisted,
+  } = options;
   void options.context;
   const environmentWriter = new EnvironmentVariableWriter(
     createEnvironmentWritePorts(environmentManager, () =>
       snapshotEnvironmentManagerState(environmentManager),
     ),
   );
+  const storeWithRefresh: CollectionVariableStore = {
+    load: (rootPath, collectionId) =>
+      collectionVariableStore.load(rootPath, collectionId),
+    refresh: (rootPath, collectionId) =>
+      collectionVariableStore.refresh(rootPath, collectionId),
+    upsert: async (rootPath, collectionId, variable) => {
+      await collectionVariableStore.upsert(rootPath, collectionId, variable);
+      if (onCollectionVariablePersisted !== undefined) {
+        await onCollectionVariablePersisted();
+      }
+    },
+  };
+  const collectionWriter = new CollectionVariableWriter({
+    store: storeWithRefresh,
+    getCollectionRootPath: () => collectionRunContext.getCollectionRootPath(),
+    getCollectionId: () => collectionRunContext.getCollectionId(),
+  });
   const writer = new CompositeVariableWriter({
     overlay,
     runStore,
     environment: environmentWriter,
+    collection: collectionWriter,
+    resolveRunStore: () => collectionRunContext.getRunStore(),
   });
   const engine = new DefaultExtractionEngine();
   const observer = new ExtractionObserver(

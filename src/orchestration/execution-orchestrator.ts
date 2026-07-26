@@ -214,6 +214,12 @@ export interface RunAtSourceLocationResult {
    * malformed. HTTP 4xx/5xx alone does not set this — only assertion outcomes.
    */
   readonly assertionFailed?: boolean;
+  /**
+   * Extraction outcome for this attempt, when the post-execution observer
+   * returned one (Phase 2 — Collection Runner reads `producedVariables` /
+   * `extractionFailed` from this without re-running extraction).
+   */
+  readonly extraction?: ExtractionReport;
 }
 
 const DEFAULT_PIPELINE: RequestExecutionPipeline = Object.freeze({
@@ -561,6 +567,9 @@ export class ExecutionOrchestrator {
                 ...(assertionReport === undefined
                   ? {}
                   : { assertions: assertionReport, assertionFailed }),
+                ...(extractionReport === undefined
+                  ? {}
+                  : { extraction: extractionReport }),
               };
             }
           }
@@ -584,6 +593,9 @@ export class ExecutionOrchestrator {
               ...(assertionReport === undefined
                 ? {}
                 : { assertions: assertionReport, assertionFailed: false }),
+              ...(extractionReport === undefined
+                ? {}
+                : { extraction: extractionReport }),
             };
           }
           this.status.update({ kind: 'failed' });
@@ -593,6 +605,9 @@ export class ExecutionOrchestrator {
             ...(result.success
               ? { statusCode: result.response.statusCode }
               : {}),
+            ...(extractionReport === undefined
+              ? {}
+              : { extraction: extractionReport }),
             ...(assertionReport === undefined
               ? {}
               : { assertions: assertionReport, assertionFailed }),

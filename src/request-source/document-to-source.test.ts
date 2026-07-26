@@ -134,6 +134,65 @@ describe('documentToRequestSource / parseSourceToRequestDocument', () => {
     );
   });
 
+  test('round-trips @depends-on names', () => {
+    const original = {
+      name: 'Products',
+      method: 'GET' as const,
+      url: 'https://example.test/products',
+      dependsOn: ['Login', 'Cart'],
+    };
+
+    const source = serializeRequestDocument(original);
+    assert.match(source, /@depends-on Login, Cart\n/u);
+
+    const parsed = parseSourceToRequestDocument(source);
+    assert.equal(parsed.kind, 'single');
+    if (parsed.kind !== 'single') {
+      return;
+    }
+    assert.deepEqual(parsed.document.dependsOn, ['Login', 'Cart']);
+
+    const roundTripAgain = parseSourceToRequestDocument(
+      serializeRequestDocument(parsed.document),
+    );
+    assert.equal(roundTripAgain.kind, 'single');
+    if (roundTripAgain.kind !== 'single') {
+      return;
+    }
+    assert.deepEqual(roundTripAgain.document.dependsOn, ['Login', 'Cart']);
+  });
+
+  test('omits @depends-on when there are no dependencies', () => {
+    const source = serializeRequestDocument({
+      name: 'Login',
+      method: 'POST' as const,
+      url: 'https://example.test/login',
+    });
+    assert.doesNotMatch(source, /@depends-on/u);
+    const parsed = parseSourceToRequestDocument(source);
+    assert.equal(parsed.kind, 'single');
+    if (parsed.kind === 'single') {
+      assert.equal(parsed.document.dependsOn, undefined);
+    }
+  });
+
+  test('last @depends-on directive wins when multiple are authored', () => {
+    const source = [
+      '@name Products',
+      '@depends-on Login',
+      '@depends-on Cart, Login',
+      '',
+      'GET https://example.test/products',
+      '',
+    ].join('\n');
+    const parsed = parseSourceToRequestDocument(source);
+    assert.equal(parsed.kind, 'single');
+    if (parsed.kind !== 'single') {
+      return;
+    }
+    assert.deepEqual(parsed.document.dependsOn, ['Cart', 'Login']);
+  });
+
   test('reports multi-request files without projecting a form model', () => {
     const source = ['GET https://a.test', '###', 'POST https://b.test'].join(
       '\n',

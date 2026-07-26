@@ -1,4 +1,5 @@
 import type { ValidationRule } from '../types';
+import { dependsOnDirectiveValidationRule } from './depends-on-directive-rule';
 import { directiveValidationRule } from './directive-rule';
 import { extractDirectiveValidationRule } from './extract-directive-rule';
 import { headerValidationRule } from './header-rule';
@@ -6,6 +7,7 @@ import { requestValidationRule } from './request-rule';
 import { variableValidationRule } from './variable-rule';
 
 export { VALIDATION_DIAGNOSTIC_CODES } from './diagnostic-codes';
+export { dependsOnDirectiveValidationRule } from './depends-on-directive-rule';
 export { directiveValidationRule } from './directive-rule';
 export { extractDirectiveValidationRule } from './extract-directive-rule';
 export { headerValidationRule } from './header-rule';
@@ -18,5 +20,6 @@ export const defaultValidationRules: readonly ValidationRule[] = Object.freeze([
   headerValidationRule,
   directiveValidationRule,
   extractDirectiveValidationRule,
+  dependsOnDirectiveValidationRule,
   variableValidationRule,
 ]);

@@ -21,13 +21,11 @@ export type {
   ExtractionReport,
   ExtractionContext,
   ExtractionEngine,
+  VariableWriter,
   ResponseExtractor,
   ExtractorRegistry,
 } from './models';
-export {
-  type VariableWriter,
-  NoOpVariableWriter,
-} from './variable-writer';
+export { NoOpVariableWriter } from './variable-writer';
 export {
   type RuntimeVariableOverlay,
   InMemoryRuntimeVariableOverlay,
@@ -62,4 +60,8 @@ export {
   type EnvironmentWriteEnvironment,
   type EnvironmentWriteVariable,
 } from './environment-variable-writer';
+export {
+  CollectionVariableWriter,
+  type CollectionVariableWriterOptions,
+} from './collection-variable-writer';
 export { requestKeyFor } from './request-key';
