@@ -1,6 +1,6 @@
-# Marketplace assets — 2.1.2
+# Marketplace assets — 2.1.3
 
-Guidance for listing media for **API Hero 2.1.2**. Full-resolution artwork under `docs/marketplace/` is typically `.vscodeignore`d; ship icons from `images/`.
+Guidance for listing media for **API Hero 2.1.3**. Full-resolution artwork under `docs/marketplace/` is typically `.vscodeignore`d; ship icons from `images/`.
 
 ## Icon
 
@@ -28,7 +28,7 @@ See [banner-placeholder.md](../marketplace/banner-placeholder.md). Recommended ~
 
 ## Checklist
 
-- [ ] Screenshots reflect 2.1.2 features only
+- [ ] Screenshots reflect 2.1.3 features only
 - [ ] No GraphQL / OAuth screenshots implying support
 - [ ] Icon and banner contrast well in Marketplace dark/light cards
 - [ ] Root README links use paths that resolve on GitHub and/or inside the VSIX as intended
