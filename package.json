@@ -2,7 +2,7 @@
   "name": "api-hero",
   "displayName": "API Hero",
   "description": "Git-first REST/HTTP client for VS Code. Edit .api requests in a UI Request Editor, run with assertions, manage collections, environments, and auth, import OpenAPI, and inspect History and Run Reports.",
-  "version": "0.2.1",
+  "version": "2.0.1",
   "publisher": "ankitsemwal",
   "license": "MIT",
   "homepage": "https://github.com/AnkitSemwal007/API-Hero",

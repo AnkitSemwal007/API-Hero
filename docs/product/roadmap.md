@@ -1,13 +1,13 @@
 # Roadmap
 
-Honest near-term plan for **API Hero** after **0.2.1** (Phase 1 — extraction; Phase 2 — collection chaining). Managers (Environments, Auth), Overview, History Detail, Run Report, OpenAPI wizard, Response copy/save/search, response variable extraction, and collection chaining (`@depends-on`, per-run store, collection variables) already ship — they are not roadmap gaps.
+Honest near-term plan for **API Hero** after **2.0.1** (Phase 1 — extraction; Phase 2 — collection chaining). Managers (Environments, Auth), Overview, History Detail, Run Report, OpenAPI wizard, Response copy/save/search, response variable extraction, and collection chaining (`@depends-on`, per-run store, collection variables) already ship — they are not roadmap gaps.
 
 ## Near term
 
 | Item | Notes |
 | --- | --- |
 | Marketplace screenshots / GIFs | Capture Request Editor (Extract), Collections, Response (extraction report), History, managers |
-| README / listing copy | Align with shipped 0.2.1 features only |
+| README / listing copy | Align with shipped 2.0.1 features only |
 | Run File | Implement multi-request file execution (today: stub, palette-hidden) |
 | Examples pack | Curated `.api` samples including extract flows |
 | Docs drift checks | Keep user/architecture docs matched to `package.json` |
@@ -16,7 +16,7 @@ Honest near-term plan for **API Hero** after **0.2.1** (Phase 1 — extraction; 
 
 | Item | Notes |
 | --- | --- |
-| OAuth2 / OIDC | New auth provider + secure token handling; not in 0.2.1 |
+| OAuth2 / OIDC | New auth provider + secure token handling; not in 2.0.1 |
 | Cookie jar | Explicit product + security design required |
 | Code Actions | Optional language assist (not shipped) |
 | Import Hub extras | Swagger 2 / Postman / Insomnia only if provider model stays thin |

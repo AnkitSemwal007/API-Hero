@@ -4,7 +4,7 @@ Thanks for using **API Hero**.
 
 ## Bug reports
 
-1. Confirm you are on the latest released version when possible (`0.2.1` or newer).
+1. Confirm you are on the latest released version when possible (`2.0.1` or newer).
 2. Open an issue at [GitHub Issues](https://github.com/AnkitSemwal007/API-Hero/issues).
 3. Include:
    - VS Code version

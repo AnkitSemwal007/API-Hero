@@ -14,7 +14,7 @@ Implementation is source of truth. Prefer [user docs](../user/getting-started.md
 
 Help developers author, run, assert, and review HTTP APIs without leaving the editor — with git-friendly text artifacts and secure secret handling.
 
-## What shipped in 0.2.1 (Phase 1 + Phase 2)
+## What shipped in 2.0.1 (Phase 1 + Phase 2)
 
 - Everything from the 0.6.x line (Request Editor, Collections, History, Env/Auth managers, OpenAPI wizard, Run Report)
 - **Extraction Engine** with `@extract` / `@sensitive-extract`
@@ -24,7 +24,7 @@ Help developers author, run, assert, and review HTTP APIs without leaving the ed
 - **Collection chaining** (`@depends-on`, produces/consumes edges, topo-ordered runner, per-run store, pre-flight dependency skip)
 - Collection-scope variables (`api-hero.variables.json` + sensitive local overlay)
 
-Not in 0.2.1: OAuth2, cookie jar, Code Actions, GraphQL, full Run File.
+Not in 2.0.1: OAuth2, cookie jar, Code Actions, GraphQL, full Run File.
 
 ## Related
 
