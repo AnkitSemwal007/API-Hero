@@ -12,7 +12,7 @@ Suggested path (docs-only, often not in VSIX): `docs/marketplace/marketing-api-h
 
 ## Screenshots and GIFs
 
-Placeholders until captured from a real 0.2.1 build:
+Placeholders until captured from a real 2.0.1 build:
 
 | Placeholder name | Subject |
 | --- | --- |

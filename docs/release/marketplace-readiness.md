@@ -1,6 +1,6 @@
-# Marketplace readiness — 0.2.1
+# Marketplace readiness — 2.0.1
 
-Checklist for publishing **API Hero** `ankitsemwal.api-hero` **0.2.1** (Phase 1 + Phase 2).
+Checklist for publishing **API Hero** `ankitsemwal.api-hero` **2.0.1** (Phase 1 + Phase 2).
 
 ## Metadata
 
@@ -8,7 +8,7 @@ Checklist for publishing **API Hero** `ankitsemwal.api-hero` **0.2.1** (Phase 1 
 | --- | --- |
 | `displayName` | API Hero |
 | `name` / publisher / ID | `api-hero` / `ankitsemwal` / `ankitsemwal.api-hero` |
-| `version` | `0.2.1` |
+| `version` | `2.0.1` |
 | `description` / keywords / categories | Match shipped REST/HTTP scope (no GraphQL/OAuth claims) |
 | `icon` | `images/icon.png` (128×128) |
 | `galleryBanner` | `#0f766e` dark |
