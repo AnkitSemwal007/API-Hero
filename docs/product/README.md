@@ -14,6 +14,16 @@ Implementation is source of truth. Prefer [user docs](../user/getting-started.md
 
 Help developers author, run, assert, and review HTTP APIs without leaving the editor — with git-friendly text artifacts and secure secret handling.
 
+## What shipped in 2.1.1
+
+- Everything from **2.0.1** (Phase 1 extraction + Phase 2 collection chaining)
+- **Create Variable From Response** in the Response Viewer (context menu, Save as variable, confirmation sheet, Mode B `@extract` persist)
+- **Workspace-scope** extraction writes; Collection + Workspace scopes in the Request Editor Extract tab
+- Collection-scope extract outside collection runs (with cache refresh)
+- Run report **consumed variables** (`-varName`) alongside produced vars
+
+Not in 2.1.1: OAuth2, cookie jar, Code Actions, GraphQL, full Run File, Global-scope extract (manual only).
+
 ## What shipped in 2.0.1 (Phase 1 + Phase 2)
 
 - Everything from the 0.6.x line (Request Editor, Collections, History, Env/Auth managers, OpenAPI wizard, Run Report)
@@ -23,8 +33,6 @@ Help developers author, run, assert, and review HTTP APIs without leaving the ed
 - Post-execution extraction pipeline and parser diagnostics for extract directives
 - **Collection chaining** (`@depends-on`, produces/consumes edges, topo-ordered runner, per-run store, pre-flight dependency skip)
 - Collection-scope variables (`api-hero.variables.json` + sensitive local overlay)
-
-Not in 2.0.1: OAuth2, cookie jar, Code Actions, GraphQL, full Run File.
 
 ## Related
 

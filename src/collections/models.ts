@@ -59,6 +59,11 @@ export interface ExtensionBag {
 /** Reference to one request inside a `.api` file. */
 export interface RequestReference {
   readonly id: string;
+  /**
+   * Legacy authored `@id` (`req_*`) when still present on disk.
+   * Used only to reverse-migrate `@depends-on` tokens; not a dependency identity.
+   */
+  readonly legacyAuthoredId?: string;
   readonly collectionId: CollectionIdentifier;
   /** Parent folder id, or undefined when the request lives at collection root. */
   readonly folderId: string | undefined;

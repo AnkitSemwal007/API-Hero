@@ -23,3 +23,4 @@ export const defaultValidationRules: readonly ValidationRule[] = Object.freeze([
   dependsOnDirectiveValidationRule,
   variableValidationRule,
 ]);
+

@@ -94,9 +94,7 @@ export class DefaultExtractionEngine implements ExtractionEngine {
         value,
         scope: rule.targetScope,
         sensitive: rule.sensitive,
-        ...(rule.targetScope === 'document'
-          ? { requestKey: context.requestKey }
-          : {}),
+        requestKey: context.requestKey,
       });
       if (write.ok) {
         return {

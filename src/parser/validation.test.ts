@@ -324,6 +324,27 @@ test('validates @depends-on directives', () => {
   assert.equal(unknownDiagnostic.severity, 'warning');
   assert.equal(unknownTarget.valid, true);
 
+  const atPrefixedSpacedName = validateApiDocument(
+    parseApiDocument(
+      [
+        '@name New Request',
+        'GET /new',
+        '###',
+        '@name Products',
+        '@depends-on @New Request',
+        'GET /products',
+      ].join('\n'),
+    ).ast,
+  );
+  assert.equal(
+    atPrefixedSpacedName.diagnostics.some(
+      (diagnostic) =>
+        diagnostic.code === VALIDATION_DIAGNOSTIC_CODES.dependsOnUnknownTarget,
+    ),
+    false,
+  );
+  assert.equal(atPrefixedSpacedName.valid, true);
+
   const ambiguousTarget = validateApiDocument(
     parseApiDocument(
       [
@@ -376,6 +397,96 @@ test('validates @depends-on directives', () => {
     ),
   );
   assert.equal(invalid.valid, false);
+});
+
+test('validates depend-ref rules: slash in @name, same-file duplicate names, ambiguous bare', () => {
+  const slashInName = validateApiDocument(
+    parseApiDocument(['@name Auth/Login', 'GET /login'].join('\n')).ast,
+  );
+  assert.ok(
+    slashInName.diagnostics.some(
+      (diagnostic) =>
+        diagnostic.code === VALIDATION_DIAGNOSTIC_CODES.nameContainsPathSeparator,
+    ),
+  );
+  assert.equal(slashInName.valid, false);
+
+  const duplicateName = validateApiDocument(
+    parseApiDocument(
+      [
+        '@name Login',
+        'GET /login',
+        '###',
+        '@name Login',
+        'GET /login-2',
+      ].join('\n'),
+    ).ast,
+  );
+  assert.ok(
+    duplicateName.diagnostics.some(
+      (diagnostic) =>
+        diagnostic.code === VALIDATION_DIAGNOSTIC_CODES.duplicateNameInFolder,
+    ),
+  );
+  assert.equal(duplicateName.valid, false);
+
+  const dependsByName = validateApiDocument(
+    parseApiDocument(
+      [
+        '@name Login',
+        'GET /login',
+        '###',
+        '@name Products',
+        '@depends-on Login',
+        'GET /products',
+      ].join('\n'),
+    ).ast,
+  );
+  assert.equal(dependsByName.valid, true);
+
+  const ambiguousBare = validateApiDocument(
+    parseApiDocument(
+      [
+        '@name Login',
+        'GET /login',
+        '###',
+        '@name Login',
+        'GET /login-alt',
+        '###',
+        '@name Invoice',
+        '@depends-on Login',
+        'GET /invoice',
+      ].join('\n'),
+    ).ast,
+  );
+  assert.ok(
+    ambiguousBare.diagnostics.some(
+      (diagnostic) =>
+        diagnostic.code === VALIDATION_DIAGNOSTIC_CODES.dependsOnAmbiguousTarget,
+    ),
+  );
+
+  const legacySpacedName = validateApiDocument(
+    parseApiDocument(
+      [
+        '@name New Request',
+        'GET /new',
+        '###',
+        '@name Products',
+        '@depends-on New Request',
+        'GET /products',
+      ].join('\n'),
+    ).ast,
+  );
+  assert.equal(legacySpacedName.valid, true);
+
+  // Legacy @id is tolerated (known directive) but not required for depends-on.
+  const withLegacyId = validateApiDocument(
+    parseApiDocument(
+      ['@id req_a1b2c3d4', '@name Login', 'GET /login'].join('\n'),
+    ).ast,
+  );
+  assert.equal(withLegacyId.valid, true);
 });
 
 test('scoped validation excludes unrelated request errors but keeps document semantics', () => {

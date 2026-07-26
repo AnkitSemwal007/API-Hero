@@ -49,6 +49,10 @@ describe('request editor webview helpers', () => {
     assert.match(html, /id="varSuggest"/u);
     assert.match(html, /data-var-complete="true"/u);
     assert.match(html, /id="urlResolved"/u);
+    assert.match(html, /Resolved: ' \+ info\.resolved/u);
+    assert.match(html, /\.toolbar\s*\{[^}]*padding:\s*var\(--ah-space-1\)\s+var\(--ah-space-2\)/u);
+    assert.match(html, /\.panels\s*\{[^}]*padding:\s*var\(--ah-space-2\)/u);
+    assert.match(html, /refreshTabBadges/u);
     assert.match(html, /analyzeVarInput/u);
     assert.match(html, /Ctrl\+Space|ctrlKey.*metaKey.*' '/u);
     assert.match(html, /setVarCatalog/u);
@@ -70,21 +74,35 @@ describe('request editor webview helpers', () => {
     assert.match(html, /Env: None/u);
     assert.match(html, /id="extractTable"/u);
     assert.match(html, /Add extraction/u);
-    assert.match(html, /id="dependsOn"/u);
+    assert.match(html, /id="dependsOnPicker"/u);
+    assert.match(html, /data-testid="depends-on-picker"/u);
+    assert.match(html, /id="dependsOnSearch"/u);
+    assert.match(html, /id="dependsOnList"/u);
     assert.match(html, /class="dependencies-block"/u);
     assert.match(html, />Dependencies</u);
-    assert.match(html, /Writes <code>@depends-on<\/code>/u);
-    // Depends-on field lives on the Request tab, not a new tab.
+    assert.match(html, /Select requests by name from this collection/u);
+    assert.match(html, /dependsOnSelectedRefs/u);
+    assert.match(html, /dependencyCatalog/u);
+    assert.match(html, /displayLabelForDependsToken/u);
+    assert.match(html, /Unknown request/u);
+    assert.doesNotMatch(
+      html,
+      /Comma-separated request names \(the value of <code>@name<\/code>/u,
+    );
+    // Depends-on picker lives on the Request tab, not a new tab.
     const requestTabAt = html.indexOf('id="tab-request"');
-    const dependsOnFieldAt = html.indexOf('id="dependsOn"');
+    const dependsOnFieldAt = html.indexOf('id="dependsOnPicker"');
     const headersTabAt = html.indexOf('id="tab-headers"');
     assert.ok(
       dependsOnFieldAt > requestTabAt && dependsOnFieldAt < headersTabAt,
     );
     assert.match(
       html,
-      /Default scope is Run\. Environment writes persist\. Request writes are session overlay for this request\./u,
+      /Default scope is Run \(session\)\. Environment, Collection, and Workspace persist\. Request writes are a session overlay for this request\. Global is not available for extract\./u,
     );
+    assert.match(html, /<option value="collection">Collection<\/option>/u);
+    assert.match(html, /<option value="workspace">Workspace<\/option>/u);
+    assert.doesNotMatch(html, /<option value="global">/u);
     // Tab order: Request, Headers, Params, … Variables, Extract, Tests
     const headersAt = html.indexOf('data-tab="headers"');
     const paramsAt = html.indexOf('data-tab="params"');
@@ -254,6 +272,15 @@ describe('request editor webview helpers', () => {
         dependsOn: ['Login', 'Products'],
       })?.dependsOn,
       ['Login', 'Products'],
+    );
+    assert.deepEqual(
+      parseRequestSourceDocument({
+        name: 'Invoice',
+        method: 'GET',
+        url: 'https://example.test',
+        dependsOn: ['Authentication/Login'],
+      })?.dependsOn,
+      ['Authentication/Login'],
     );
     assert.equal(
       parseRequestSourceDocument({

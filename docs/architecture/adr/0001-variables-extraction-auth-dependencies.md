@@ -251,9 +251,15 @@ Dependencies are derived from:
 
 1. **Produces** — variables written by `@extract` / `@sensitive-extract`
 2. **Consumes** — `{{name}}` references in URL, headers, body, auth refs, directives
-3. **Explicit** — `@depends-on RequestName, …` (ordering-only or additional constraints)
+3. **Explicit** — `@depends-on …` (ordering-only or additional constraints)
 
-Identity: stable `request:<path>#<index>`; `@depends-on` resolves by `@name` / label at plan-build (ambiguous names ⇒ validation error).
+Identity (see [ADR 0002](./0002-authored-request-ids.md)):
+
+- **Depend refs** — `@depends-on Login` or `Authentication/Login` (human-readable; no `req_*`).
+- **Display** `@name` — editable; duplicates allowed across folders; same-folder duplicates fail closed.
+- **Discovery** `request:<path>#<index>` — plan membership / graph nodes only; never persisted in `@depends-on`.
+
+Resolve depend refs once at plan-build → ID edges. Ambiguous bare names ⇒ diagnostic + Quick Fix (do not guess).
 
 ### 8.2 Plan building
 

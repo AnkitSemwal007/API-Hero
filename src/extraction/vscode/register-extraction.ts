@@ -1,5 +1,6 @@
 import type { ExtensionContext } from 'vscode';
 
+import { collectionIdForRoot } from '../../collections';
 import type { CollectionRunVariableContext } from '../../collection-runner';
 import type { CollectionVariableStore, EnvironmentManager } from '../../variables';
 import type { EnvironmentManagerState } from '../../variables/vscode';
@@ -9,6 +10,7 @@ import {
   DefaultExtractionEngine,
   EnvironmentVariableWriter,
   InMemoryRuntimeVariableOverlay,
+  WorkspaceVariableWriter,
   type RuntimeVariableOverlay,
 } from '..';
 import type { InMemoryRunVariableStore } from '../../variables';
@@ -29,16 +31,28 @@ export interface RegisterExtractionOptions {
    */
   readonly collectionRunContext: CollectionRunVariableContext;
   /**
-   * Called after a successful `scope=collection` persist so the active-run
-   * resolver snapshot can pick up mid-run collection extracts (§9.3).
+   * Called after a successful `scope=collection` persist so the collection
+   * variable cache (and active-run snapshot when applicable) pick up the
+   * new value — including Create Variable / extract outside a collection run.
    */
-  readonly onCollectionVariablePersisted?: () => Promise<void>;
+  readonly onCollectionVariablePersisted?: (persisted: {
+    readonly rootPath: string;
+    readonly collectionId: string;
+  }) => Promise<void>;
+  /**
+   * Resolves the owning collection root for a single-request source path so
+   * `@extract scope=collection` works outside an active collection run.
+   */
+  readonly resolveCollectionRootPathForSource?: (
+    sourceId: string,
+  ) => string | undefined;
 }
 
 export interface RegisterExtractionResult {
   readonly observer: ExtractionObserver;
   readonly overlay: RuntimeVariableOverlay;
   readonly runStore: InMemoryRunVariableStore;
+  readonly writer: CompositeVariableWriter;
 }
 
 /**
@@ -55,13 +69,15 @@ export function registerExtraction(
     collectionVariableStore,
     collectionRunContext,
     onCollectionVariablePersisted,
+    resolveCollectionRootPathForSource,
   } = options;
   void options.context;
-  const environmentWriter = new EnvironmentVariableWriter(
-    createEnvironmentWritePorts(environmentManager, () =>
-      snapshotEnvironmentManagerState(environmentManager),
-    ),
+  const environmentPorts = createEnvironmentWritePorts(
+    environmentManager,
+    () => snapshotEnvironmentManagerState(environmentManager),
   );
+  const environmentWriter = new EnvironmentVariableWriter(environmentPorts);
+  const workspaceWriter = new WorkspaceVariableWriter(environmentPorts);
   const storeWithRefresh: CollectionVariableStore = {
     load: (rootPath, collectionId) =>
       collectionVariableStore.load(rootPath, collectionId),
@@ -70,7 +86,7 @@ export function registerExtraction(
     upsert: async (rootPath, collectionId, variable) => {
       await collectionVariableStore.upsert(rootPath, collectionId, variable);
       if (onCollectionVariablePersisted !== undefined) {
-        await onCollectionVariablePersisted();
+        await onCollectionVariablePersisted({ rootPath, collectionId });
       }
     },
   };
@@ -78,12 +94,17 @@ export function registerExtraction(
     store: storeWithRefresh,
     getCollectionRootPath: () => collectionRunContext.getCollectionRootPath(),
     getCollectionId: () => collectionRunContext.getCollectionId(),
+    ...(resolveCollectionRootPathForSource === undefined
+      ? {}
+      : { resolveCollectionRootPathForSource }),
+    collectionIdForRoot,
   });
   const writer = new CompositeVariableWriter({
     overlay,
     runStore,
     environment: environmentWriter,
     collection: collectionWriter,
+    workspace: workspaceWriter,
     resolveRunStore: () => collectionRunContext.getRunStore(),
   });
   const engine = new DefaultExtractionEngine();
@@ -92,7 +113,7 @@ export function registerExtraction(
     writer,
     () => environmentManager.activeId,
   );
-  return { observer, overlay, runStore };
+  return { observer, overlay, runStore, writer };
 }
 
 function snapshotEnvironmentManagerState(

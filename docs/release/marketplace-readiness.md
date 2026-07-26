@@ -1,6 +1,6 @@
-# Marketplace readiness — 2.0.1
+# Marketplace readiness — 2.1.2
 
-Checklist for publishing **API Hero** `ankitsemwal.api-hero` **2.0.1** (Phase 1 + Phase 2).
+Checklist for publishing **API Hero** `ankitsemwal.api-hero` **2.1.2** (patch: array-root JSON path fix for Create Variable / Copy Value).
 
 ## Metadata
 
@@ -8,7 +8,7 @@ Checklist for publishing **API Hero** `ankitsemwal.api-hero` **2.0.1** (Phase 1 
 | --- | --- |
 | `displayName` | API Hero |
 | `name` / publisher / ID | `api-hero` / `ankitsemwal` / `ankitsemwal.api-hero` |
-| `version` | `2.0.1` |
+| `version` | `2.1.2` |
 | `description` / keywords / categories | Match shipped REST/HTTP scope (no GraphQL/OAuth claims) |
 | `icon` | `images/icon.png` (128×128) |
 | `galleryBanner` | `#0f766e` dark |
@@ -16,22 +16,23 @@ Checklist for publishing **API Hero** `ankitsemwal.api-hero` **2.0.1** (Phase 1 
 
 ## Functional claims (listing must match)
 
-- Request Editor default for `.api` (including **Extract** tab)
+- Request Editor default for `.api` (including **Extract** tab with Collection/Workspace scopes)
 - Collections + History Activity Bar
 - Env Manager, Auth Manager, Overview, OpenAPI wizard
-- Assertions, **extraction** (`@extract` / `@sensitive-extract`), **collection chaining** (`@depends-on`), collection variables, collection runner + report, history detail
+- Assertions, **extraction** (`@extract` / `@sensitive-extract`), **Create Variable From Response**, **collection chaining** (`@depends-on`), collection/workspace variables, collection runner + report, history detail
 - Stubs called out or omitted: Run File, Login, Logout
 - No OAuth2, cookie jar, Code Actions, or GraphQL examples
 
 ## Quality gates
 
-- [ ] `npm run check` / `npm run lint` / `npm test` pass
-- [ ] `npm run package` produces a VSIX
+- [x] `npm run check` / `npm run lint` / `npm test` pass (684 unit tests)
+- [x] `npm run package:fast` produces `release/api-hero-2.1.2.vsix`
+- [x] Stable IDs unchanged ([stable-identifiers.md](./stable-identifiers.md))
 - [ ] Manual smoke: create request → run → response → history
 - [ ] Manual smoke: extract rule → run → extraction report → variable reuse
+- [ ] Manual smoke: Create Variable From Response (context menu → scope → rule in `.api` + value available)
 - [ ] Manual smoke: collection chaining (`@depends-on` / extract token → dependent request; cycle blocks; collection-scope extract persists)
 - [ ] Manual smoke: manage env/auth, filter collections, OpenAPI import
-- [ ] Stable IDs unchanged ([stable-identifiers.md](./stable-identifiers.md))
 
 ## Assets
 

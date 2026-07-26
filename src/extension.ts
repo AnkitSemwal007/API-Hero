@@ -22,6 +22,7 @@ import {
 import { registerAssertions } from './assertions/vscode';
 import {
   InMemoryRuntimeVariableOverlay,
+  planCollectionVariablePersistRefresh,
   requestKeyFor,
 } from './extraction';
 import { registerExtraction } from './extraction/vscode';
@@ -188,22 +189,32 @@ export async function activate(context: ExtensionContext): Promise<void> {
     collectionRunVariableContext.getRunStore()?.toDefinitions() ??
     runVariableStore.toDefinitions();
 
-  /** Reload collection defs into the active-run snapshot after a persist. */
-  const refreshActiveCollectionVariables = async (): Promise<void> => {
-    if (!collectionRunVariableContext.isActive()) {
-      return;
-    }
-    const rootPath = collectionRunVariableContext.getCollectionRootPath();
-    if (rootPath === undefined) {
-      return;
-    }
+  /**
+   * After any successful collection-scope persist, reload definitions into
+   * `collectionVariableCache` for that root (so single-request resolve sees
+   * Create Variable / extract writes). Also refresh the active-run snapshot
+   * when the persist belongs to the collection currently executing.
+   */
+  const refreshCollectionVariablesAfterPersist = async (persisted: {
+    readonly rootPath: string;
+    readonly collectionId: string;
+  }): Promise<void> => {
     try {
       const definitions = await collectionVariableStore.load(
-        rootPath,
-        collectionRunVariableContext.getCollectionId(),
+        persisted.rootPath,
+        persisted.collectionId,
       );
-      activeCollectionRunVariables = definitions;
-      collectionVariableCache.set(normalizePathKey(rootPath), definitions);
+      const plan = planCollectionVariablePersistRefresh({
+        persistedRootPath: persisted.rootPath,
+        definitions,
+        isCollectionRunActive: collectionRunVariableContext.isActive(),
+        activeRootPath: collectionRunVariableContext.getCollectionRootPath(),
+        normalizeKey: normalizePathKey,
+      });
+      collectionVariableCache.set(plan.cacheKey, plan.definitions);
+      if (plan.updateActiveRunSnapshot) {
+        activeCollectionRunVariables = plan.definitions;
+      }
     } catch (error: unknown) {
       logger.warning('Failed to refresh collection variables after write', {
         message: error instanceof Error ? error.message : String(error),
@@ -251,10 +262,58 @@ export async function activate(context: ExtensionContext): Promise<void> {
       ],
     };
   };
+  const assertionsRegistration = registerAssertions(context);
+  const extractionRegistration = registerExtraction({
+    context,
+    environmentManager,
+    overlay: runtimeOverlay,
+    runStore: runVariableStore,
+    collectionVariableStore,
+    collectionRunContext: collectionRunVariableContext,
+    onCollectionVariablePersisted: refreshCollectionVariablesAfterPersist,
+    resolveCollectionRootPathForSource: (sourceId) =>
+      resolveCollectionRootPathForSource(sourceId),
+  });
   const responseViewer = new ResponseViewerService(
     new VsCodeResponsePanelFactory(),
     undefined,
-    createVsCodeResponseViewerHostActions(),
+    createVsCodeResponseViewerHostActions({
+      writer: extractionRegistration.writer,
+    }),
+    {
+      getKnownVariableNames: (context) => {
+        const snapshot = environmentManager.capture();
+        const names = new Set<string>();
+        for (const variable of snapshot.globalVariables) {
+          names.add(variable.name);
+        }
+        for (const variable of snapshot.workspaceVariables) {
+          names.add(variable.name);
+        }
+        for (const variable of snapshot.active?.variables ?? []) {
+          names.add(variable.name);
+        }
+        for (const variable of activeRunDefinitions()) {
+          names.add(variable.name);
+        }
+        const sourceId =
+          context?.sourceId
+          ?? window.activeTextEditor?.document.uri.toString()
+          ?? '';
+        for (const variable of collectionDefinitionsForSource(sourceId)) {
+          names.add(variable.name);
+        }
+        if (context?.requestKey !== undefined) {
+          for (const variable of runtimeOverlay.getDefinitions({
+            requestKey: context.requestKey,
+          })) {
+            names.add(variable.name);
+          }
+        }
+        return [...names];
+      },
+      variableWriter: extractionRegistration.writer,
+    },
   );
   const executor = new DefaultRequestExecutor(new NodeHttpTransport());
   const historyInfrastructure = createHistoryInfrastructure(
@@ -264,16 +323,6 @@ export async function activate(context: ExtensionContext): Promise<void> {
     ),
     logger,
   );
-  const assertionsRegistration = registerAssertions(context);
-  const extractionRegistration = registerExtraction({
-    context,
-    environmentManager,
-    overlay: runtimeOverlay,
-    runStore: runVariableStore,
-    collectionVariableStore,
-    collectionRunContext: collectionRunVariableContext,
-    onCollectionVariablePersisted: refreshActiveCollectionVariables,
-  });
   /**
    * Single capture-context provider for history. Filled after
    * {@link registerHistory}; orchestrator invokes it only at commit time.
@@ -429,6 +478,7 @@ export async function activate(context: ExtensionContext): Promise<void> {
   registerRequestEditor({
     context,
     orchestrator,
+    discovery: collectionsRegistration.discovery,
     getAuthProfiles: () =>
       authenticationProfiles.list().map((profile) => ({
         id: profile.id,

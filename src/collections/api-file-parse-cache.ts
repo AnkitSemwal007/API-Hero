@@ -8,6 +8,8 @@ export interface ParsedRequestSummary {
   readonly method: string;
   readonly url: string;
   readonly label: string;
+  /** Legacy `@id` (`req_*`) when still present on disk (migration only). */
+  readonly legacyAuthoredId?: string;
   readonly range: Range;
 }
 
@@ -111,11 +113,29 @@ function summarizeRequest(
     followingName ??
     `${request.method} ${request.url}`.trim();
 
+  const precedingId = documentDirectives
+    .filter(
+      (directive) =>
+        directive.knownName === 'id' &&
+        directive.range.start.line >= blockStartLine &&
+        directive.range.end.offset <= request.range.start.offset,
+    )
+    .at(-1)?.value;
+  const followingId = request.directives.find(
+    (directive) => directive.knownName === 'id',
+  )?.value;
+  const legacyAuthoredIdRaw = (precedingId ?? followingId)?.trim();
+  const legacyAuthoredId =
+    legacyAuthoredIdRaw !== undefined && legacyAuthoredIdRaw.length > 0
+      ? legacyAuthoredIdRaw
+      : undefined;
+
   return {
     index,
     method: request.method,
     url: request.url,
     label,
+    ...(legacyAuthoredId !== undefined ? { legacyAuthoredId } : {}),
     range: request.range,
   };
 }

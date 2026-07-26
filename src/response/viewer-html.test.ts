@@ -6,6 +6,7 @@ import type { RuntimeJsonValue } from '../models/request';
 import { freezeDetachedBytes } from '../shared';
 import { presentExecutionResult } from './presentation';
 import {
+  resolveCreateVariableValue,
   type ResponseViewerDisposable,
   type ResponseViewerPanel,
   type ResponseViewerPanelFactory,
@@ -23,6 +24,12 @@ function result(body = '{"value":"<img src=x onerror=alert(1)>"}'): ExecutionRes
     completedAt: '2026-07-19T10:00:00.010Z',
     durationMs: 10,
   });
+  let json: RuntimeJsonValue | undefined;
+  try {
+    json = JSON.parse(body) as RuntimeJsonValue;
+  } catch {
+    json = undefined;
+  }
   return Object.freeze({
     success: true,
     requestId: 'request-1',
@@ -41,7 +48,7 @@ function result(body = '{"value":"<img src=x onerror=alert(1)>"}'): ExecutionRes
       body: Object.freeze({
         bytes,
         text: body,
-        json: Object.freeze({ value: '<img src=x onerror=alert(1)>' }),
+        ...(json === undefined ? {} : { json: Object.freeze(json) as RuntimeJsonValue }),
       }),
       bodySizeBytes: bytes.byteLength,
       contentType: 'application/json',
@@ -460,7 +467,204 @@ test('renders extraction chip and Extracted tab; masks sensitive values', () => 
   assert.match(html, /Extracted/u);
   assert.match(html, /token/u);
   assert.match(html, /••••••••/u);
-  assert.doesNotMatch(html, /create.?variable/iu);
-  assert.doesNotMatch(html, /Save as variable/iu);
   assert.equal(html.includes('<script>'), false);
+});
+
+test('JSON tree exposes path metadata and Create Variable chrome when enabled', () => {
+  const model = presentExecutionResult(
+    result('{"access_token":"abc","items":[{"id":1}]}'),
+  );
+  const html = renderResponseViewerHtml(model, 'nonce', {
+    enableCreateVariable: true,
+    knownVariableNames: ['token'],
+  });
+  assert.match(html, /data-json-path="body\.access_token"/u);
+  assert.match(html, /data-json-value="abc"/u);
+  assert.match(html, /data-json-type="string"/u);
+  assert.match(html, /data-json-extractable="true"/u);
+  assert.match(html, /data-json-path="body\.items\[0\]\.id"/u);
+  assert.match(html, /Save as variable/u);
+  assert.match(html, /Extract Variable/u);
+  assert.match(html, /jsonContextMenu/u);
+  assert.match(html, /createVariableSheet/u);
+  assert.match(html, /data-enable-create-variable="true"/u);
+});
+
+test('JSON tree marks non-identifier keys as non-extractable', () => {
+  const model = presentExecutionResult(result('{"invalid key":"x","ok":1}'));
+  const html = renderResponseViewerHtml(model, 'nonce', {
+    enableCreateVariable: true,
+  });
+  assert.match(html, /data-json-path="body\.invalid key"[^>]*data-json-extractable="false"/u);
+  assert.match(html, /data-json-path="body\.ok"[^>]*data-json-extractable="true"/u);
+});
+
+test('parseResponseViewerMessage accepts createVariable, copyText, and copyJsonPathValue', () => {
+  assert.deepEqual(
+    parseResponseViewerMessage({
+      type: 'createVariable',
+      name: 'token',
+      path: 'body.access_token',
+      scope: 'environment',
+      sensitive: true,
+    }),
+    {
+      type: 'createVariable',
+      name: 'token',
+      path: 'body.access_token',
+      scope: 'environment',
+      sensitive: true,
+    },
+  );
+  assert.deepEqual(
+    parseResponseViewerMessage({ type: 'copyText', text: 'body.id' }),
+    { type: 'copyText', text: 'body.id' },
+  );
+  assert.deepEqual(
+    parseResponseViewerMessage({
+      type: 'copyJsonPathValue',
+      path: 'body.access_token',
+    }),
+    { type: 'copyJsonPathValue', path: 'body.access_token' },
+  );
+  assert.equal(
+    parseResponseViewerMessage({
+      type: 'createVariable',
+      name: 'token',
+      path: 'body.x',
+      scope: 'global',
+      sensitive: false,
+    }),
+    undefined,
+  );
+});
+
+test('copyJsonPathValue resolves from lastResult; createVariable notifies on validation failure', async () => {
+  const factory = new MockPanelFactory();
+  const copied: string[] = [];
+  const errors: string[] = [];
+  const viewer = new ResponseViewerService(
+    factory,
+    () => 'nonce',
+    {
+      copyText: (text) => {
+        copied.push(text);
+      },
+      saveText: () => undefined,
+      notifyCreateVariableError: (message) => {
+        errors.push(message);
+      },
+    },
+  );
+
+  viewer.show(
+    result('{"access_token":"secret-value"}'),
+    undefined,
+    undefined,
+    {
+      sourceId: 'file:///ws/a.api',
+      requestKey: 'request:file:///ws/a.api#0',
+      offset: 0,
+    },
+  );
+  const panel = factory.panels[0]!;
+
+  await panel.emitMessage({
+    type: 'copyJsonPathValue',
+    path: 'body.access_token',
+  });
+  assert.deepEqual(copied, ['secret-value']);
+
+  await panel.emitMessage({
+    type: 'createVariable',
+    name: '!!bad',
+    path: 'body.access_token',
+    scope: 'environment',
+    sensitive: false,
+  });
+  assert.equal(errors.length, 1);
+  assert.match(errors[0]!, /invalid variable name/iu);
+});
+
+test('resolveCreateVariableValue resolves array-root bodies (body[0], body[0].id)', () => {
+  const arrayResult = result('[{"id":"x"}]');
+  assert.equal(resolveCreateVariableValue(arrayResult, 'body[0].id'), 'x');
+  assert.equal(
+    resolveCreateVariableValue(arrayResult, 'body[0]'),
+    undefined, // object values are not extractable scalars
+  );
+});
+
+test('createVariable and copyJsonPathValue succeed for array-root body paths', async () => {
+  const factory = new MockPanelFactory();
+  const copied: string[] = [];
+  const errors: string[] = [];
+  const created: unknown[] = [];
+  const viewer = new ResponseViewerService(
+    factory,
+    () => 'nonce',
+    {
+      copyText: (text) => {
+        copied.push(text);
+      },
+      saveText: () => undefined,
+      notifyCreateVariableError: (message) => {
+        errors.push(message);
+      },
+      createVariableFromResponse: async (input) => {
+        created.push(input);
+      },
+    },
+  );
+
+  viewer.show(result('[{"id":"x"}]'), undefined, undefined, {
+    sourceId: 'file:///ws/a.api',
+    requestKey: 'request:file:///ws/a.api#0',
+    offset: 0,
+  });
+  const panel = factory.panels[0]!;
+
+  await panel.emitMessage({ type: 'copyJsonPathValue', path: 'body[0].id' });
+  assert.deepEqual(copied, ['x']);
+
+  await panel.emitMessage({
+    type: 'createVariable',
+    name: 'itemId',
+    path: 'body[0].id',
+    scope: 'environment',
+    sensitive: false,
+  });
+  assert.equal(errors.length, 0);
+  assert.equal(created.length, 1);
+});
+
+test('getKnownVariableNames throw does not block opening the response panel', () => {
+  const factory = new MockPanelFactory();
+  const viewer = new ResponseViewerService(
+    factory,
+    () => 'nonce',
+    {
+      copyText: () => undefined,
+      saveText: () => undefined,
+    },
+    {
+      getKnownVariableNames: () => {
+        throw new Error('lookup failed');
+      },
+    },
+  );
+
+  viewer.show(
+    result('{"id":1}'),
+    undefined,
+    undefined,
+    {
+      sourceId: 'file:///ws/a.api',
+      requestKey: 'request:file:///ws/a.api#0',
+      offset: 0,
+    },
+  );
+  assert.equal(factory.panels.length, 1);
+  assert.match(factory.panels[0]!.html, /data-json-path="body\.id"/u);
+  assert.match(factory.panels[0]!.html, /data-enable-create-variable="true"/u);
 });

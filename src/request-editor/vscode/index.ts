@@ -23,6 +23,7 @@ export {
 } from './request-editor-messages';
 export type {
   RequestEditorAuthProfileOption,
+  RequestEditorDependencyCatalogEntry,
   RequestEditorInboundMessage,
   RequestEditorMode,
   RequestEditorOutboundMessage,
@@ -30,9 +31,15 @@ export type {
   RequestEditorVariableCompletion,
 } from './request-editor-messages';
 export {
+  buildRequestEditorDependencyCatalog,
+  toWebviewDependencyCatalog,
+} from './dependency-catalog';
+export type { BuildDependencyCatalogOptions } from './dependency-catalog';
+export {
   openRequestEditor,
   RequestEditorProvider,
 } from './request-editor-provider';
+export { prepareModelForSerialize } from '../prepare-model-for-serialize';
 export type { RequestEditorProviderOptions } from './request-editor-provider';
 export {
   registerRequestEditor,

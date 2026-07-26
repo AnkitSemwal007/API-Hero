@@ -60,15 +60,22 @@ compatibility.
 
 ## Response extraction (`@extract`)
 
-Phase 1 ships `@extract` / `@sensitive-extract` directives that write values
-from a response into `run`, document-session overlay, or the active
-environment after execute. See
-[ADR-0001 Phase 1](./adr/0001-phase-1-implementation-spec.md). Extracted `run`
-and overlay values are merged into `getVariableContext` for the next single
-request; environment writes refresh Environment Manager. Collection-scope
-writes are persisted by `CollectionVariableWriter` (below) once a collection
-run supplies collection context; outside an active collection run,
-collection-scope writes fail with `PERSIST_FAILED`.
+`@extract` / `@sensitive-extract` write values from a response into `run`,
+document-session overlay, active environment, collection, or workspace after
+execute. See [ADR-0001](./adr/0001-variables-extraction-auth-dependencies.md).
+Extracted `run` and overlay values are merged into `getVariableContext` for
+the next single request; environment and workspace writes refresh Environment
+Manager via `EnvironmentVariableWriter` / `WorkspaceVariableWriter` (both use
+`writeEnvironmentManagerState` ports; sensitive values follow the existing
+local overlay path). Collection-scope writes use `CollectionVariableWriter`:
+prefer an active collection-run context, otherwise resolve the owning
+collection root from the request source path (`resolveCollectionRootPathForSource`)
+so single-request `@extract scope=collection` works outside a collection run.
+Global extract remains forbidden.
+
+Create Variable From Response (Response Viewer) persists a Mode B extract rule
+into the `.api` source and also writes the current value through
+`CompositeVariableWriter` for the chosen scope.
 
 ### Collection variables (Phase 2)
 

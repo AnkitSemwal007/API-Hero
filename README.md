@@ -2,7 +2,7 @@
 
 **Git-first REST/HTTP client for Visual Studio Code** — author human-readable `.api` requests beside your code, run them with assertions, organize collections as folders, manage environments and auth, import OpenAPI, and inspect responses professionally.
 
-> Extension ID: **`ankitsemwal.api-hero`** · Version: **2.0.1** · License: [MIT](LICENSE)
+> Extension ID: **`ankitsemwal.api-hero`** · Version: **2.1.2** · License: [MIT](LICENSE)
 
 [Documentation](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/README.md) · [Changelog](CHANGELOG.md) · [Support](SUPPORT.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
 
@@ -31,7 +31,7 @@ API Hero is for developers who want Postman-like speed **without** leaving the e
 ```bash
 npm install
 npm run package
-code --install-extension release/api-hero-2.0.1.vsix
+code --install-extension release/api-hero-2.1.2.vsix
 ```
 
 Requires VS Code **1.90+**.
@@ -80,8 +80,8 @@ Loose files may appear under a **Legacy** entry in Collections until you move th
 
 - **`.api` language** — highlighting, snippets, hover, outline, diagnostics, CodeLens
 - **Request Editor** — default custom editor for `.api` (params, headers, body, auth, variables, tests, preview)
-- **Response Viewer** — status card, pretty/raw/JSON, headers, assertions, **extraction report**; **copy**, **save**, **search**
-- **Extraction** — `@extract` / `@sensitive-extract`, Extraction Engine, Run/document/environment scopes, Request Editor **Extract** tab
+- **Response Viewer** — status card, pretty/raw/JSON, headers, assertions, **extraction report**; **copy**, **save**, **search**; **Create Variable From Response** (context menu → scope → confirmation sheet)
+- **Extraction** — `@extract` / `@sensitive-extract`, Extraction Engine, Run/document/environment/collection/**workspace** variable scopes, Request Editor **Extract** tab
 - **Collections** — Activity Bar explorer, folders, CRUD, filter, drag-and-drop, import/export folder trees
 - **Collection Runner** — run collection / folder / selection / tests with failure policy + **Run Report**; **collection chaining** (`@depends-on`, produces/consumes) reorders and runs dependent requests with a shared run store
 - **History** — persisted runs, facet filters, **detail panel**, re-run, reveal original request
@@ -97,7 +97,7 @@ Loose files may appear under a **Legacy** entry in Collections until you move th
 
 ## Screenshots & GIFs
 
-_Screenshots and GIFs are not bundled in the VSIX yet._ Recommended captures from a real 2.0.1 build:
+_Screenshots and GIFs are not bundled in the VSIX yet._ Recommended captures from a real 2.1.2 build:
 
 1. Request Editor + Response Viewer side by side (run affordance visible)
 2. Collections Activity Bar (filter / run optional)

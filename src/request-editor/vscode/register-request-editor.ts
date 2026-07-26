@@ -12,6 +12,11 @@ import {
 } from 'vscode';
 
 import { COMMAND_IDS } from '../../constants';
+import {
+  normalizePathKey,
+  type CollectionDiscoveryService,
+  type WorkspaceCollections,
+} from '../../collections';
 import type { ExecutionOrchestrator } from '../../orchestration';
 import type { RequestSourceDocument } from '../../request-source';
 import type { VariableDefinition } from '../../models';
@@ -23,6 +28,8 @@ import {
 } from '../../variables';
 import { formatVariablePreviewError } from '../format-variable-preview-error';
 import { REQUEST_EDITOR_VIEW_TYPE } from './constants';
+import { cascadeDependRefRenameOnNameChange } from './cascade-depend-ref-rename';
+import { buildRequestEditorDependencyCatalog } from './dependency-catalog';
 import {
   openRequestEditor,
   RequestEditorProvider,
@@ -40,6 +47,8 @@ export interface RegisterRequestEditorOptions {
   readonly getExternalVariableDefinitions: () => readonly VariableDefinition[];
   /** Active environment display name for Variables-tab discoverability. */
   readonly getActiveEnvironmentLabel?: () => string | undefined;
+  /** Collections discovery for same-collection Depends-on picker. */
+  readonly discovery?: CollectionDiscoveryService;
 }
 
 export interface RequestEditorRegistration {
@@ -69,6 +78,25 @@ export function registerRequestEditor(
         model,
       ),
     getActiveEnvironmentLabel: options.getActiveEnvironmentLabel,
+    getDependencyCatalog: (documentPath) => {
+      const aggregate = options.discovery?.snapshot;
+      const currentRequestId = findRequestIdForDocumentPath(
+        aggregate,
+        documentPath,
+      );
+      return buildRequestEditorDependencyCatalog({
+        aggregate,
+        documentPath,
+        ...(currentRequestId !== undefined ? { currentRequestId } : {}),
+      });
+    },
+    cascadeDependRefRename: async ({ documentPath, oldName, newName }) =>
+      cascadeDependRefRenameOnNameChange({
+        aggregate: options.discovery?.snapshot,
+        documentPath,
+        oldName,
+        newName,
+      }),
     runDocument: (document) => runRequestDocument(orchestrator, document),
   });
 
@@ -181,4 +209,22 @@ async function pickApiDocument(): Promise<TextDocument | undefined> {
     { placeHolder: 'Select an .api file' },
   );
   return picked?.document;
+}
+
+function findRequestIdForDocumentPath(
+  aggregate: WorkspaceCollections | undefined,
+  documentPath: string,
+): string | undefined {
+  if (aggregate === undefined) {
+    return undefined;
+  }
+  const key = normalizePathKey(documentPath);
+  for (const collection of Object.values(aggregate.collections)) {
+    for (const request of Object.values(collection.requests)) {
+      if (normalizePathKey(request.filePath) === key) {
+        return request.id;
+      }
+    }
+  }
+  return undefined;
 }

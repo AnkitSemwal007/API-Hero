@@ -125,6 +125,24 @@ describe('collection-run-report-html', () => {
     assert.equal(model.rows[0]?.producedVariablesLabel, '+accessToken, +userId');
   });
 
+  test('consumedVariablesLabel formats names with minus prefix', () => {
+    const base = sampleSummary();
+    const withConsume: RunSummary = {
+      ...base,
+      results: [
+        {
+          ...base.results[0]!,
+          producedVariables: ['productId'],
+          consumedVariables: ['accessToken'],
+        },
+        ...base.results.slice(1),
+      ],
+    };
+    const model = buildCollectionRunReportModel(withConsume);
+    assert.equal(model.rows[0]?.consumedVariablesLabel, '-accessToken');
+    assert.equal(model.rows[0]?.producedVariablesLabel, '+productId');
+  });
+
   test('renderCollectionRunReportHtml shell includes dependency report hooks', () => {
     const html = renderCollectionRunReportHtml('reportNonce');
     assert.match(html, /Execution order/);
@@ -132,6 +150,7 @@ describe('collection-run-report-html', () => {
     assert.match(html, /Dependencies/);
     assert.match(html, /Unresolved/);
     assert.match(html, /vars-produced/);
+    assert.match(html, /vars-consumed/);
     assert.match(html, /skip-reason/);
   });
 

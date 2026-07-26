@@ -3,6 +3,27 @@
  */
 
 export {
+  parseDependRef,
+  formatDependRef,
+  isMinimalUniqueRef,
+  minimalDependRefFor,
+  resolveDependRef,
+  nameContainsPathSeparator,
+  buildDependRefIndex,
+  type DependRef,
+  type DependRefIndexEntry,
+  type ResolveDependRefResult,
+} from './depend-ref';
+export {
+  planDependRefRewrites,
+  rewriteDependsOnTokens,
+  tokenTargetsRenamedRequest,
+  dependRefAfterRename,
+  type RenameDependRefsIdentity,
+  type DependOnDocumentSnapshot,
+  type DependOnRewrite,
+} from './rename-depend-refs';
+export {
   parseDependsOnDirective,
   uniqueDependsOnNames,
   type ParseDependsOnDirectiveResult,
@@ -15,7 +36,6 @@ export type {
   DependencyNodeMeta,
   PlanEnrichmentResult,
   RequestDependencyAnalysis,
-  VariablesPerRunExtension,
 } from './models';
 export { analyzeProducesConsumesForDocument } from './produces-consumes';
 export {
@@ -33,3 +53,4 @@ export {
   analyzeRunPlanDependencies,
   type AnalyzeRunPlanDependenciesPorts,
 } from './analyze-plan';
+

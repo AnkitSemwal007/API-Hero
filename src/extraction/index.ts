@@ -5,8 +5,15 @@
 
 export {
   resolveJsonPath,
+  isExtractableJsonPath,
+  stripBodyPrefix,
   type JsonPathResolution,
 } from './shared/json-path';
+export {
+  planCollectionVariablePersistRefresh,
+  type CollectionVariablePersistRefreshInput,
+  type CollectionVariablePersistRefreshResult,
+} from './collection-variable-cache';
 export type {
   VariableWriteTargetScope,
   VariableWriteRequest,
@@ -64,4 +71,7 @@ export {
   CollectionVariableWriter,
   type CollectionVariableWriterOptions,
 } from './collection-variable-writer';
-export { requestKeyFor } from './request-key';
+export {
+  WorkspaceVariableWriter,
+} from './workspace-variable-writer';
+export { requestKeyFor, parseRequestKey } from './request-key';

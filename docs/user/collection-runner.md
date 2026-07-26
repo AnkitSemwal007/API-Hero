@@ -48,12 +48,20 @@ GET {{host}}/products
 Authorization: Bearer {{accessToken}}
 ```
 
-`@depends-on` takes a comma-separated list of other requests' `@name` labels
-and forces run order even when the tree order in the Collections view would
-otherwise run them differently. You only need `@depends-on` when a request
-consumes a variable but the producing request isn't already earlier in the
-collection — API Hero also detects the `{{accessToken}}` reference itself and
-orders requests accordingly.
+`@depends-on` stores **human-readable** refs: a bare `@name` when that name is
+unique in the collection, or `Folder/Name` (folder relative path + `/` + name)
+when the same display name appears in more than one folder. The Request Editor
+Depends-on picker shows name + folder and persists the shortest unique ref.
+Renaming a request in the Request Editor rewrites dependents' `@depends-on`
+tokens across the collection.
+
+Opaque `req_*` tokens and discovery ids (`request:…#…`) are never written to
+`@depends-on`. Leftover `req_*` values from older drafts are migrated back to
+names on save when uniquely resolvable.
+
+You only need `@depends-on` when a request consumes a variable but the
+producing request isn't already earlier in the collection — API Hero also
+detects the `{{accessToken}}` reference itself and orders requests accordingly.
 
 If reordering was needed, a notification reads
 **"Reordered N requests for dependencies"** after the run. A circular
@@ -67,9 +75,10 @@ variable, the dependent request is skipped with a reason such as
 running with a stale or missing value.
 
 The **Collection Run Report** shows the resulting execution order (with a
-"Reordered" badge when it changed), which variables each request produced,
-skip reasons, and a text list of dependency edges such as
-`Login → Products (accessToken)` — variable **names** only, never values.
+"Reordered" badge when it changed), which variables each request produced
+(`+name`) and planned to consume (`-name`), skip reasons, and a text list of
+dependency edges such as `Login → Products (accessToken)` — variable **names**
+only, never values.
 
 ## Collection variables
 

@@ -143,6 +143,7 @@ describe('documentToRequestSource / parseSourceToRequestDocument', () => {
     };
 
     const source = serializeRequestDocument(original);
+    assert.doesNotMatch(source, /@id/u);
     assert.match(source, /@depends-on Login, Cart\n/u);
 
     const parsed = parseSourceToRequestDocument(source);
@@ -150,6 +151,7 @@ describe('documentToRequestSource / parseSourceToRequestDocument', () => {
     if (parsed.kind !== 'single') {
       return;
     }
+    assert.equal(parsed.document.id, undefined);
     assert.deepEqual(parsed.document.dependsOn, ['Login', 'Cart']);
 
     const roundTripAgain = parseSourceToRequestDocument(
@@ -160,6 +162,26 @@ describe('documentToRequestSource / parseSourceToRequestDocument', () => {
       return;
     }
     assert.deepEqual(roundTripAgain.document.dependsOn, ['Login', 'Cart']);
+  });
+
+  test('round-trips @depends-on qualified refs and does not emit @id', () => {
+    const original = {
+      name: 'Invoice',
+      method: 'GET' as const,
+      url: 'https://example.test/invoice',
+      dependsOn: ['Authentication/Login', 'Cart'],
+    };
+    const source = serializeRequestDocument(original);
+    assert.doesNotMatch(source, /@id/u);
+    const parsed = parseSourceToRequestDocument(source);
+    assert.equal(parsed.kind, 'single');
+    if (parsed.kind !== 'single') {
+      return;
+    }
+    assert.deepEqual(parsed.document.dependsOn, [
+      'Authentication/Login',
+      'Cart',
+    ]);
   });
 
   test('omits @depends-on when there are no dependencies', () => {

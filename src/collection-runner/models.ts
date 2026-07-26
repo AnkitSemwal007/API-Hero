@@ -128,11 +128,18 @@ export interface PlannedRequest {
   readonly url: string;
   /** Zero-based order within the plan. */
   readonly ordinal: number;
+  /**
+   * Folder `relativePath` for depend-ref qualification (`''` / omitted for root).
+   */
+  readonly folderRelativePath?: string;
   /** Variable names this request's enabled extract rules may produce (Phase 2). */
   readonly produces?: readonly string[];
   /** Variable names referenced via `{{name}}` that need external resolution (Phase 2). */
   readonly consumes?: readonly string[];
-  /** Request ids resolved from this request's `@depends-on` names (Phase 2). */
+  /**
+   * Discovery request ids resolved from this request's `@depends-on` tokens
+   * (human-readable refs → ids at enrich time).
+   */
   readonly dependsOnRequestIds?: readonly string[];
 }
 
@@ -171,6 +178,11 @@ export interface RequestRunResult {
   readonly assertionsTotal?: number;
   /** Variable names actually extracted for this attempt (Phase 2). */
   readonly producedVariables?: readonly string[];
+  /**
+   * Variable names this request planned to consume (from plan-time `consumes`).
+   * Secret-free names only — for run report display.
+   */
+  readonly consumedVariables?: readonly string[];
   /** Secret-free reason this request was skipped due to a dependency (Phase 2). */
   readonly skipReason?: string;
   /**

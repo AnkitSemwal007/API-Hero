@@ -13,6 +13,7 @@ export interface CompositeVariableWriterOptions {
   readonly runStore: RunVariableStore; // session default
   readonly environment: VariableWriter;
   readonly collection?: VariableWriter;
+  readonly workspace?: VariableWriter;
   /**
    * When a collection run is active, returns that run's store; otherwise
    * undefined so writes fall back to the session `runStore`.
@@ -22,12 +23,11 @@ export interface CompositeVariableWriterOptions {
 
 /**
  * Routes writes to overlay (document), run store (session or active
- * collection run), environment writer, or collection writer. Workspace
- * remains UNSUPPORTED_SCOPE (ADR).
+ * collection run), environment, collection, or workspace writers.
  *
- * `resolveRunStore` lets the Collection Runner (Phase 2) substitute a
- * per-run store for the duration of one execute without changing the
- * session singleton semantics used by single-request P1.
+ * `resolveRunStore` lets the Collection Runner substitute a per-run store
+ * for the duration of one execute without changing the session singleton
+ * semantics used by single-request runs.
  */
 export class CompositeVariableWriter implements VariableWriter {
   public constructor(private readonly options: CompositeVariableWriterOptions) {}
@@ -71,11 +71,14 @@ export class CompositeVariableWriter implements VariableWriter {
         }
         return this.options.collection.write(request);
       case 'workspace':
-        return {
-          ok: false,
-          code: 'UNSUPPORTED_SCOPE',
-          message: 'Workspace-scope writes are not supported.',
-        };
+        if (this.options.workspace === undefined) {
+          return {
+            ok: false,
+            code: 'UNSUPPORTED_SCOPE',
+            message: 'Variable scope "workspace" has no workspace writer configured.',
+          };
+        }
+        return this.options.workspace.write(request);
       default:
         return {
           ok: false,

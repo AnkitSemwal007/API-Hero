@@ -34,21 +34,28 @@ Optional `sensitive: true` masks values in language UI and previews.
 
 ## Extract from responses
 
-Use `@extract` / `@sensitive-extract` (or the Request Editor **Extract** tab) to
-copy values from the last response into variables:
+Use `@extract` / `@sensitive-extract` (or the Request Editor **Extract** tab, or
+**Extract Variable…** in the Response Viewer) to copy values from the last
+response into variables:
 
 ```api
 @extract token from body.access_token scope=environment
 @extract id from body.id
+@extract tenant from body.tenant scope=workspace
 GET https://example.test/login
 ```
 
-Default scope is **Run** (session-only, highest precedence). Environment writes
-persist to the active environment. Collection writes (`scope=collection`)
-persist to the running request's collection variables file — sensitive values
-go to the local overlay instead of the tracked file. Request (`document`)
-writes are a session overlay for that request. Sensitive extracts are masked
-in the Response Viewer **Extracted** tab.
+| Scope | Behavior |
+| --- | --- |
+| **Run** (default in DSL) | Session-only; highest precedence |
+| **Request** (`document`) | Session overlay for that request |
+| **Environment** | Persists to the active environment (Response Viewer default) |
+| **Collection** | Persists to the owning collection’s `api-hero.variables.json` (works for single requests under a collection, not only during a collection run) |
+| **Workspace** | Persists to workspace variables |
+| **Global** | **Forbidden for extract** — not offered in UI; parse rejects it |
+
+Sensitive extracts are masked in the Response Viewer **Extracted** tab. Sensitive
+environment / workspace / collection values use the existing local overlay path.
 
 ## Resolution rules
 

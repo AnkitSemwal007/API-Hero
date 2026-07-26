@@ -4,22 +4,26 @@ import {
   type DirectiveNode,
   type RequestNode,
 } from '../../ast';
+import {
+  nameContainsPathSeparator,
+  parseDependRef,
+} from '../../../dependencies/depend-ref';
 import { parseDependsOnDirective } from '../../../dependencies/parse-depends-on';
 import type { ValidationContext, ValidationRule } from '../types';
 import { VALIDATION_DIAGNOSTIC_CODES } from './diagnostic-codes';
 
 /**
- * Semantic validation for `@depends-on` directive values.
+ * Semantic validation for `@depends-on` and `@name` dependency rules (ADR 0002).
  *
- * This rule validates at file scope only — it has no knowledge of sibling
- * `.api` files in the owning collection. `unknown-target` is therefore
- * reported as a warning here; plan-time enrichment (Phase 2 PR4+) applies the
- * fail-closed error policy once the full collection membership is known.
+ * File-scope: bare / qualified human refs; ambiguous bare names list candidates;
+ * `/` forbidden in `@name`; same-file duplicate `@name` fail closed.
+ * Unknown targets outside this file are warnings; plan enrich fails closed.
  */
 export const dependsOnDirectiveValidationRule: ValidationRule = Object.freeze({
   id: 'depends-on-directive',
   validate(document: ApiDocument, context: ValidationContext): void {
-    const nameIndex = buildRequestNameIndex(document, context.requests);
+    const index = buildRequestResolveIndex(document, context.requests);
+    validateNameDirectives(context, index);
 
     for (const directive of context.directives) {
       if (directive.knownName !== 'depends-on') {
@@ -43,48 +47,105 @@ export const dependsOnDirectiveValidationRule: ValidationRule = Object.freeze({
         continue;
       }
 
-      const ownRequest = owningRequest(directive, nameIndex.requestByBlock);
-      const ownName = ownRequest === undefined
-        ? undefined
-        : nameIndex.ownName.get(ownRequest);
+      const ownRequest = owningRequest(directive, index.requestByBlock);
+      const ownName =
+        ownRequest === undefined ? undefined : index.ownName.get(ownRequest);
 
       const seen = new Set<string>();
-      for (const name of parsed.names) {
-        if (seen.has(name)) {
+      for (const token of parsed.names) {
+        if (seen.has(token)) {
           context.report({
             code: VALIDATION_DIAGNOSTIC_CODES.dependsOnDuplicateName,
-            message: `Duplicate name "${name}" in @depends-on list.`,
+            message: `Duplicate dependency "${token}" in @depends-on list.`,
             severity: 'warning',
             range: directive.range,
           });
           continue;
         }
-        seen.add(name);
+        seen.add(token);
 
-        if (ownName !== undefined && name === ownName) {
+        const ref = parseDependRef(token);
+        if (ref === undefined) {
           context.report({
-            code: VALIDATION_DIAGNOSTIC_CODES.dependsOnSelfDepends,
-            message: `Request "${name}" cannot depend on itself.`,
+            code: VALIDATION_DIAGNOSTIC_CODES.dependsOnInvalid,
+            message: `Invalid @depends-on token "${token}".`,
             severity: 'error',
             range: directive.range,
           });
           continue;
         }
 
-        const matches = nameIndex.byName.get(name) ?? [];
-        if (matches.length === 0) {
+        if (
+          ownName !== undefined &&
+          ((ref.kind === 'bare' && ref.name === ownName) ||
+            (ref.kind === 'qualified' && ref.name === ownName))
+        ) {
+          // Self-depend via bare name or any qualified ending in own name when
+          // this is the only match in-file for that spelling.
+          const selfMatches =
+            ref.kind === 'bare'
+              ? (index.byName.get(ref.name) ?? [])
+              : (index.byQualified.get(`${ref.folderPath}/${ref.name}`) ?? []);
+          if (
+            ownRequest !== undefined &&
+            selfMatches.length === 1 &&
+            selfMatches[0] === ownRequest
+          ) {
+            context.report({
+              code: VALIDATION_DIAGNOSTIC_CODES.dependsOnSelfDepends,
+              message: `Request cannot depend on itself ("${token}").`,
+              severity: 'error',
+              range: directive.range,
+            });
+            continue;
+          }
+        }
+
+        if (ref.kind === 'bare') {
+          const matches = index.byName.get(ref.name) ?? [];
+          if (matches.length === 0) {
+            context.report({
+              code: VALIDATION_DIAGNOSTIC_CODES.dependsOnUnknownTarget,
+              message:
+                `No request named "${ref.name}" was found in this file. ` +
+                'If it lives in another file within the collection, this is expected here.',
+              severity: 'warning',
+              range: directive.range,
+            });
+          } else if (matches.length > 1) {
+            const candidates = matches
+              .map((request) => {
+                // File-scope has no folder path — suggest @name only; enrich
+                // / collection tooling use Folder/Name.
+                const name = index.ownName.get(request) ?? ref.name;
+                return `"${name}"`;
+              })
+              .join(', ');
+            context.report({
+              code: VALIDATION_DIAGNOSTIC_CODES.dependsOnAmbiguousTarget,
+              message:
+                `Multiple requests in this file are named "${ref.name}"; ` +
+                `@depends-on target is ambiguous. Prefer a qualified Folder/Name ref. ` +
+                `Candidates: ${candidates}.`,
+              severity: 'error',
+              range: directive.range,
+            });
+          }
+          continue;
+        }
+
+        const qualifiedKey = `${ref.folderPath}/${ref.name}`;
+        const qualifiedMatches = index.byQualified.get(qualifiedKey) ?? [];
+        // File-scope cannot resolve folder paths; treat qualified as name lookup
+        // when folder metadata is unavailable, and warn on unknown bare-equivalent.
+        const nameMatches = index.byName.get(ref.name) ?? [];
+        if (qualifiedMatches.length === 0 && nameMatches.length === 0) {
           context.report({
             code: VALIDATION_DIAGNOSTIC_CODES.dependsOnUnknownTarget,
-            message: `No request named "${name}" was found in this file. ` +
+            message:
+              `No request matching "${token}" was found in this file. ` +
               'If it lives in another file within the collection, this is expected here.',
             severity: 'warning',
-            range: directive.range,
-          });
-        } else if (matches.length > 1) {
-          context.report({
-            code: VALIDATION_DIAGNOSTIC_CODES.dependsOnAmbiguousTarget,
-            message: `Multiple requests in this file are named "${name}"; @depends-on target is ambiguous.`,
-            severity: 'error',
             range: directive.range,
           });
         }
@@ -93,19 +154,103 @@ export const dependsOnDirectiveValidationRule: ValidationRule = Object.freeze({
   },
 });
 
-interface RequestNameIndex {
+interface RequestResolveIndex {
   readonly ownName: ReadonlyMap<RequestNode, string>;
   readonly byName: ReadonlyMap<string, readonly RequestNode[]>;
+  /** Qualified key `folder/name` — file-scope uses name-only keys when unknown. */
+  readonly byQualified: ReadonlyMap<string, readonly RequestNode[]>;
   /** Maps the parser's `requestBlock` ordinal (`###`-delimited) to its request. */
   readonly requestByBlock: ReadonlyMap<number, RequestNode>;
 }
 
-function buildRequestNameIndex(
+function validateNameDirectives(
+  context: ValidationContext,
+  index: RequestResolveIndex,
+): void {
+  for (const directive of context.directives) {
+    if (directive.knownName !== 'name') {
+      continue;
+    }
+    const value = directive.value.trim();
+    if (value.length === 0) {
+      continue;
+    }
+    if (nameContainsPathSeparator(value)) {
+      context.report({
+        code: VALIDATION_DIAGNOSTIC_CODES.nameContainsPathSeparator,
+        message:
+          'Request @name cannot contain "/". Use a display label; ' +
+          'qualify dependencies as Folder/Name in @depends-on instead.',
+        severity: 'error',
+        range: directive.range,
+      });
+    }
+  }
+
+  for (const [name, requests] of index.byName) {
+    if (requests.length < 2) {
+      continue;
+    }
+    // Same-file duplicate @name — fail closed (same-folder for multi-request files).
+    for (let i = 1; i < requests.length; i += 1) {
+      const request = requests[i]!;
+      const nameDirective = findNameDirectiveFor(request, context);
+      if (nameDirective === undefined) {
+        continue;
+      }
+      context.report({
+        code: VALIDATION_DIAGNOSTIC_CODES.duplicateNameInFolder,
+        message:
+          `Duplicate @name "${name}" in this file. ` +
+          'Same-folder duplicate names are not allowed; rename one request.',
+        severity: 'error',
+        range: nameDirective.range,
+      });
+    }
+  }
+}
+
+function findNameDirectiveFor(
+  request: RequestNode,
+  context: ValidationContext,
+): DirectiveNode | undefined {
+  const block = requestBlockOf(request);
+  let latest: DirectiveNode | undefined;
+  for (const directive of context.directives) {
+    if (directive.knownName !== 'name') {
+      continue;
+    }
+    if (block !== undefined && directiveBlockOf(directive) !== block) {
+      continue;
+    }
+    if (
+      latest === undefined ||
+      directive.range.start.offset > latest.range.start.offset
+    ) {
+      latest = directive;
+    }
+  }
+  for (const directive of request.directives) {
+    if (directive.knownName !== 'name') {
+      continue;
+    }
+    if (
+      latest === undefined ||
+      directive.range.start.offset > latest.range.start.offset
+    ) {
+      latest = directive;
+    }
+  }
+  return latest;
+}
+
+function buildRequestResolveIndex(
   document: ApiDocument,
   requests: readonly RequestNode[],
-): RequestNameIndex {
+): RequestResolveIndex {
   const ownName = new Map<RequestNode, string>();
   const byName = new Map<string, RequestNode[]>();
+  const byQualified = new Map<string, RequestNode[]>();
   const requestByBlock = new Map<number, RequestNode>();
 
   for (const request of requests) {
@@ -117,19 +262,26 @@ function buildRequestNameIndex(
 
   for (const request of requests) {
     const name = requestDisplayName(document, request);
-    if (name === undefined) {
-      continue;
-    }
-    ownName.set(request, name);
-    const bucket = byName.get(name);
-    if (bucket === undefined) {
-      byName.set(name, [request]);
-    } else {
-      bucket.push(request);
+    if (name !== undefined) {
+      ownName.set(request, name);
+      const bucket = byName.get(name);
+      if (bucket === undefined) {
+        byName.set(name, [request]);
+      } else {
+        bucket.push(request);
+      }
+      // File-scope has no folder path; qualified lookups fall back to name.
+      const qKey = `/${name}`;
+      const qBucket = byQualified.get(qKey);
+      if (qBucket === undefined) {
+        byQualified.set(qKey, [request]);
+      } else {
+        qBucket.push(request);
+      }
     }
   }
 
-  return { ownName, byName, requestByBlock };
+  return { ownName, byName, byQualified, requestByBlock };
 }
 
 /**
@@ -214,3 +366,4 @@ function directiveBlockOf(directive: DirectiveNode): number | undefined {
     ? block
     : undefined;
 }
+

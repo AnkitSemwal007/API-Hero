@@ -33,6 +33,22 @@ export interface RequestEditorAuthProfileOption {
   readonly label: string;
 }
 
+/**
+ * Same-collection request catalog for the Depends-on picker.
+ * Display uses `name` / `folderLabel`; model stores human `dependRef` tokens.
+ */
+export interface RequestEditorDependencyCatalogEntry {
+  readonly name: string;
+  /** Folder `relativePath`, or `''` for root. */
+  readonly folderPath: string;
+  /** Minimal unique human ref to persist in `@depends-on`. */
+  readonly dependRef: string;
+  readonly requestId?: string;
+  readonly folderLabel?: string;
+  /** Legacy `@id` for reverse-migrating leftover `req_*` tokens. */
+  readonly legacyAuthoredId?: string;
+}
+
 export type RequestEditorMode = 'form' | 'multi' | 'empty';
 
 export interface RequestEditorState {
@@ -44,6 +60,8 @@ export interface RequestEditorState {
   readonly model?: RequestSourceDocument;
   readonly variablePreview?: Readonly<Record<string, string>>;
   readonly variableCompletions?: readonly RequestEditorVariableCompletion[];
+  /** Same-collection requests for the Depends-on name picker (excludes self). */
+  readonly dependencyCatalog?: readonly RequestEditorDependencyCatalogEntry[];
   /** Display name of the active environment, when one is selected. */
   readonly activeEnvironmentLabel?: string;
   readonly fileName?: string;
@@ -210,11 +228,15 @@ export function parseRequestSourceDocument(
   if (record.dependsOn !== undefined && !isStringArray(record.dependsOn)) {
     return undefined;
   }
+  if (record.id !== undefined && typeof record.id !== 'string') {
+    return undefined;
+  }
 
   const model: RequestSourceDocument = {
     name: record.name,
     method: methodUpper as HttpMethod,
     url: record.url,
+    ...(typeof record.id === 'string' ? { id: record.id } : {}),
     ...(typeof record.description === 'string'
       ? { description: record.description }
       : {}),

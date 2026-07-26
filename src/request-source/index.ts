@@ -24,4 +24,5 @@ export {
 export {
   serializePlaceholderRequest,
   serializeRequestDocument,
+  formatExtractionRule,
 } from './serialize';

@@ -371,6 +371,10 @@ function mapOrchestratorResult(
   const durationMs = runResult.durationMs ?? fallbackDurationMs;
   const assertionFields = assertionFieldsFrom(runResult);
   const extractionFields = extractionFieldsFrom(runResult);
+  const consumedVariables =
+    planned.consumes !== undefined && planned.consumes.length > 0
+      ? planned.consumes
+      : undefined;
   const base = {
     requestId: planned.requestId,
     ordinal: planned.ordinal,
@@ -381,6 +385,7 @@ function mapOrchestratorResult(
       : { statusCode: runResult.statusCode }),
     ...assertionFields,
     ...extractionFields,
+    ...(consumedVariables === undefined ? {} : { consumedVariables }),
   };
 
   // Orchestrator contract: assertion failures return outcome 'failed' with

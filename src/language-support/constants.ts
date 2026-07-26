@@ -11,6 +11,7 @@ export const DIRECTIVES = [
   '@connection',
   '@auth',
   '@timeout',
+  '@id',
   '@name',
   '@description',
   '@tag',
@@ -26,6 +27,7 @@ export const SINGLETON_DIRECTIVES = [
   '@connection',
   '@auth',
   '@timeout',
+  '@id',
   '@name',
   '@description',
 ] as const;
@@ -77,7 +79,10 @@ export const HOVER_DOCUMENTATION: Readonly<Record<string, string>> = {
   '@connection': 'Selects the connection used by this request block.',
   '@auth': 'Configures authentication for this request block.',
   '@timeout': 'Sets the request timeout in milliseconds.',
-  '@name': 'Sets the request name shown in the Outline view.',
+  '@id':
+    'Legacy optional directive ignored for dependencies. Prefer @name; do not use for @depends-on.',
+  '@name':
+    'Sets the request name shown in the Outline view and used by @depends-on (bare or Folder/Name). Must not contain "/".',
   '@description': 'Adds descriptive metadata to the request.',
   '@tag': 'Adds a searchable tag to the request.',
   '@variable': 'Defines a Request-scope variable using name=value (highest precedence).',
@@ -87,5 +92,5 @@ export const HOVER_DOCUMENTATION: Readonly<Record<string, string>> = {
   '@sensitive-extract':
     'Like @extract, but marks the extracted variable as sensitive (masked in UI and reports).',
   '@depends-on':
-    'Declares explicit run-order dependencies on other requests by @name, comma-separated: @depends-on Login, Products.',
+    'Declares explicit run-order dependencies as human-readable refs: bare @name when unique, or Folder/Name when names collide across folders.',
 };

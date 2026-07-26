@@ -22,10 +22,12 @@ import {
   serializeRequestDocument,
   type RequestSourceDocument,
 } from '../../request-source';
+import { prepareModelForSerialize } from '../prepare-model-for-serialize';
 import {
   clearActiveRequestEditorDocument,
   setActiveRequestEditorDocument,
 } from './active-request-editor';
+import { toWebviewDependencyCatalog } from './dependency-catalog';
 import { REQUEST_EDITOR_SYNC_DEBOUNCE_MS } from './constants';
 import { renderRequestEditorHtml } from './request-editor-html';
 import {
@@ -36,6 +38,7 @@ import {
   redactSensitiveVariablesInSource,
   restoreSensitiveVariablesFromBaseline,
   type RequestEditorAuthProfileOption,
+  type RequestEditorDependencyCatalogEntry,
   type RequestEditorState,
 } from './request-editor-messages';
 
@@ -49,6 +52,22 @@ export interface RequestEditorProviderOptions {
   ) => readonly import('./request-editor-messages').RequestEditorVariableCompletion[];
   /** Active environment display name, or undefined when none is selected. */
   readonly getActiveEnvironmentLabel?: () => string | undefined;
+  /**
+   * Same-collection Depends-on picker catalog for the open document.
+   * Entries use display names; the form stores human depend refs.
+   */
+  readonly getDependencyCatalog?: (
+    documentPath: string,
+  ) => readonly RequestEditorDependencyCatalogEntry[];
+  /**
+   * After the open request's `@name` changes, cascade rewrite dependents'
+   * `@depends-on` tokens across the collection.
+   */
+  readonly cascadeDependRefRename?: (options: {
+    readonly documentPath: string;
+    readonly oldName: string;
+    readonly newName: string;
+  }) => Promise<{ readonly skippedOpenPaths?: readonly string[] } | void>;
   /**
    * Runs the document request (same pipeline as `apiRunner.runRequest`).
    * Preferred over executeCommand so Custom Text Editors work without an
@@ -221,7 +240,14 @@ class RequestEditorDocumentSync implements Disposable {
     );
   }
 
-  /** Resolves when no form apply is in flight and nothing is queued. */
+  /**
+   * Resolves when no form apply is in flight and nothing is queued.
+   *
+   * Must re-check idle after registering a waiter: `drainFormApplies` may
+   * finish and notify an empty waiter list between the idle checks and
+   * `drainWaiters.push`, which would otherwise leave Run awaiting forever
+   * (no HTTP, no history). Extract-tab flushes make that race more likely.
+   */
   private async waitUntilFormAppliesIdle(): Promise<void> {
     while (!this.disposed) {
       if (this.pendingForm !== undefined && !this.applyInFlight) {
@@ -233,6 +259,10 @@ class RequestEditorDocumentSync implements Disposable {
       }
       await new Promise<void>((resolve) => {
         this.drainWaiters.push(resolve);
+        // Close the missed-wakeup window.
+        if (!this.applyInFlight && this.pendingForm === undefined) {
+          resolve();
+        }
       });
     }
   }
@@ -325,7 +355,12 @@ class RequestEditorDocumentSync implements Disposable {
       model,
       parsed.document,
     );
-    const nextText = serializeRequestDocument(restored);
+    const previousName = parsed.document.name.trim();
+    const prepared = prepareModelForSerialize(
+      restored,
+      this.options.getDependencyCatalog?.(this.document.uri.fsPath) ?? [],
+    );
+    const nextText = serializeRequestDocument(prepared);
     if (nextText === this.document.getText()) {
       await this.postAck();
       return;
@@ -371,6 +406,40 @@ class RequestEditorDocumentSync implements Disposable {
       });
       return;
     }
+
+    const nextName = prepared.name.trim();
+    if (
+      previousName.length > 0 &&
+      nextName.length > 0 &&
+      previousName !== nextName &&
+      this.options.cascadeDependRefRename !== undefined
+    ) {
+      try {
+        const cascadeResult = await this.options.cascadeDependRefRename({
+          documentPath: this.document.uri.fsPath,
+          oldName: previousName,
+          newName: nextName,
+        });
+        const skipped = cascadeResult?.skippedOpenPaths ?? [];
+        if (skipped.length > 0) {
+          await this.panel.webview.postMessage({
+            type: 'error',
+            message:
+              `Renamed this request, but could not update dependencies in ${skipped.length} ` +
+              `file${skipped.length === 1 ? '' : 's'} (unable to open).`,
+          });
+        }
+      } catch (error) {
+        await this.panel.webview.postMessage({
+          type: 'error',
+          message:
+            error instanceof Error
+              ? error.message
+              : 'Could not cascade dependency renames.',
+        });
+      }
+    }
+
     await this.postAck();
   }
 
@@ -459,6 +528,9 @@ class RequestEditorDocumentSync implements Disposable {
         this.options.getVariablePreview?.(parsed.document) ?? {};
       const variableCompletions =
         this.options.getVariableCompletions?.(parsed.document) ?? [];
+      const dependencyCatalog = toWebviewDependencyCatalog(
+        this.options.getDependencyCatalog?.(this.document.uri.fsPath) ?? [],
+      );
       state = withActiveEnv({
         mode: 'form',
         documentVersion: this.document.version,
@@ -468,6 +540,7 @@ class RequestEditorDocumentSync implements Disposable {
         model: masked,
         variablePreview,
         variableCompletions,
+        dependencyCatalog,
         fileName: this.document.fileName,
       });
     }

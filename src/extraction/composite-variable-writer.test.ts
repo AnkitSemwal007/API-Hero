@@ -96,7 +96,7 @@ describe('CompositeVariableWriter', () => {
     }
   });
 
-  test('workspace returns UNSUPPORTED_SCOPE', async () => {
+  test('workspace returns UNSUPPORTED_SCOPE when no workspace writer is configured', async () => {
     const writer = new CompositeVariableWriter({
       overlay: new InMemoryRuntimeVariableOverlay(),
       runStore: new InMemoryRunVariableStore(),
@@ -113,6 +113,27 @@ describe('CompositeVariableWriter', () => {
     if (!result.ok) {
       assert.equal(result.code, 'UNSUPPORTED_SCOPE');
     }
+  });
+
+  test('routes workspace writes to the configured workspace writer', async () => {
+    const workspace = new FakeEnvironmentWriter();
+    const writer = new CompositeVariableWriter({
+      overlay: new InMemoryRuntimeVariableOverlay(),
+      runStore: new InMemoryRunVariableStore(),
+      environment: new FakeEnvironmentWriter(),
+      workspace,
+    });
+
+    const request: VariableWriteRequest = {
+      name: 'wsToken',
+      value: 'w1',
+      scope: 'workspace',
+      sensitive: true,
+    };
+    const result = await writer.write(request);
+
+    assert.deepEqual(result, { ok: true });
+    assert.deepEqual(workspace.writes, [request]);
   });
 
   test('routes collection writes to the configured collection writer', async () => {
