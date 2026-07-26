@@ -1,9 +1,15 @@
 /**
  * Builds a directed {@link DependencyGraph} from produces/consumes analyses
- * plus explicit `@depends-on` names (§6.3–6.4). Framework-free.
+ * plus explicit `@depends-on` human refs (ADR 0002 Option C).
+ * Framework-free.
  */
 
 import type { DependencyEdge } from '../collection-runner';
+import {
+  parseDependRef,
+  resolveDependRef,
+  type DependRefIndexEntry,
+} from './depend-ref';
 import type { DependencyGraph, RequestDependencyAnalysis } from './models';
 
 export interface BuildDependencyGraphOptions {
@@ -11,6 +17,11 @@ export interface BuildDependencyGraphOptions {
   readonly analyses: readonly RequestDependencyAnalysis[];
   /** Display label (authored `@name`) for every request id in the plan. */
   readonly labelByRequestId: ReadonlyMap<string, string>;
+  /**
+   * Folder `relativePath` for every plan member (`''` for collection root).
+   * Used to resolve qualified `Folder/Name` depend refs.
+   */
+  readonly folderPathByRequestId?: ReadonlyMap<string, string>;
 }
 
 export type BuildDependencyGraphResult =
@@ -30,15 +41,15 @@ export type BuildDependencyGraphResult =
 
 /**
  * Builds nodes/edges: an implicit edge from every in-plan producer of `v` to
- * every consumer of `v` (§6.4, deterministic — topo sort + last-write-wins at
- * runtime resolve any ordering ambiguity among multiple producers), plus one
- * explicit edge per resolved `@depends-on` name. Unknown or ambiguous
- * `@depends-on` targets fail closed (§6.3).
+ * every consumer of `v` (§6.4), plus one explicit edge per resolved
+ * `@depends-on` token. Tokens resolve as bare names or `Folder/Name`
+ * (ADR 0002). Unknown or ambiguous targets fail closed.
  */
 export function buildDependencyGraph(
   options: BuildDependencyGraphOptions,
 ): BuildDependencyGraphResult {
   const { analyses, labelByRequestId } = options;
+  const folderPathByRequestId = options.folderPathByRequestId ?? new Map();
   const nodes = analyses.map((analysis) => analysis.requestId);
   const edges: DependencyEdge[] = [];
 
@@ -71,31 +82,22 @@ export function buildDependencyGraph(
     }
   }
 
-  const requestIdsByLabel = new Map<string, string[]>();
+  const index: DependRefIndexEntry[] = [];
   for (const [requestId, label] of labelByRequestId) {
-    const list = requestIdsByLabel.get(label) ?? [];
-    list.push(requestId);
-    requestIdsByLabel.set(label, list);
+    index.push({
+      requestId,
+      name: label,
+      folderPath: folderPathByRequestId.get(requestId) ?? '',
+    });
   }
 
   for (const analysis of analyses) {
-    for (const name of analysis.dependsOnNames) {
-      const matches = requestIdsByLabel.get(name) ?? [];
-      if (matches.length > 1) {
-        return {
-          ok: false,
-          code: 'AMBIGUOUS_DEPENDS_ON',
-          message: `Multiple requests in this plan are named "${name}"; @depends-on target is ambiguous.`,
-        };
+    for (const token of analysis.dependsOnNames) {
+      const resolved = resolveDependsOnToken(token, index);
+      if (!resolved.ok) {
+        return resolved;
       }
-      if (matches.length === 0) {
-        return {
-          ok: false,
-          code: 'UNKNOWN_DEPENDS_ON_TARGET',
-          message: `No request named "${name}" was found in this run's plan.`,
-        };
-      }
-      const target = matches[0]!;
+      const target = resolved.requestId;
       if (target === analysis.requestId) {
         continue;
       }
@@ -109,3 +111,57 @@ export function buildDependencyGraph(
 
   return { ok: true, graph: { nodes, edges }, unresolvedConsumes };
 }
+
+type ResolveTokenResult =
+  | { readonly ok: true; readonly requestId: string }
+  | {
+      readonly ok: false;
+      readonly code: 'AMBIGUOUS_DEPENDS_ON' | 'UNKNOWN_DEPENDS_ON_TARGET';
+      readonly message: string;
+    };
+
+function resolveDependsOnToken(
+  token: string,
+  index: readonly DependRefIndexEntry[],
+): ResolveTokenResult {
+  const ref = parseDependRef(token);
+  if (ref === undefined) {
+    return {
+      ok: false,
+      code: 'UNKNOWN_DEPENDS_ON_TARGET',
+      message: `Invalid @depends-on token "${token}".`,
+    };
+  }
+
+  const resolved = resolveDependRef(ref, index);
+  if (resolved.ok) {
+    return { ok: true, requestId: resolved.requestId };
+  }
+
+  if (resolved.code === 'ambiguous') {
+    const hint =
+      ref.kind === 'bare' && resolved.candidates.length > 0
+        ? ` Use a qualified ref such as ${resolved.candidates
+            .map((c) => `"${c.folderPath}/${c.name}"`)
+            .join(' or ')}.`
+        : '';
+    return {
+      ok: false,
+      code: 'AMBIGUOUS_DEPENDS_ON',
+      message:
+        ref.kind === 'bare'
+          ? `Multiple requests in this plan are named "${ref.name}"; @depends-on target is ambiguous.${hint}`
+          : `Multiple requests in this plan match "${token}"; @depends-on target is ambiguous.`,
+    };
+  }
+
+  return {
+    ok: false,
+    code: 'UNKNOWN_DEPENDS_ON_TARGET',
+    message:
+      ref.kind === 'bare'
+        ? `No request named "${ref.name}" was found in this run's plan.`
+        : `No request matching "${token}" was found in this run's plan.`,
+  };
+}
+

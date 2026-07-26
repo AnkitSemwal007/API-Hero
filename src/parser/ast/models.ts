@@ -110,6 +110,7 @@ export const KNOWN_DIRECTIVE_NAMES = [
   'connection',
   'auth',
   'timeout',
+  'id',
   'name',
   'description',
   'tag',

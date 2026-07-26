@@ -97,6 +97,11 @@ export interface ExecutionResultViewer {
     result: ExecutionResult,
     assertions?: TestReport,
     extraction?: ExtractionReport,
+    context?: {
+      readonly sourceId: string;
+      readonly requestKey: string;
+      readonly offset: number;
+    },
   ): void;
 }
 
@@ -550,7 +555,11 @@ export class ExecutionOrchestrator {
 
           if (showViewer) {
             try {
-              this.viewer.show(result, assertionReport, extractionReport);
+              this.viewer.show(result, assertionReport, extractionReport, {
+                sourceId: source.sourceId,
+                requestKey,
+                offset: source.offset,
+              });
             } catch {
               this.status.update({ kind: 'failed' });
               if (showNotifications) {

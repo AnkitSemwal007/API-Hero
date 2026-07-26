@@ -77,6 +77,9 @@ export function documentToRequestSource(
   const name =
     directiveValue(document, request, 'name')?.trim() ||
     `${String(request.method).toUpperCase()} ${request.url.trim()}`;
+  const idRaw = directiveValue(document, request, 'id')?.trim();
+  const id =
+    idRaw !== undefined && idRaw.length > 0 ? idRaw : undefined;
   const description = directiveValue(document, request, 'description')?.trim();
   const authProfileId = directiveValue(document, request, 'auth')?.trim();
   const timeoutRaw = directiveValue(document, request, 'timeout')?.trim();
@@ -104,6 +107,7 @@ export function documentToRequestSource(
     name,
     method,
     url: baseUrl.length > 0 ? baseUrl : request.url.trim(),
+    ...(id !== undefined ? { id } : {}),
     ...(description !== undefined && description.length > 0
       ? { description }
       : {}),

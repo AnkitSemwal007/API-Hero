@@ -385,6 +385,9 @@ export class CollectionDiscoveryService {
         const id = requestIdFor(file.path, summary.index);
         const reference: RequestReference = {
           id,
+          ...(summary.legacyAuthoredId !== undefined
+            ? { legacyAuthoredId: summary.legacyAuthoredId }
+            : {}),
           collectionId,
           folderId,
           filePath: file.path,

@@ -8,8 +8,9 @@ import {
 } from './index';
 
 describe('serializeRequestDocument', () => {
-  test('emits minimal GET with @name', () => {
+  test('emits minimal GET with @name only (no @id)', () => {
     const source = serializeRequestDocument({
+      id: 'req_fixed001',
       name: 'Get user',
       method: 'GET',
       url: 'https://httpbin.org/get',
@@ -21,6 +22,7 @@ describe('serializeRequestDocument', () => {
 GET https://httpbin.org/get
 `,
     );
+    assert.doesNotMatch(source, /@id/u);
   });
 
   test('includes description, auth, variables, headers, and expect', () => {
@@ -91,18 +93,30 @@ GET https://httpbin.org/get
     );
   });
 
-  test('serializes @depends-on after extraction rules and before the request line', () => {
+  test('serializes @depends-on human refs after extraction rules and before the request line', () => {
     const source = serializeRequestDocument({
       name: 'Products',
       method: 'GET',
       url: 'https://example.test/products',
       extractionRules: [{ name: 'accessToken', from: 'body.access_token' }],
-      dependsOn: ['Login', 'Cart'],
+      dependsOn: ['Login', 'Authentication/Cart'],
     });
+    assert.match(source, /^@name Products\n/u);
+    assert.doesNotMatch(source, /@id/u);
     assert.match(
       source,
-      /@extract accessToken from body\.access_token\n@depends-on Login, Cart\n\nGET/u,
+      /@extract accessToken from body\.access_token\n@depends-on Login, Authentication\/Cart\n\nGET/u,
     );
+  });
+
+  test('does not generate @id when missing', () => {
+    const source = serializeRequestDocument({
+      name: 'Products',
+      method: 'GET',
+      url: 'https://example.test/products',
+    });
+    assert.match(source, /^@name Products\n/u);
+    assert.doesNotMatch(source, /@id/u);
   });
 
   test('omits @depends-on when the list is empty or blank', () => {
@@ -258,12 +272,8 @@ GET https://httpbin.org/get
   });
 });
 
-test('serializePlaceholderRequest matches Phase 1b shape', () => {
-  assert.equal(
-    serializePlaceholderRequest('Login'),
-    `@name Login
-
-GET https://httpbin.org/get
-`,
-  );
+test('serializePlaceholderRequest emits @name without @id', () => {
+  const source = serializePlaceholderRequest('Login');
+  assert.match(source, /^@name Login\n\nGET https:\/\/httpbin\.org\/get\n$/u);
+  assert.doesNotMatch(source, /@id/u);
 });

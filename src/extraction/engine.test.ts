@@ -117,6 +117,7 @@ describe('DefaultExtractionEngine', () => {
         value: 'secret',
         scope: 'run',
         sensitive: false,
+        requestKey: 'request:test#0',
       },
     ]);
     assert.equal(report.outcomes[0]?.kind, 'extracted');

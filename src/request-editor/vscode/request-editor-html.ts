@@ -76,11 +76,15 @@ export function renderRequestEditorHtml(nonce: string): string {
     <p class="hint">Method and URL stay in the top bar. Query parameters are on the Params tab.</p>
     <div class="dependencies-block">
       <h3 class="ah-section-title">Dependencies</h3>
-      <label class="field dependson-field">
+      <div class="field dependson-field">
         <span>Depends on <em class="optional-hint">optional</em></span>
-        <input id="dependsOn" type="text" placeholder="Login, Products" aria-label="Depends on (comma-separated request names)" />
-      </label>
-      <p class="hint">Comma-separated request <code>@name</code> values this request depends on. Writes <code>@depends-on</code>.</p>
+        <div id="dependsOnPicker" class="depends-picker" data-testid="depends-on-picker">
+          <div id="dependsOnChips" class="depends-chips" aria-live="polite"></div>
+          <input id="dependsOnSearch" type="search" placeholder="Search requests by name…" autocomplete="off" aria-label="Search dependency requests" aria-controls="dependsOnList" />
+          <div id="dependsOnList" class="depends-list" role="listbox" aria-multiselectable="true" hidden></div>
+        </div>
+      </div>
+      <p class="hint">Select requests by name from this collection. Dependencies are stored as readable names (or Folder/Name when needed). Renaming a request updates dependents.</p>
     </div>
   </section>
   <section id="tab-headers" class="panel" role="tabpanel" hidden>
@@ -193,7 +197,7 @@ export function renderRequestEditorHtml(nonce: string): string {
     <pre id="variablePreview" class="preview-box">No preview</pre>
   </section>
   <section id="tab-extract" class="panel" role="tabpanel" hidden>
-    <p class="hint">Default scope is Run. Environment writes persist. Request writes are session overlay for this request.</p>
+    <p class="hint">Default scope is Run (session). Environment, Collection, and Workspace persist. Request writes are a session overlay for this request. Global is not available for extract.</p>
     <div class="table-toolbar">
       <button type="button" data-add="extract" class="secondary">Add extraction</button>
     </div>
@@ -311,30 +315,35 @@ body {
   font-size: 12px;
 }
 .toolbar {
-  display: flex;
-  flex-direction: column;
-  gap: var(--ah-space-2);
-  padding: var(--ah-space-2) var(--ah-space-3);
+  display: block;
+  padding: var(--ah-space-1) var(--ah-space-2);
   border-bottom: 1px solid var(--vscode-panel-border, var(--vscode-contrastBorder));
   background: var(--vscode-sideBar-background, var(--vscode-editor-background));
 }
 .run-row {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  flex-wrap: nowrap;
+  gap: var(--ah-space-1);
   align-items: center;
 }
 .run-row .field { margin: 0; }
-.run-row .field.method { width: 96px; flex: 0 0 96px; }
-.run-row .field.grow { flex: 1 1 220px; min-width: 140px; }
+.run-row .field.method { width: 92px; flex: 0 0 92px; }
+.run-row .field.grow.url-field { flex: 1 1 auto; min-width: 0; }
+.run-row .chip,
+.run-row .run-btn {
+  flex: 0 0 auto;
+  height: var(--ah-control-height);
+  min-height: var(--ah-control-height);
+  box-sizing: border-box;
+}
 .run-btn {
   min-width: 64px;
-  padding: 4px 14px;
-  min-height: 26px;
+  padding: 0 14px;
+  font-weight: 600;
 }
 .identity-block {
   display: grid;
-  gap: var(--ah-space-3);
+  gap: var(--ah-space-2);
   max-width: 36rem;
   margin-bottom: var(--ah-space-2);
 }
@@ -354,19 +363,110 @@ body {
 }
 .dependencies-block .ah-section-title { margin-top: 0; }
 .dependson-field { margin: 0; }
+.depends-picker {
+  display: grid;
+  gap: var(--ah-space-1);
+  border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
+  border-radius: 2px;
+  padding: var(--ah-space-1);
+  background: var(--vscode-input-background);
+}
+.depends-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-height: 0;
+}
+.depends-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border-radius: 2px;
+  background: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+  font-size: 11px;
+  max-width: 100%;
+}
+.depends-chip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: inherit;
+  font-size: inherit;
+}
+.depends-chip button {
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+  opacity: 0.85;
+}
+.depends-list {
+  max-height: 180px;
+  overflow: auto;
+  border-top: 1px solid var(--vscode-panel-border, transparent);
+  padding-top: var(--ah-space-1);
+}
+.depends-option {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ah-space-1);
+  padding: 4px 2px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.depends-option:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+.depends-option input { width: auto; margin-top: 2px; }
+.depends-option-meta {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+.depends-option-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.depends-option-folder {
+  color: var(--vscode-descriptionForeground);
+  font-size: 10px;
+}
+.depends-empty {
+  color: var(--vscode-descriptionForeground);
+  font-size: 11px;
+  padding: 4px 2px;
+}
+.tabs {
+  padding: 0 var(--ah-space-1);
+}
+.tabs .tab {
+  padding: 3px 8px;
+  min-height: 22px;
+  font-size: 11px;
+  line-height: 1.3;
+}
+.tabs .tab:hover {
+  opacity: 1;
+  background: var(--vscode-list-hoverBackground);
+}
 .panels {
-  padding: var(--ah-space-3);
+  padding: var(--ah-space-2);
   flex: 1;
   overflow: auto;
 }
 .panel { display: none; }
 .panel.active { display: block; }
-.form-compact { display: grid; gap: var(--ah-space-3); max-width: 42rem; }
-.row { display: flex; gap: var(--ah-space-3); align-items: end; }
+.form-compact { display: grid; gap: var(--ah-space-2); max-width: 42rem; }
+.row { display: flex; gap: var(--ah-space-2); align-items: end; }
 .row.wrap { flex-wrap: wrap; }
 .field { display: grid; gap: var(--ah-space-1); }
 .field.grow { flex: 1; min-width: 0; }
-.field.method { width: 96px; flex: 0 0 96px; }
+.field.method { width: 92px; flex: 0 0 92px; }
 .field span, .field em {
   color: var(--vscode-descriptionForeground);
   font-size: 11px;
@@ -395,23 +495,30 @@ textarea { resize: vertical; min-height: 120px; }
 .hint {
   color: var(--vscode-descriptionForeground);
   font-size: 11px;
-  margin: var(--ah-space-2) 0 0;
+  margin: var(--ah-space-1) 0 0;
   line-height: 1.4;
+}
+.panel > .hint:first-child,
+.identity-block + .hint {
+  margin-top: var(--ah-space-1);
 }
 .hint code, h3 code { font-family: var(--vscode-editor-font-family); }
 .url-field { position: relative; }
 .var-resolved, .var-hint {
-  margin: 4px 0 0;
+  margin: 2px 0 0;
   font-size: 11px;
   line-height: 1.35;
-  white-space: pre-wrap;
-  word-break: break-all;
 }
 .var-resolved {
   color: var(--vscode-descriptionForeground);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .var-hint {
   color: var(--vscode-inputValidation-warningForeground, var(--vscode-editorWarning-foreground));
+  white-space: pre-wrap;
+  word-break: break-all;
 }
 .var-suggest {
   position: fixed;
@@ -494,7 +601,7 @@ textarea { resize: vertical; min-height: 120px; }
   gap: var(--ah-space-2);
   align-items: center;
   flex-wrap: wrap;
-  margin-bottom: var(--ah-space-2);
+  margin-bottom: var(--ah-space-1);
 }
 table.kv {
   width: 100%;
@@ -555,14 +662,24 @@ table.kv input[type="checkbox"] {
   min-height: 1em;
 }
 h3, .ah-section-title {
-  margin: var(--ah-space-3) 0 var(--ah-space-2);
+  margin: var(--ah-space-2) 0 var(--ah-space-1);
   font-size: 12px;
   font-weight: 600;
   color: var(--vscode-foreground);
 }
+.empty-state.compact {
+  margin: var(--ah-space-1) 0;
+  padding: var(--ah-space-1) var(--ah-space-2);
+}
 @media (max-width: 560px) {
-  .run-row { flex-direction: column; align-items: stretch; }
+  .run-row {
+    flex-direction: column;
+    flex-wrap: wrap;
+    align-items: stretch;
+  }
   .run-row .field.method { width: 100%; flex: 1; }
+  .run-row .chip,
+  .run-row .run-btn { width: 100%; }
   .row { flex-direction: column; align-items: stretch; }
   .inline-field { grid-template-columns: 1fr; }
 }
@@ -577,6 +694,10 @@ const EDITOR_SCRIPT = `
   /** True when the user edited a field since the last successful flush or inbound apply. */
   let formDirty = false;
   const DEBOUNCE_MS = 300;
+  /** Selected human depend refs for Depends-on (bare or Folder/Name). */
+  let dependsOnSelectedRefs = [];
+  /** Catalog from host: { name, folderPath, dependRef, folderLabel? }[] */
+  let dependencyCatalog = [];
 
   const el = (id) => document.getElementById(id);
 
@@ -611,6 +732,28 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
     if (tabId === 'preview') {
       refreshPreview();
     }
+  }
+
+  function tabLabelWithCount(base, count) {
+    return count > 0 ? base + ' (' + count + ')' : base;
+  }
+
+  function refreshTabBadges() {
+    const counts = {
+      variables: readVariables().length,
+      extract: readExtractionRules().length,
+      tests: readExpectLines().length
+    };
+    document.querySelectorAll('.tab[data-tab]').forEach((button) => {
+      const id = button.getAttribute('data-tab');
+      if (id === 'variables') {
+        button.textContent = tabLabelWithCount('Variables', counts.variables);
+      } else if (id === 'extract') {
+        button.textContent = tabLabelWithCount('Extract', counts.extract);
+      } else if (id === 'tests') {
+        button.textContent = tabLabelWithCount('Tests', counts.tests);
+      }
+    });
   }
 
   function defaultModel() {
@@ -720,7 +863,9 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
         '<td><select data-scope>' +
         '<option value="run">Run</option>' +
         '<option value="document">Request</option>' +
+        '<option value="collection">Collection</option>' +
         '<option value="environment">Environment</option>' +
+        '<option value="workspace">Workspace</option>' +
         '</select></td>' +
         '<td class="enabled"><input data-sensitive type="checkbox" /></td>' +
         '<td class="enabled"><input data-optional type="checkbox" /></td>' +
@@ -733,6 +878,7 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
       tr.querySelector('[data-del]').addEventListener('click', () => {
         tr.remove();
         syncEmptyState('extractTable');
+        refreshTabBadges();
         scheduleUpdate();
       });
       bindChange(tr.querySelector('[data-name]'));
@@ -744,6 +890,7 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
     });
     syncEmptyState('extractTable');
     readExtractionRules();
+    refreshTabBadges();
   }
 
   function replaceExtractionRulesIfChanged(rows) {
@@ -756,11 +903,156 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
     renderExtractionRules(rows || []);
   }
 
+  function catalogEntryByRef(dependRef) {
+    return dependencyCatalog.find((entry) => entry.dependRef === dependRef);
+  }
+
+  function catalogEntryByLegacyId(legacyId) {
+    return dependencyCatalog.find((entry) => entry.legacyAuthoredId === legacyId);
+  }
+
+  function catalogEntryByName(name) {
+    const matches = dependencyCatalog.filter((entry) => entry.name === name);
+    return matches.length === 1 ? matches[0] : undefined;
+  }
+
+  function displayLabelForDependsToken(token) {
+    const byRef = catalogEntryByRef(token);
+    if (byRef) {
+      return byRef.folderLabel
+        ? byRef.name + ' (' + byRef.folderLabel + ')'
+        : byRef.name;
+    }
+    const byLegacy = catalogEntryByLegacyId(token);
+    if (byLegacy) {
+      return byLegacy.folderLabel
+        ? byLegacy.name + ' (' + byLegacy.folderLabel + ')'
+        : byLegacy.name;
+    }
+    if (/^req_[A-Za-z0-9]+$/.test(token)) {
+      return 'Unknown request';
+    }
+    return token;
+  }
+
   function readDependsOn() {
-    return el('dependsOn').value
-      .split(',')
-      .map((entry) => entry.trim())
-      .filter((entry) => entry.length > 0);
+    return dependsOnSelectedRefs.slice();
+  }
+
+  function setDependsOnFromModel(tokens) {
+    const next = [];
+    const seen = new Set();
+    (tokens || []).forEach((token) => {
+      const trimmed = String(token || '').trim();
+      if (!trimmed || seen.has(trimmed)) return;
+      const byRef = catalogEntryByRef(trimmed);
+      if (byRef) {
+        seen.add(byRef.dependRef);
+        next.push(byRef.dependRef);
+        return;
+      }
+      const byLegacy = catalogEntryByLegacyId(trimmed);
+      if (byLegacy) {
+        seen.add(byLegacy.dependRef);
+        next.push(byLegacy.dependRef);
+        return;
+      }
+      const byName = catalogEntryByName(trimmed);
+      if (byName) {
+        seen.add(byName.dependRef);
+        next.push(byName.dependRef);
+        return;
+      }
+      // Keep unresolved tokens so save-time migration / validation can see them.
+      seen.add(trimmed);
+      next.push(trimmed);
+    });
+    dependsOnSelectedRefs = next;
+    renderDependsOnPicker();
+  }
+
+  function toggleDependsOnRef(dependRef, checked) {
+    if (!dependRef) return;
+    const set = new Set(dependsOnSelectedRefs);
+    if (checked) set.add(dependRef);
+    else set.delete(dependRef);
+    dependsOnSelectedRefs = Array.from(set);
+    renderDependsOnPicker();
+    scheduleUpdate();
+  }
+
+  function removeDependsOnRef(dependRef) {
+    dependsOnSelectedRefs = dependsOnSelectedRefs.filter((ref) => ref !== dependRef);
+    renderDependsOnPicker();
+    scheduleUpdate();
+  }
+
+  function renderDependsOnPicker() {
+    const chips = el('dependsOnChips');
+    const list = el('dependsOnList');
+    const search = el('dependsOnSearch');
+    if (!chips || !list || !search) return;
+
+    chips.innerHTML = '';
+    dependsOnSelectedRefs.forEach((token) => {
+      const chip = document.createElement('span');
+      chip.className = 'depends-chip';
+      chip.setAttribute('data-depends-ref', token);
+      const label = document.createElement('span');
+      label.textContent = displayLabelForDependsToken(token);
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.setAttribute('aria-label', 'Remove ' + label.textContent);
+      remove.textContent = '×';
+      remove.addEventListener('click', () => removeDependsOnRef(token));
+      chip.appendChild(label);
+      chip.appendChild(remove);
+      chips.appendChild(chip);
+    });
+
+    const query = (search.value || '').trim().toLowerCase();
+    list.innerHTML = '';
+    const options = dependencyCatalog.filter((entry) => {
+      if (!query) return true;
+      const hay = (entry.name + ' ' + (entry.folderLabel || entry.folderPath || '')).toLowerCase();
+      return hay.includes(query);
+    });
+    if (options.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'depends-empty';
+      empty.textContent = dependencyCatalog.length === 0
+        ? 'No other requests in this collection.'
+        : 'No matching requests.';
+      list.appendChild(empty);
+    } else {
+      options.forEach((entry) => {
+        const label = document.createElement('label');
+        label.className = 'depends-option';
+        label.setAttribute('role', 'option');
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        input.value = entry.dependRef;
+        input.checked = dependsOnSelectedRefs.includes(entry.dependRef);
+        input.addEventListener('change', () => {
+          toggleDependsOnRef(entry.dependRef, input.checked);
+        });
+        const meta = document.createElement('span');
+        meta.className = 'depends-option-meta';
+        const name = document.createElement('span');
+        name.className = 'depends-option-name';
+        name.textContent = entry.name;
+        meta.appendChild(name);
+        if (entry.folderLabel || entry.folderPath) {
+          const folder = document.createElement('span');
+          folder.className = 'depends-option-folder';
+          folder.textContent = entry.folderLabel || entry.folderPath;
+          meta.appendChild(folder);
+        }
+        label.appendChild(input);
+        label.appendChild(meta);
+        list.appendChild(label);
+      });
+    }
   }
 
   function readExpectLines() {
@@ -924,6 +1216,7 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
       tr.querySelector('[data-del]').addEventListener('click', () => {
         tr.remove();
         syncEmptyState('variablesTable');
+        refreshTabBadges();
         scheduleUpdate();
       });
       tr.querySelector('[data-ins]').addEventListener('click', () => {
@@ -944,6 +1237,7 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
       tbody.appendChild(tr);
     });
     syncEmptyState('variablesTable');
+    refreshTabBadges();
   }
 
   function renderTests(lines) {
@@ -956,10 +1250,12 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
       li.querySelector('code').textContent = line;
       li.querySelector('[data-del]').addEventListener('click', () => {
         li.remove();
+        refreshTabBadges();
         scheduleUpdate();
       });
       list.appendChild(li);
     });
+    refreshTabBadges();
   }
 
   function updateBodyVisibility() {
@@ -1204,7 +1500,10 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
     const model = next.model || defaultModel();
     setFieldValue('name', model.name || '');
     setFieldValue('description', model.description || '');
-    setFieldValue('dependsOn', (model.dependsOn || []).join(', '));
+    dependencyCatalog = Array.isArray(next.dependencyCatalog)
+      ? next.dependencyCatalog.slice()
+      : [];
+    setDependsOnFromModel(model.dependsOn || []);
     setFieldValue('method', model.method || 'GET');
     syncMethodSelect();
     setFieldValue('url', model.url || '');
@@ -1225,6 +1524,7 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
     refreshVariablePreviewLocal(model);
     setVarCatalog(next.variableCompletions || []);
     bindAllVarFields();
+    refreshTabBadges();
     applying = false;
   }
 
@@ -1276,10 +1576,28 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
     button.addEventListener('click', () => setTab(button.getAttribute('data-tab')));
   });
 
-  ['name', 'description', 'dependsOn', 'method', 'url', 'timeoutMs', 'authProfile', 'bodyType',
+  ['name', 'description', 'method', 'url', 'timeoutMs', 'authProfile', 'bodyType',
     'bodyText', 'rawContentType', 'multipartBoundary', 'binaryNote'].forEach((id) => {
     bindChange(el(id));
   });
+
+  const dependsSearch = el('dependsOnSearch');
+  const dependsList = el('dependsOnList');
+  if (dependsSearch && dependsList) {
+    dependsSearch.addEventListener('focus', () => {
+      dependsList.hidden = false;
+      renderDependsOnPicker();
+    });
+    dependsSearch.addEventListener('input', () => {
+      dependsList.hidden = false;
+      renderDependsOnPicker();
+    });
+    document.addEventListener('click', (event) => {
+      const picker = el('dependsOnPicker');
+      if (!picker || picker.contains(event.target)) return;
+      dependsList.hidden = true;
+    });
+  }
 
   el('method').addEventListener('change', syncMethodSelect);
   el('bodyType').addEventListener('change', () => {

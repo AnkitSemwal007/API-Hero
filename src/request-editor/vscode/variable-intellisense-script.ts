@@ -281,9 +281,14 @@ export const VARIABLE_INTELLISENSE_SCRIPT = `
       if (!info) {
         preview.hidden = true;
         preview.textContent = '';
+        preview.removeAttribute('title');
+        preview.removeAttribute('aria-label');
       } else {
         preview.hidden = false;
-        preview.textContent = 'Resolved\\n' + info.resolved;
+        var resolvedLabel = 'Resolved: ' + info.resolved;
+        preview.textContent = resolvedLabel;
+        preview.title = resolvedLabel;
+        preview.setAttribute('aria-label', resolvedLabel);
       }
     }
     if (hint) {

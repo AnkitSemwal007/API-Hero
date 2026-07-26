@@ -11,6 +11,7 @@ const SINGLETON_DIRECTIVES = new Set([
   'connection',
   'auth',
   'timeout',
+  'id',
   'name',
   'description',
 ]);

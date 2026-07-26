@@ -12,6 +12,8 @@
  * Query params are encoded into the URL (same approach as OpenAPI import and
  * runtime `parseParameters(queryPart(url))`). Template values starting with
  * `{{` are left unencoded so `{{baseUrl}}` / `{{id}}` stay intact.
+ *
+ * Legacy `@id` is never emitted (ADR 0002 Option C).
  */
 
 import type {
@@ -302,7 +304,8 @@ function formatExpectLine(raw: string): string | undefined {
   return `expect ${trimmed}`;
 }
 
-function formatExtractionRule(
+/** Formats one `@extract` / `@sensitive-extract` line, or undefined when disabled/empty. */
+export function formatExtractionRule(
   rule: RequestSourceExtractionRule,
 ): string | undefined {
   if (rule.enabled === false) {
@@ -340,3 +343,4 @@ function formatMultiline(text: string): readonly string[] {
 function singleLine(value: string): string {
   return value.replace(/[\r\n]+/gu, ' ').trim();
 }
+

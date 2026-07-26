@@ -81,7 +81,7 @@ export function buildRunPlan(options: BuildRunPlanOptions): RunPlan {
   }
 
   const planned: PlannedRequest[] = requests.map((request, ordinal) =>
-    toPlannedRequest(request, ordinal),
+    toPlannedRequest(request, ordinal, collection),
   );
 
   return freezeRunPlan({
@@ -150,7 +150,12 @@ function selectRequests(
 function toPlannedRequest(
   request: RequestReference,
   ordinal: number,
+  collection: Collection,
 ): PlannedRequest {
+  const folderRelativePath =
+    request.folderId === undefined
+      ? ''
+      : (collection.folders[request.folderId]?.relativePath ?? '');
   return {
     requestId: request.id,
     collectionId: request.collectionId,
@@ -161,6 +166,7 @@ function toPlannedRequest(
     method: request.method,
     url: request.url,
     ordinal,
+    folderRelativePath,
   };
 }
 

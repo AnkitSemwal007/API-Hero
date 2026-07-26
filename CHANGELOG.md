@@ -7,6 +7,73 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.2] - 2026-07-26
+
+Human-readable request dependencies (Option C), Create Variable / extract polish, and array-root JSON path fixes.
+
+### Added
+
+- **Folder-aware `@depends-on` refs** — bare `@name` when unique, or `Folder/Name` (and `./Name` for root) when the same display name appears in more than one folder ([ADR 0002](docs/architecture/adr/0002-authored-request-ids.md))
+- **Depends-on name picker** in the Request Editor (search, multi-select, folder context); files stay Git-readable
+- **Rename Symbol-style cascade** — renaming a request in the Request Editor rewrites matching `@depends-on` tokens across the collection
+- **Create Variable From Response** polish — Response Viewer actions, workspace/collection extract scopes, Extract tab Collection/Workspace options
+
+### Changed
+
+- Runtime dependency graph still uses discovery IDs only **after** one resolve at plan enrich; execution never compares display names
+- Serialize no longer emits authored `@id` / `req_*` for dependencies; leftover `req_*` tokens reverse-migrate to human refs on save when unique
+
+### Fixed
+
+- Create Variable / Copy Value for JSON **array-root** bodies (`body[0]`, `body[0].id`) via shared `stripBodyPrefix`
+- Leading `@` on depends-on entries (e.g. `@New Request`) stripped so spaced names resolve
+- Host `handleCreateVariable` rejects non-extractable JSON paths before persist
+
+### Unchanged
+
+- Stable `apiRunner.*` command IDs, configuration keys, and Secret Storage patterns
+- Discovery `request:<path>#<index>` remains runtime-only (never written to `@depends-on`)
+
+### Tests
+
+- **727** unit tests passing
+
+## [2.1.1] - 2026-07-26
+
+Response Extraction production readiness — Create Variable From Response and full extract write scopes.
+
+Public production release of the 2.1 line.
+
+### Added
+
+- **Create Variable From Response** — Response Viewer JSON tree context menu (Copy Value, Copy JSON Path, Extract Variable…, Expand/Collapse), Save as variable toolbar action, and confirmation sheet (name, path, scope, sensitive, overwrite warning)
+- **Mode B persistence** — saves `@extract` / `@sensitive-extract` into the request `.api` source and writes the current value via the VariableWriter for the chosen scope
+- **Workspace-scope extraction writes** — `scope=workspace` via `WorkspaceVariableWriter` (ADR-aligned; Global extract remains forbidden)
+- **Collection extract outside collection runs** — `scope=collection` resolves the owning collection from the request source path; collection variable cache refreshes on every persist
+- **Request Editor Extract tab** — Collection and Workspace scopes in the scope picker
+- **Run report consumed variables** — shows declared consumes as `-varName` alongside produced `+varName`
+- **JSON tree metadata** — `data-json-path`, value, type, and extractable gating aligned with supported JSON-path grammar
+
+### Changed
+
+- Response Viewer, variables, and collection-runner user docs for Create-from-Response, workspace extracts, and consumed variables
+- Host-side Copy Value for extractable paths (re-resolves from the last execution result)
+
+### Fixed
+
+- Collection-variable cache stayed stale after outside-run `scope=collection` writes, so the next request could miss the new value
+- Create Variable validation/path failures now surface an error instead of failing silently after the sheet closes
+
+### Unchanged
+
+- Stable `apiRunner.*` command IDs, configuration keys, and Secret Storage patterns
+- Global-scope extraction remains forbidden (manual Variable Manager only)
+- Activity Bar remains **Collections** + **History** only
+
+### Tests
+
+- **684** unit tests passing
+
 ## [2.0.1] - 2026-07-26
 
 Phase 1 + Phase 2 release — response variable extraction and collection chaining.

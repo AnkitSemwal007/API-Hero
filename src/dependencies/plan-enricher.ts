@@ -29,7 +29,7 @@ export interface EnrichRunPlanOptions {
 /**
  * Enriches a membership plan with a dependency graph and (by default)
  * reorders `plan.requests` into topological order. Returns `ok: false` when
- * the graph has a cycle or an `@depends-on` name cannot be resolved uniquely
+ * the graph has a cycle or an `@depends-on` ref cannot be resolved uniquely
  * — callers must not start the run in that case (§6.5).
  */
 export function enrichRunPlanWithDependencies(
@@ -44,9 +44,19 @@ export function enrichRunPlanWithDependencies(
   const labelByRequestId = new Map(
     membershipPlan.requests.map((request) => [request.requestId, request.label]),
   );
+  const folderPathByRequestId = new Map(
+    membershipPlan.requests.map((request) => [
+      request.requestId,
+      request.folderRelativePath ?? '',
+    ]),
+  );
   const originalOrder = membershipPlan.requests.map((request) => request.requestId);
 
-  const graphResult = buildDependencyGraph({ analyses, labelByRequestId });
+  const graphResult = buildDependencyGraph({
+    analyses,
+    labelByRequestId,
+    folderPathByRequestId,
+  });
   if (!graphResult.ok) {
     return { ok: false, code: graphResult.code, message: graphResult.message };
   }
@@ -181,3 +191,4 @@ function formatCyclePath(
     })
     .join(' → ');
 }
+

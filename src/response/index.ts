@@ -70,6 +70,24 @@ export {
 
 } from './viewer-html';
 
-export type { ResponseViewerMessage } from './viewer-html';
+export type {
+  ResponseViewerMessage,
+  ResponseViewerRenderOptions,
+} from './viewer-html';
+
+export {
+  sanitizeVariableName,
+  looksSensitiveForExtract,
+  leafKeyFromJsonPath,
+  CREATE_VARIABLE_DEFAULT_SCOPE,
+  CREATE_VARIABLE_SCOPES,
+} from './create-variable';
+
+export type {
+  ResponseViewerExecutionContext,
+  ResponseViewerServiceOptions,
+} from './response-viewer-service';
+
+export { resolveCreateVariableValue } from './response-viewer-service';
 
 

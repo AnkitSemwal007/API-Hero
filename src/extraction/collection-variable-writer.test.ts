@@ -169,4 +169,56 @@ describe('CollectionVariableWriter', () => {
       assert.equal(result.code, 'PERSIST_FAILED');
     }
   });
+
+  test('resolves collection from source path when run context is inactive', async () => {
+    const store = new FakeCollectionVariableStore();
+    const writer = new CollectionVariableWriter({
+      store,
+      getCollectionRootPath: () => undefined,
+      getCollectionId: () => undefined,
+      resolveCollectionRootPathForSource: (sourceId) =>
+        sourceId.includes('Checkout') ? 'Collections/Checkout' : undefined,
+      collectionIdForRoot: (root) => `collection:${root.toLowerCase()}`,
+    });
+
+    const result = await writer.write({
+      name: 'accessToken',
+      value: 'abc',
+      scope: 'collection',
+      sensitive: false,
+      requestKey: 'request:Collections/Checkout/login.api#0',
+    });
+
+    assert.deepEqual(result, { ok: true });
+    assert.deepEqual(store.upserts, [
+      {
+        collectionRootPath: 'Collections/Checkout',
+        collectionId: 'collection:collections/checkout',
+        variable: { name: 'accessToken', value: 'abc', sensitive: false },
+      },
+    ]);
+  });
+
+  test('prefers active run context over source-path resolution', async () => {
+    const store = new FakeCollectionVariableStore();
+    const writer = new CollectionVariableWriter({
+      store,
+      getCollectionRootPath: () => 'Collections/Active',
+      getCollectionId: () => 'collection:active',
+      resolveCollectionRootPathForSource: () => 'Collections/Other',
+      collectionIdForRoot: () => 'collection:other',
+    });
+
+    const result = await writer.write({
+      name: 'token',
+      value: 'x',
+      scope: 'collection',
+      sensitive: false,
+      requestKey: 'request:Collections/Other/a.api#0',
+    });
+
+    assert.deepEqual(result, { ok: true });
+    assert.equal(store.upserts[0]?.collectionRootPath, 'Collections/Active');
+    assert.equal(store.upserts[0]?.collectionId, 'collection:active');
+  });
 });

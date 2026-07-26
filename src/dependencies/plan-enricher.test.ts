@@ -170,6 +170,40 @@ describe('enrichRunPlanWithDependencies', () => {
     assert.equal(result.code, 'AMBIGUOUS_DEPENDS_ON');
   });
 
+  test('resolves qualified @depends-on via PlannedRequest.folderRelativePath', () => {
+    const membershipPlan = plan([
+      {
+        ...plannedRequest('login', 'Login', 0),
+        folderRelativePath: 'Authentication',
+      },
+      {
+        ...plannedRequest('other', 'Login', 1),
+        folderRelativePath: 'Admin',
+      },
+      plannedRequest('invoice', 'Invoice', 2),
+    ]);
+    const analyses: RequestDependencyAnalysis[] = [
+      { requestId: 'login', produces: [], consumes: [], dependsOnNames: [] },
+      { requestId: 'other', produces: [], consumes: [], dependsOnNames: [] },
+      {
+        requestId: 'invoice',
+        produces: [],
+        consumes: [],
+        dependsOnNames: ['Authentication/Login'],
+      },
+    ];
+
+    const result = enrichRunPlanWithDependencies({ membershipPlan, analyses });
+
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.deepEqual(
+      result.plan.requests.find((request) => request.requestId === 'invoice')
+        ?.dependsOnRequestIds,
+      ['login'],
+    );
+  });
+
   test('records unresolvedConsumes without blocking the run', () => {
     const membershipPlan = plan([plannedRequest('products', 'Products', 0)]);
     const analyses: RequestDependencyAnalysis[] = [

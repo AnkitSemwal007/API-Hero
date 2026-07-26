@@ -150,15 +150,16 @@ discovery.refresh() -> buildRunPlan (membership DFS)
 
 `src/dependencies/**` (framework-free, no `vscode` import) owns graph
 construction: `produces-consumes.ts` (extract + `{{}}` scan),
-`graph-builder.ts` (implicit producer→consumer edges + explicit
-`@depends-on` edges), `cycle-detector.ts`, `topo-sort.ts`, and
-`plan-enricher.ts` (`enrichRunPlanWithDependencies`, the single entry point
-`register-collection-runner.ts` calls). The `@depends-on` directive itself
-(parse, validation diagnostics, hover, `RequestSourceDocument.dependsOn`
-round-trip) lives in the parser / language-support / request-source layers —
-see [request-execution-pipeline.md](./request-execution-pipeline.md) for the
-document model these layers feed. Syntax:
-`@depends-on Login, Products` (comma-separated `@name` labels, same plan).
+`depend-ref.ts` / `graph-builder.ts` (implicit producer→consumer edges +
+explicit `@depends-on` edges resolved from human refs), `cycle-detector.ts`,
+`topo-sort.ts`, and `plan-enricher.ts` (`enrichRunPlanWithDependencies`, the
+single entry point `register-collection-runner.ts` calls). Depend refs are
+parsed/validated in the parser / language-support / request-source layers —
+see [request-execution-pipeline.md](./request-execution-pipeline.md) and
+[ADR 0002](./adr/0002-authored-request-ids.md). Syntax:
+`@depends-on Login` or `@depends-on Authentication/Login` (bare when unique,
+folder-qualified when names collide). Discovery `request:<path>#<index>` ids
+are plan/graph keys only — never persisted in `@depends-on`.
 
 ### Typed extension bags
 

@@ -6,6 +6,7 @@ import {
   methodBadgeClass,
   WEBVIEW_SHARED_CSS,
 } from '../ui/webview';
+import { isExtractableJsonPath } from '../extraction';
 import type {
   PresentedAssertions,
   PresentedExtraction,
@@ -20,9 +21,25 @@ export type ResponseViewerMessage =
   | { readonly type: 'ready' }
   | { readonly type: 'copyBody'; readonly mode: 'pretty' | 'raw' }
   | { readonly type: 'copyHeaders' }
-  | { readonly type: 'saveBody'; readonly mode: 'pretty' | 'raw' };
+  | { readonly type: 'saveBody'; readonly mode: 'pretty' | 'raw' }
+  | { readonly type: 'copyText'; readonly text: string }
+  | { readonly type: 'copyJsonPathValue'; readonly path: string }
+  | {
+      readonly type: 'createVariable';
+      readonly name: string;
+      readonly path: string;
+      readonly scope: string;
+      readonly sensitive: boolean;
+    };
 
 const BODY_MODES = new Set(['pretty', 'raw']);
+const CREATE_VARIABLE_SCOPES = new Set([
+  'environment',
+  'document',
+  'collection',
+  'workspace',
+  'run',
+]);
 /** Cap DOM search highlights to avoid blowups on huge bodies. */
 const RESPONSE_SEARCH_MATCH_LIMIT = 500;
 
@@ -52,13 +69,53 @@ export function parseResponseViewerMessage(
       mode: record.mode as 'pretty' | 'raw',
     };
   }
+  if (
+    keys.length === 2
+    && record.type === 'copyText'
+    && typeof record.text === 'string'
+  ) {
+    return { type: 'copyText', text: record.text };
+  }
+  if (
+    keys.length === 2
+    && record.type === 'copyJsonPathValue'
+    && typeof record.path === 'string'
+  ) {
+    return { type: 'copyJsonPathValue', path: record.path };
+  }
+  if (
+    keys.length === 5
+    && record.type === 'createVariable'
+    && typeof record.name === 'string'
+    && typeof record.path === 'string'
+    && typeof record.scope === 'string'
+    && CREATE_VARIABLE_SCOPES.has(record.scope)
+    && typeof record.sensitive === 'boolean'
+  ) {
+    return {
+      type: 'createVariable',
+      name: record.name,
+      path: record.path,
+      scope: record.scope,
+      sensitive: record.sensitive,
+    };
+  }
   return undefined;
+}
+
+/** Optional Create Variable From Response chrome for the Response Viewer. */
+export interface ResponseViewerRenderOptions {
+  /** When true, show Save as variable / Extract Variable entry points. */
+  readonly enableCreateVariable?: boolean;
+  /** Names already known (any scope) for overwrite warnings in the sheet. */
+  readonly knownVariableNames?: readonly string[];
 }
 
 /** Builds a self-contained response document with no remote resource access. */
 export function renderResponseViewerHtml(
   model: ResponsePresentation,
   nonce: string,
+  options: ResponseViewerRenderOptions = {},
 ): string {
   const safeNonce = escapeAttribute(nonce);
   return `<!doctype html>
@@ -70,10 +127,10 @@ export function renderResponseViewerHtml(
 <title>API Response</title>
 <style nonce="${safeNonce}">${VIEWER_CSS}</style>
 </head>
-<body>
+<body data-enable-create-variable="${options.enableCreateVariable === true ? 'true' : 'false'}" data-known-variables="${escapeAttribute(JSON.stringify(options.knownVariableNames ?? []))}">
 <main>
   ${renderStatusCard(model)}
-  ${model.failure === undefined ? renderSuccess(model) : renderFailure(model)}
+  ${model.failure === undefined ? renderSuccess(model, options) : renderFailure(model)}
 </main>
 <script nonce="${safeNonce}">${VIEWER_SCRIPT}</script>
 </body>
@@ -131,7 +188,10 @@ function renderStatusCard(model: ResponsePresentation): string {
   </header>`;
 }
 
-function renderSuccess(model: ResponsePresentation): string {
+function renderSuccess(
+  model: ResponsePresentation,
+  options: ResponseViewerRenderOptions,
+): string {
   const showCookies = model.cookies.available;
   const showAssertions = model.assertions !== undefined;
   const showExtraction = model.extraction !== undefined;
@@ -164,7 +224,7 @@ function renderSuccess(model: ResponsePresentation): string {
     ${tabs.map((tab) => `<button type="button" role="tab" id="tab-${tab.id}" data-tab="${tab.id}" aria-controls="panel-${tab.id}" aria-selected="${tab.selected}" tabindex="${tab.selected ? '0' : '-1'}"${tab.selected ? ' class="active"' : ''}>${escapeHtml(tab.label)}</button>`).join('')}
   </nav>
   <section id="panel-body" class="tab-panel" role="tabpanel" aria-labelledby="tab-body"${tabs[0]?.id === 'body' ? '' : ' hidden'}>
-    ${renderBody(model.body)}
+    ${renderBody(model.body, options)}
   </section>
   <section id="panel-headers" class="tab-panel" role="tabpanel" aria-labelledby="tab-headers" hidden>
     ${renderHeaders(model)}
@@ -176,7 +236,8 @@ function renderSuccess(model: ResponsePresentation): string {
     ${stat('Final URL', model.statistics.finalUrl ?? 'Unknown')}
     ${stat('Started', model.statistics.startedAt)}
     ${stat('Completed', model.statistics.completedAt)}
-  </aside>`;
+  </aside>
+  ${options.enableCreateVariable === true ? renderCreateVariableChrome() : ''}`;
 }
 
 function renderFailure(model: ResponsePresentation): string {
@@ -320,7 +381,10 @@ function renderExtraction(extraction: PresentedExtraction): string {
   <ul class="assert-list">${rows}</ul>`;
 }
 
-function renderBody(body: ResponseBodyPresentation | undefined): string {
+function renderBody(
+  body: ResponseBodyPresentation | undefined,
+  options: ResponseViewerRenderOptions = {},
+): string {
   if (body === undefined) {
     return '<div class="empty-state"><strong>No response body</strong><span>This response did not include a body to display.</span></div>';
   }
@@ -330,6 +394,12 @@ function renderBody(body: ResponseBodyPresentation | undefined): string {
   const pretty = body.language === 'json' && body.prettyAvailable
     ? renderJsonTree(body.pretty)
     : `<pre tabindex="0"><code>${highlight(body.pretty, body.language)}</code></pre>`;
+  const saveAsVariable =
+    options.enableCreateVariable === true
+    && body.language === 'json'
+    && body.prettyAvailable
+      ? '<button type="button" data-action="saveAsVariable" id="saveAsVariableBtn" title="Save selected JSON leaf as a variable" disabled>Save as variable</button>'
+      : '';
   return `<div class="panel-toolbar body-toolbar">
     <div class="toolbar" role="group" aria-label="Body view">
       <button type="button" class="active" data-mode="pretty" aria-pressed="true">Pretty</button>
@@ -344,6 +414,7 @@ function renderBody(body: ResponseBodyPresentation | undefined): string {
         <input type="search" id="bodySearch" placeholder="Search" autocomplete="off" spellcheck="false" />
       </label>
       <span id="searchStatus" class="search-status muted" aria-live="polite"></span>
+      ${saveAsVariable}
       <button type="button" data-action="copyBody" title="Copy body">Copy</button>
       <button type="button" data-action="saveBody" title="${body.truncated ? 'Save unavailable for truncated preview' : 'Save body'}"${body.truncated ? ' disabled' : ''}>Save</button>
     </div>
@@ -361,29 +432,131 @@ function renderJsonTree(pretty: string): string {
     return `<pre tabindex="0"><code>${highlight(pretty.slice(0, RESPONSE_TEXT_PREVIEW_LIMIT), 'json')}</code></pre>`;
   }
   try {
-    return `<div class="json-tree" role="tree">${renderJsonValue(JSON.parse(pretty) as unknown, 'root', 0)}</div>`;
+    return `<div class="json-tree" role="tree">${renderJsonValue(JSON.parse(pretty) as unknown, 'root', 0, 'body')}</div>`;
   } catch {
     return `<pre tabindex="0"><code>${highlight(pretty, 'json')}</code></pre>`;
   }
 }
 
-function renderJsonValue(value: unknown, label: string, depth: number): string {
+function renderJsonValue(
+  value: unknown,
+  label: string,
+  depth: number,
+  path: string,
+): string {
+  const jsonType = describeJsonType(value);
+  const isScalar =
+    jsonType === 'string'
+    || jsonType === 'number'
+    || jsonType === 'boolean'
+    || jsonType === 'null';
+  const extractable = isScalar && isExtractableJsonPath(path);
+  const metaAttrs = [
+    `data-json-path="${escapeAttribute(path)}"`,
+    `data-json-type="${jsonType}"`,
+    ...(isScalar
+      ? [
+          `data-json-value="${escapeAttribute(stringifyPrimitive(value))}"`,
+          `data-json-extractable="${extractable ? 'true' : 'false'}"`,
+        ]
+      : []),
+  ].join(' ');
   const key = label === 'root'
     ? ''
     : `<span class="token-key">${escapeHtml(JSON.stringify(label))}</span><span>: </span>`;
   if (value !== null && typeof value === 'object') {
     if (depth >= JSON_TREE_MAX_DEPTH) {
       const preview = safeJsonPreview(value);
-      return `<div class="json-leaf" role="treeitem">${key}<span class="token-punctuation">${highlight(preview, 'json')}</span></div>`;
+      return `<div class="json-leaf" role="treeitem" ${metaAttrs}>${key}<span class="token-punctuation">${highlight(preview, 'json')}</span></div>`;
     }
-    const entries = Array.isArray(value)
+    const isArray = Array.isArray(value);
+    const entries = isArray
       ? value.map((item, index) => [String(index), item] as const)
       : Object.entries(value);
     const open = depth < 2 ? ' open' : '';
-    const kind = Array.isArray(value) ? 'Array' : 'Object';
-    return `<details${open} role="treeitem"><summary>${key}<span class="token-punctuation">${kind}(${entries.length})</span></summary><div class="json-children" role="group">${entries.map(([childLabel, child]) => renderJsonValue(child, childLabel, depth + 1)).join('')}</div></details>`;
+    const kind = isArray ? 'Array' : 'Object';
+    return `<details${open} role="treeitem" class="json-node" ${metaAttrs}><summary>${key}<span class="token-punctuation">${kind}(${entries.length})</span></summary><div class="json-children" role="group">${entries.map(([childLabel, child]) => {
+      const childPath = isArray
+        ? `${path}[${childLabel}]`
+        : `${path}.${childLabel}`;
+      return renderJsonValue(child, childLabel, depth + 1, childPath);
+    }).join('')}</div></details>`;
   }
-  return `<div class="json-leaf" role="treeitem">${key}${jsonPrimitive(value)}</div>`;
+  return `<div class="json-leaf json-selectable" role="treeitem" tabindex="0" ${metaAttrs}>${key}${jsonPrimitive(value)}</div>`;
+}
+
+function describeJsonType(
+  value: unknown,
+): 'string' | 'number' | 'boolean' | 'null' | 'object' | 'array' {
+  if (value === null) {
+    return 'null';
+  }
+  if (Array.isArray(value)) {
+    return 'array';
+  }
+  if (typeof value === 'object') {
+    return 'object';
+  }
+  if (typeof value === 'string') {
+    return 'string';
+  }
+  if (typeof value === 'number') {
+    return 'number';
+  }
+  if (typeof value === 'boolean') {
+    return 'boolean';
+  }
+  return 'null';
+}
+
+function stringifyPrimitive(value: unknown): string {
+  if (value === null) {
+    return 'null';
+  }
+  if (typeof value === 'string') {
+    return value;
+  }
+  return String(value);
+}
+
+function renderCreateVariableChrome(): string {
+  return `
+<nav id="jsonContextMenu" class="json-context-menu" hidden role="menu" aria-label="JSON node actions">
+  <button type="button" role="menuitem" data-menu="copyValue">Copy Value</button>
+  <button type="button" role="menuitem" data-menu="copyPath">Copy JSON Path</button>
+  <button type="button" role="menuitem" data-menu="extract">Extract Variable…</button>
+  <button type="button" role="menuitem" data-menu="expand" hidden>Expand</button>
+  <button type="button" role="menuitem" data-menu="collapse" hidden>Collapse</button>
+</nav>
+<div id="createVariableSheet" class="create-var-sheet" hidden role="dialog" aria-modal="true" aria-labelledby="createVarTitle">
+  <div class="create-var-card">
+    <h2 id="createVarTitle">Extract Variable</h2>
+    <label class="field"><span>Variable name</span><input id="createVarName" type="text" autocomplete="off" spellcheck="false" /></label>
+    <label class="field"><span>Path</span>
+      <div class="path-row">
+        <input id="createVarPath" type="text" readonly />
+        <button type="button" id="createVarCopyPath" class="secondary" title="Copy path">Copy</button>
+      </div>
+    </label>
+    <label class="field"><span>Scope</span>
+      <select id="createVarScope">
+        <option value="environment" selected>Environment</option>
+        <option value="document">Request</option>
+        <option value="collection">Collection</option>
+        <option value="workspace">Workspace</option>
+        <option value="run">Run</option>
+      </select>
+    </label>
+    <label class="field check"><input id="createVarSensitive" type="checkbox" /> <span>Sensitive</span></label>
+    <label class="field"><span>Value preview</span><input id="createVarPreview" type="text" readonly /></label>
+    <p id="createVarOverwrite" class="notice" hidden>A variable with this name already exists and will be overwritten.</p>
+    <p id="createVarError" class="error" hidden></p>
+    <div class="create-var-actions">
+      <button type="button" id="createVarCancel" class="secondary">Cancel</button>
+      <button type="button" id="createVarConfirm">Save extract rule</button>
+    </div>
+  </div>
+</div>`;
 }
 
 /** Serializes a deep subtree to a bounded, safe preview string. */
@@ -614,6 +787,44 @@ dd { margin: 0; overflow-wrap: anywhere; }
 .json-children { padding-left: 18px; border-left: 1px solid var(--vscode-tree-indentGuidesStroke); }
 .json-leaf, .json-tree summary { min-height: 1.45em; }
 .json-tree summary { cursor: pointer; }
+.json-leaf.json-selectable { cursor: pointer; border-radius: 2px; }
+.json-leaf.json-selectable:hover, .json-leaf.json-selectable:focus-visible,
+.json-leaf.json-selected { background: var(--vscode-list-hoverBackground); outline: none; }
+.json-leaf.json-selected { background: var(--vscode-list-activeSelectionBackground); color: var(--vscode-list-activeSelectionForeground); }
+.json-context-menu {
+  position: fixed; z-index: 40; min-width: 180px; padding: 4px 0;
+  background: var(--vscode-menu-background, var(--vscode-editorWidget-background));
+  color: var(--vscode-menu-foreground, var(--vscode-foreground));
+  border: 1px solid var(--vscode-menu-border, var(--vscode-panel-border));
+  border-radius: var(--ah-radius); box-shadow: 0 4px 16px rgba(0,0,0,.25);
+}
+.json-context-menu button {
+  display: block; width: 100%; text-align: left; border: 0; background: transparent;
+  color: inherit; padding: 6px 12px; border-radius: 0;
+}
+.json-context-menu button:hover, .json-context-menu button:focus-visible {
+  background: var(--vscode-menu-selectionBackground, var(--vscode-list-activeSelectionBackground));
+  color: var(--vscode-menu-selectionForeground, var(--vscode-list-activeSelectionForeground));
+}
+.json-context-menu button:disabled { opacity: .45; }
+.create-var-sheet {
+  position: fixed; inset: 0; z-index: 50; display: grid; place-items: center;
+  background: rgba(0,0,0,.45); padding: var(--ah-space-4);
+}
+.create-var-sheet[hidden] { display: none !important; }
+.create-var-card {
+  width: min(420px, 100%); max-height: 90vh; overflow: auto;
+  background: var(--vscode-editorWidget-background, var(--vscode-sideBar-background));
+  border: 1px solid var(--vscode-panel-border); border-radius: var(--ah-radius);
+  padding: var(--ah-space-4); display: grid; gap: var(--ah-space-3);
+}
+.create-var-card h2 { margin: 0; font-size: 1.05rem; }
+.create-var-card .field { display: grid; gap: 4px; }
+.create-var-card .field.check { grid-template-columns: auto 1fr; align-items: center; gap: 8px; }
+.create-var-card .path-row { display: flex; gap: 6px; }
+.create-var-card .path-row input { flex: 1; min-width: 0; }
+.create-var-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.create-var-card .error { color: var(--vscode-errorForeground); margin: 0; }
 mark.search-hit {
   background: var(--vscode-editor-findMatchHighlightBackground, rgba(234, 92, 0, .33));
   color: inherit; border-radius: 1px;
@@ -859,6 +1070,223 @@ const VIEWER_SCRIPT = `
       return;
     }
     searchStatus.textContent = (matchIndex + 1) + ' of ' + matches.length;
+  }
+
+  // --- Create Variable From Response (ADR §12) ---
+  const createEnabled = document.body.dataset.enableCreateVariable === 'true';
+  let knownNames = [];
+  try {
+    knownNames = JSON.parse(document.body.dataset.knownVariables || '[]');
+  } catch (_) {
+    knownNames = [];
+  }
+  let selectedNode = null;
+  const menu = document.getElementById('jsonContextMenu');
+  const sheet = document.getElementById('createVariableSheet');
+  const saveAsBtn = document.getElementById('saveAsVariableBtn');
+  const nameInput = document.getElementById('createVarName');
+  const pathInput = document.getElementById('createVarPath');
+  const scopeSelect = document.getElementById('createVarScope');
+  const sensitiveInput = document.getElementById('createVarSensitive');
+  const previewInput = document.getElementById('createVarPreview');
+  const overwriteEl = document.getElementById('createVarOverwrite');
+  const errorEl = document.getElementById('createVarError');
+
+  function isScalarType(type) {
+    return type === 'string' || type === 'number' || type === 'boolean' || type === 'null';
+  }
+
+  function sanitizeName(raw) {
+    let name = String(raw || '').trim().replace(/[^A-Za-z0-9_.-]/g, '_');
+    if (/^[0-9]/.test(name)) name = 'v_' + name;
+    if (!/^[A-Za-z_][A-Za-z0-9_.-]*$/.test(name) || name.length === 0) return 'extracted';
+    return name;
+  }
+
+  function leafKey(path) {
+    const trimmed = String(path || '').trim();
+    const without = trimmed.toLowerCase().startsWith('body.')
+      ? trimmed.slice(5)
+      : (trimmed.toLowerCase() === 'body' ? '' : trimmed);
+    if (!without) return 'body';
+    const bracket = without.lastIndexOf('[');
+    const dot = without.lastIndexOf('.');
+    if (bracket > dot) {
+      const m = /^\\[(\\d+)\\]$/.exec(without.slice(bracket));
+      return m ? m[1] : 'item';
+    }
+    if (dot >= 0) return without.slice(dot + 1) || 'extracted';
+    return without;
+  }
+
+  function looksSensitive(name, path) {
+    return /(token|secret|password|api[_-]?key|authorization)/i.test(name + ' ' + path);
+  }
+
+  function selectNode(node) {
+    if (selectedNode) selectedNode.classList.remove('json-selected');
+    selectedNode = node;
+    if (node) node.classList.add('json-selected');
+    if (saveAsBtn) {
+      const type = node?.dataset.jsonType;
+      const extractable = node?.dataset.jsonExtractable === 'true';
+      saveAsBtn.disabled = !(node && isScalarType(type) && extractable);
+    }
+  }
+
+  function hideMenu() {
+    if (menu) menu.hidden = true;
+  }
+
+  function openSheet(node) {
+    if (!createEnabled || !sheet || !node) return;
+    const path = node.dataset.jsonPath || '';
+    const type = node.dataset.jsonType || '';
+    if (!isScalarType(type) || node.dataset.jsonExtractable !== 'true') return;
+    const value = node.dataset.jsonValue ?? '';
+    const defaultName = sanitizeName(leafKey(path));
+    if (nameInput) nameInput.value = defaultName;
+    if (pathInput) pathInput.value = path;
+    if (scopeSelect) scopeSelect.value = 'environment';
+    if (sensitiveInput) sensitiveInput.checked = looksSensitive(defaultName, path);
+    updatePreview();
+    updateOverwrite();
+    if (errorEl) { errorEl.hidden = true; errorEl.textContent = ''; }
+    sheet.hidden = false;
+    nameInput?.focus();
+  }
+
+  function closeSheet() {
+    if (sheet) sheet.hidden = true;
+  }
+
+  function updatePreview() {
+    if (!previewInput || !selectedNode) return;
+    const sensitive = sensitiveInput?.checked === true;
+    const value = selectedNode.dataset.jsonValue ?? '';
+    previewInput.value = sensitive ? '••••••••' : value;
+  }
+
+  function updateOverwrite() {
+    if (!overwriteEl || !nameInput) return;
+    const name = nameInput.value.trim();
+    const known = Array.isArray(knownNames) && knownNames.includes(name);
+    overwriteEl.hidden = !known;
+  }
+
+  function nodeFromEventTarget(target) {
+    if (!(target instanceof Element)) return null;
+    return target.closest('[data-json-path]');
+  }
+
+  if (createEnabled) {
+    document.querySelector('.json-tree')?.addEventListener('click', (event) => {
+      const node = nodeFromEventTarget(event.target);
+      if (!node || !(node instanceof HTMLElement)) return;
+      if (node.tagName === 'DETAILS') return;
+      selectNode(node);
+    });
+
+    document.querySelector('.json-tree')?.addEventListener('contextmenu', (event) => {
+      const node = nodeFromEventTarget(event.target);
+      if (!node || !(node instanceof HTMLElement) || !menu) return;
+      event.preventDefault();
+      selectNode(node);
+      const type = node.dataset.jsonType || '';
+      const scalar = isScalarType(type);
+      const extractable = node.dataset.jsonExtractable === 'true';
+      const isDetails = node.tagName === 'DETAILS';
+      const extractBtn = menu.querySelector('[data-menu="extract"]');
+      const expandBtn = menu.querySelector('[data-menu="expand"]');
+      const collapseBtn = menu.querySelector('[data-menu="collapse"]');
+      if (extractBtn) extractBtn.disabled = !scalar || !extractable;
+      if (expandBtn) {
+        expandBtn.hidden = !isDetails;
+        expandBtn.disabled = !isDetails || node.open;
+      }
+      if (collapseBtn) {
+        collapseBtn.hidden = !isDetails;
+        collapseBtn.disabled = !isDetails || !node.open;
+      }
+      menu.hidden = false;
+      menu.style.left = Math.min(event.clientX, window.innerWidth - 200) + 'px';
+      menu.style.top = Math.min(event.clientY, window.innerHeight - 160) + 'px';
+    });
+
+    document.addEventListener('click', (event) => {
+      if (menu && !menu.hidden && event.target instanceof Node && !menu.contains(event.target)) {
+        hideMenu();
+      }
+    });
+
+    menu?.addEventListener('click', (event) => {
+      const btn = event.target instanceof Element ? event.target.closest('[data-menu]') : null;
+      if (!btn || !(btn instanceof HTMLElement) || !selectedNode) return;
+      const action = btn.dataset.menu;
+      hideMenu();
+      if (action === 'copyValue') {
+        const path = selectedNode.dataset.jsonPath ?? '';
+        if (selectedNode.dataset.jsonExtractable === 'true') {
+          vscode.postMessage({ type: 'copyJsonPathValue', path });
+        } else {
+          // Non-identifier keys cannot be re-resolved via json-path grammar.
+          vscode.postMessage({ type: 'copyText', text: selectedNode.dataset.jsonValue ?? '' });
+        }
+      } else if (action === 'copyPath') {
+        vscode.postMessage({ type: 'copyText', text: selectedNode.dataset.jsonPath ?? '' });
+      } else if (action === 'extract') {
+        openSheet(selectedNode);
+      } else if (action === 'expand' && selectedNode.tagName === 'DETAILS') {
+        selectedNode.open = true;
+      } else if (action === 'collapse' && selectedNode.tagName === 'DETAILS') {
+        selectedNode.open = false;
+      }
+    });
+
+    saveAsBtn?.addEventListener('click', () => {
+      if (selectedNode) openSheet(selectedNode);
+    });
+
+    nameInput?.addEventListener('input', () => {
+      updateOverwrite();
+      if (sensitiveInput && !sensitiveInput.dataset.touched) {
+        sensitiveInput.checked = looksSensitive(nameInput.value, pathInput?.value || '');
+        updatePreview();
+      }
+    });
+    sensitiveInput?.addEventListener('change', () => {
+      sensitiveInput.dataset.touched = '1';
+      updatePreview();
+    });
+    document.getElementById('createVarCopyPath')?.addEventListener('click', () => {
+      vscode.postMessage({ type: 'copyText', text: pathInput?.value || '' });
+    });
+    document.getElementById('createVarCancel')?.addEventListener('click', closeSheet);
+    sheet?.addEventListener('click', (event) => {
+      if (event.target === sheet) closeSheet();
+    });
+    document.getElementById('createVarConfirm')?.addEventListener('click', () => {
+      const name = (nameInput?.value || '').trim();
+      const path = (pathInput?.value || '').trim();
+      const scope = scopeSelect?.value || 'environment';
+      const sensitive = sensitiveInput?.checked === true;
+      if (!/^[A-Za-z_][A-Za-z0-9_.-]*$/.test(name)) {
+        if (errorEl) {
+          errorEl.hidden = false;
+          errorEl.textContent = 'Enter a valid variable name (letters, digits, _, ., -).';
+        }
+        return;
+      }
+      if (!path) {
+        if (errorEl) {
+          errorEl.hidden = false;
+          errorEl.textContent = 'Path is required.';
+        }
+        return;
+      }
+      vscode.postMessage({ type: 'createVariable', name, path, scope, sensitive });
+      closeSheet();
+    });
   }
 })();
 `;

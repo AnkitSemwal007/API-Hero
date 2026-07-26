@@ -94,6 +94,11 @@ export interface RequestSourceDocument {
   readonly method: RequestSourceMethod;
   /** Base URL without query string; query params are applied separately. */
   readonly url: string;
+  /**
+   * Legacy `@id` when still present on disk. Not emitted on serialize
+   * (ADR 0002 Option C). Kept optional for parse/round-trip of older files.
+   */
+  readonly id?: string;
   readonly description?: string;
   /** Authentication profile id for `@auth`. */
   readonly authProfileId?: string;
@@ -107,7 +112,10 @@ export interface RequestSourceDocument {
   readonly expectLines?: readonly string[];
   readonly variables?: readonly RequestSourceVariable[];
   readonly extractionRules?: readonly RequestSourceExtractionRule[];
-  /** Request `@name` labels listed by `@depends-on` (display names), in authored order. */
+  /**
+   * `@depends-on` tokens in authored order — bare `@name` or `Folder/Name`
+   * (ADR 0002). Never discovery `request:<path>#<index>` or opaque `req_*`.
+   */
   readonly dependsOn?: readonly string[];
   /**
    * Optional `@timeout` in milliseconds. Omitted from source when undefined.

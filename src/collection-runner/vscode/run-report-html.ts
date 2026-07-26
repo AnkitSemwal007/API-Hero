@@ -44,6 +44,7 @@ export interface CollectionRunReportRow {
   readonly isFailure: boolean;
   /** `+accessToken, +userId` — extracted variable names only, never values (§10.1). */
   readonly producedVariablesLabel?: string;
+  readonly consumedVariablesLabel?: string;
   /** Secret-free reason a dependent request was skipped (§10.1, §6.7). */
   readonly skipReason?: string;
 }
@@ -160,9 +161,17 @@ export function buildCollectionRunReportModel(
         const producedVariablesLabel = formatProducedVariablesLabel(
           result.producedVariables,
         );
-        return producedVariablesLabel === undefined
-          ? {}
-          : { producedVariablesLabel };
+        const consumedVariablesLabel = formatConsumedVariablesLabel(
+          result.consumedVariables,
+        );
+        return {
+          ...(producedVariablesLabel === undefined
+            ? {}
+            : { producedVariablesLabel }),
+          ...(consumedVariablesLabel === undefined
+            ? {}
+            : { consumedVariablesLabel }),
+        };
       })(),
       ...(result.skipReason === undefined
         ? {}
@@ -327,6 +336,15 @@ function formatProducedVariablesLabel(
     return undefined;
   }
   return producedVariables.map((name) => `+${name}`).join(', ');
+}
+
+function formatConsumedVariablesLabel(
+  consumedVariables: readonly string[] | undefined,
+): string | undefined {
+  if (consumedVariables === undefined || consumedVariables.length === 0) {
+    return undefined;
+  }
+  return consumedVariables.map((name) => `-${name}`).join(', ');
 }
 
 /** Formats one dependency edge as text, e.g. `Login → Products (accessToken)` (§10.1). */
@@ -495,6 +513,11 @@ td.assertions-fail { color: var(--vscode-testing-iconFailed, var(--vscode-errorF
   font-size: .85em; overflow-wrap: anywhere; margin-top: 2px;
   font-family: var(--vscode-editor-font-family, var(--vscode-font-family));
 }
+.vars-consumed {
+  color: var(--vscode-descriptionForeground);
+  font-size: .85em; overflow-wrap: anywhere; margin-top: 2px;
+  font-family: var(--vscode-editor-font-family, var(--vscode-font-family));
+}
 .row-actions { display: flex; gap: var(--ah-space-1); flex-wrap: wrap; white-space: nowrap; }
 .row-actions button { padding: 2px 8px; font-size: .9em; }
 input[type="checkbox"] { accent-color: var(--vscode-focusBorder); }
@@ -589,13 +612,16 @@ const REPORT_SCRIPT = `
           const producedVariables = row.producedVariablesLabel
             ? '<div class="vars-produced">' + escapeHtml(row.producedVariablesLabel) + '</div>'
             : '';
+          const consumedVariables = row.consumedVariablesLabel
+            ? '<div class="vars-consumed">' + escapeHtml(row.consumedVariablesLabel) + '</div>'
+            : '';
           return '<tr data-request-id="' + escapeAttribute(row.requestId) + '" tabindex="0"' +
             (row.isFailure ? ' class="row-fail"' : '') + '>' +
             '<td>' + escapeHtml(String(row.ordinal + 1)) + '</td>' +
             '<td><span class="status-badge ' + escapeAttribute(row.statusBadgeClass) + '">' +
               escapeHtml(row.statusBadgeText) + '</span></td>' +
             '<td class="request-cell"><div class="label">' + escapeHtml(row.label) + '</div>' +
-              meta + producedVariables + message + '</td>' +
+              meta + producedVariables + consumedVariables + message + '</td>' +
             '<td>' + escapeHtml(row.durationLabel) + '</td>' +
             '<td class="' + (row.isFailure && row.assertionsLabel && /fail/i.test(row.assertionsLabel) ? 'assertions-fail' : '') + '">' + escapeHtml(row.assertionsLabel) + '</td>' +
             '<td class="row-actions">' +

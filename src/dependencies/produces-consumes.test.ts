@@ -86,6 +86,31 @@ describe('analyzeProducesConsumesForDocument', () => {
     assert.deepEqual(analysis.dependsOnNames, ['Login', 'Products']);
   });
 
+  test('collects qualified Folder/Name tokens from @depends-on', () => {
+    const text = [
+      '@name Invoice',
+      '@depends-on Authentication/Login, Products',
+      'GET {{host}}/invoices',
+      '',
+    ].join('\n');
+    const analysis = analyze(text);
+    assert.deepEqual(analysis.dependsOnNames, [
+      'Authentication/Login',
+      'Products',
+    ]);
+  });
+
+  test('strips leading @ from @depends-on entries including spaced names', () => {
+    const text = [
+      '@name Invoice',
+      '@depends-on @New Request, @Login',
+      'GET {{host}}/invoices',
+      '',
+    ].join('\n');
+    const analysis = analyze(text);
+    assert.deepEqual(analysis.dependsOnNames, ['New Request', 'Login']);
+  });
+
   test('returns an empty analysis when no request exists at offset', () => {
     const analysis = analyze('', 0);
     assert.deepEqual(analysis, {

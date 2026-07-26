@@ -22,4 +22,6 @@ export const VALIDATION_DIAGNOSTIC_CODES = Object.freeze({
   dependsOnAmbiguousTarget: 'dependencies.ambiguous-target',
   dependsOnDuplicateName: 'dependencies.duplicate-name',
   dependsOnSelfDepends: 'dependencies.self-depends',
+  nameContainsPathSeparator: 'dependencies.name-contains-path-separator',
+  duplicateNameInFolder: 'dependencies.duplicate-name-in-folder',
 } as const);

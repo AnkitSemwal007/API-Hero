@@ -10,9 +10,78 @@
  * Missing paths return `{ found: false }` without throwing.
  */
 
+/** Property-name segment grammar used by {@link resolveJsonPath}. */
+const JSON_PATH_PROPERTY = /^[A-Za-z_][\w-]*$/u;
+
 export type JsonPathResolution =
   | { readonly found: true; readonly value: unknown }
   | { readonly found: false; readonly reason: string };
+
+/**
+ * Strips a leading `body` prefix from a response-relative JSON path:
+ * - `body` → `''`
+ * - `body.foo` → `foo`
+ * - `body[0]` → `[0]` (bracket kept — array-root bodies)
+ * - anything else → the trimmed path, unchanged
+ */
+export function stripBodyPrefix(path: string): string {
+  const trimmed = path.trim();
+  const lower = trimmed.toLowerCase();
+  if (lower === 'body') {
+    return '';
+  }
+  if (lower.startsWith('body.')) {
+    return trimmed.slice(5);
+  }
+  if (lower.startsWith('body[')) {
+    return trimmed.slice(4);
+  }
+  return trimmed;
+}
+
+/**
+ * Returns true when every property segment in `path` matches the json-path
+ * identifier grammar (`^[A-Za-z_][\w-]*$`). Numeric indices are allowed.
+ * Leading `body.` / `body[` / bare `body` are accepted. Paths with spaces,
+ * quoted keys, or other non-identifier property names return false.
+ */
+export function isExtractableJsonPath(path: string): boolean {
+  let remaining = stripBodyPrefix(path);
+  if (remaining.length === 0) {
+    return true;
+  }
+
+  while (remaining.length > 0) {
+    if (remaining.startsWith('.')) {
+      remaining = remaining.slice(1);
+      continue;
+    }
+
+    if (remaining === 'length' || remaining.startsWith('length.')) {
+      if (remaining === 'length') {
+        return true;
+      }
+      return false;
+    }
+
+    const indexMatch = /^\[(\d+)\](.*)$/u.exec(remaining);
+    if (indexMatch !== null) {
+      remaining = indexMatch[2] ?? '';
+      continue;
+    }
+
+    const propMatch = /^([A-Za-z_][\w-]*)(.*)$/u.exec(remaining);
+    if (propMatch === null) {
+      return false;
+    }
+    const property = propMatch[1]!;
+    if (!JSON_PATH_PROPERTY.test(property)) {
+      return false;
+    }
+    remaining = propMatch[2] ?? '';
+  }
+  return true;
+}
 
 export function resolveJsonPath(
   root: unknown,
@@ -23,11 +92,8 @@ export function resolveJsonPath(
   }
 
   let current: unknown = root;
-  let remaining = path.trim();
-  // Allow a leading "body." that callers may leave on the path.
-  if (remaining.toLowerCase().startsWith('body.')) {
-    remaining = remaining.slice(5);
-  }
+  // Allow a leading "body" / "body." / "body[" that callers may leave on the path.
+  let remaining = stripBodyPrefix(path);
 
   while (remaining.length > 0) {
     if (remaining.startsWith('.')) {

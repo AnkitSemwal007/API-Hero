@@ -20,6 +20,10 @@ export interface RequestDependencyAnalysis {
   readonly requestId: string;
   readonly produces: readonly string[];
   readonly consumes: readonly string[];
+  /**
+   * Tokens from `@depends-on` in authored order — bare `@name` or
+   * `Folder/Name` human refs (ADR 0002). Never discovery path#index or `req_*`.
+   */
   readonly dependsOnNames: readonly string[];
 }
 
