@@ -8,6 +8,7 @@ import {
   isValidVariableName,
   maskEnvironmentManagerState,
   parseEnvironmentManagerMessage,
+  renameSelectedEnvironment,
   renderEnvironmentManagerHtml,
   restoreEnvironmentManagerState,
   validateEnvironmentManagerState,
@@ -172,6 +173,92 @@ describe('environment-manager-html', () => {
     );
   });
 
+  test('renameSelectedEnvironment reallocates id and selection', () => {
+    const state: EnvironmentManagerState = {
+      environments: [
+        { id: 'new-environment', name: 'New Environment', variables: [] },
+      ],
+      globalVariables: [],
+      workspaceVariables: [],
+      selectedId: 'new-environment',
+    };
+    const renamed = renameSelectedEnvironment(state, 'Dummy');
+    assert.equal(renamed.environments[0]?.id, 'dummy');
+    assert.equal(renamed.environments[0]?.name, 'Dummy');
+    assert.equal(renamed.selectedId, 'dummy');
+  });
+
+  test('renameSelectedEnvironment updates activeEnvironmentId when it matched', () => {
+    const state: EnvironmentManagerState = {
+      environments: [
+        { id: 'new-environment', name: 'New Environment', variables: [] },
+      ],
+      globalVariables: [],
+      workspaceVariables: [],
+      selectedId: 'new-environment',
+      activeEnvironmentId: 'new-environment',
+    };
+    const renamed = renameSelectedEnvironment(state, 'Dummy');
+    assert.equal(renamed.activeEnvironmentId, 'dummy');
+    assert.equal(renamed.selectedId, 'dummy');
+  });
+
+  test('renameSelectedEnvironment leaves unrelated activeEnvironmentId alone', () => {
+    const state: EnvironmentManagerState = {
+      environments: [
+        { id: 'prod', name: 'Prod', variables: [] },
+        { id: 'new-environment', name: 'New Environment', variables: [] },
+      ],
+      globalVariables: [],
+      workspaceVariables: [],
+      selectedId: 'new-environment',
+      activeEnvironmentId: 'prod',
+    };
+    const renamed = renameSelectedEnvironment(state, 'Dummy');
+    assert.equal(renamed.activeEnvironmentId, 'prod');
+    assert.equal(renamed.selectedId, 'dummy');
+  });
+
+  test('renameSelectedEnvironment uniquifies against other env ids', () => {
+    const state: EnvironmentManagerState = {
+      environments: [
+        { id: 'dummy', name: 'Dummy', variables: [] },
+        { id: 'new-environment', name: 'New Environment', variables: [] },
+      ],
+      globalVariables: [],
+      workspaceVariables: [],
+      selectedId: 'new-environment',
+    };
+    const renamed = renameSelectedEnvironment(state, 'Dummy');
+    assert.equal(renamed.environments[1]?.id, 'dummy-2');
+    assert.equal(renamed.environments[1]?.name, 'Dummy');
+    assert.equal(renamed.selectedId, 'dummy-2');
+    assert.equal(renamed.environments[0]?.id, 'dummy');
+  });
+
+  test('renameSelectedEnvironment ignores global and workspace selection', () => {
+    const globalState: EnvironmentManagerState = {
+      environments: [{ id: 'dev', name: 'Dev', variables: [] }],
+      globalVariables: [],
+      workspaceVariables: [],
+      selectedId: 'global',
+      activeEnvironmentId: 'dev',
+    };
+    assert.deepEqual(
+      renameSelectedEnvironment(globalState, 'Dummy'),
+      globalState,
+    );
+
+    const workspaceState: EnvironmentManagerState = {
+      ...globalState,
+      selectedId: 'workspace',
+    };
+    assert.deepEqual(
+      renameSelectedEnvironment(workspaceState, 'Dummy'),
+      workspaceState,
+    );
+  });
+
   test('mask and restore preserve sensitive cleartext across round-trips', () => {
     const baseline = sampleState();
     const masked = maskEnvironmentManagerState(baseline);
@@ -255,6 +342,315 @@ describe('environment-manager-html', () => {
     );
   });
 
+  test('restore recovers cleartext when environment id changes on rename', () => {
+    const baseline = sampleState();
+    const incoming: EnvironmentManagerState = {
+      ...baseline,
+      environments: [
+        {
+          id: 'staging',
+          name: 'Staging',
+          variables: [
+            { name: 'host', value: 'https://dev.test', sensitive: false },
+            {
+              name: 'token',
+              value: MASKED_VARIABLE_VALUE,
+              sensitive: true,
+            },
+          ],
+        },
+      ],
+      selectedId: 'staging',
+      activeEnvironmentId: 'staging',
+    };
+    const restored = restoreEnvironmentManagerState(incoming, baseline);
+    assert.equal(
+      restored.environments[0]?.variables.find((entry) => entry.name === 'token')
+        ?.value,
+      'sekrit',
+    );
+  });
+
+  test('restore pairs orphan for one rename while sibling keeps id match', () => {
+    const baseline: EnvironmentManagerState = {
+      environments: [
+        {
+          id: 'dev',
+          name: 'Development',
+          variables: [{ name: 'token', value: 'sekritA', sensitive: true }],
+        },
+        {
+          id: 'staging',
+          name: 'Staging',
+          variables: [{ name: 'token', value: 'sekritB', sensitive: true }],
+        },
+      ],
+      globalVariables: [],
+      workspaceVariables: [],
+      activeEnvironmentId: 'dev',
+      selectedId: 'dev',
+    };
+    const incoming: EnvironmentManagerState = {
+      ...baseline,
+      environments: [
+        {
+          id: 'dev-renamed',
+          name: 'Development',
+          variables: [
+            { name: 'token', value: MASKED_VARIABLE_VALUE, sensitive: true },
+          ],
+        },
+        {
+          id: 'staging',
+          name: 'Staging',
+          variables: [
+            { name: 'token', value: MASKED_VARIABLE_VALUE, sensitive: true },
+          ],
+        },
+      ],
+      selectedId: 'dev-renamed',
+      activeEnvironmentId: 'dev-renamed',
+    };
+    const restored = restoreEnvironmentManagerState(incoming, baseline);
+    assert.equal(
+      restored.environments.find((entry) => entry.id === 'dev-renamed')
+        ?.variables.find((entry) => entry.name === 'token')?.value,
+      'sekritA',
+    );
+    assert.equal(
+      restored.environments.find((entry) => entry.id === 'staging')
+        ?.variables.find((entry) => entry.name === 'token')?.value,
+      'sekritB',
+    );
+  });
+
+  test('restore uses id match not orphan when deleting one of two environments', () => {
+    const baseline: EnvironmentManagerState = {
+      environments: [
+        {
+          id: 'dev',
+          name: 'Development',
+          variables: [
+            { name: 'token', value: 'sekritA', sensitive: true },
+          ],
+        },
+        {
+          id: 'staging',
+          name: 'Staging',
+          variables: [
+            { name: 'token', value: 'sekritB', sensitive: true },
+          ],
+        },
+      ],
+      globalVariables: [],
+      workspaceVariables: [],
+      activeEnvironmentId: 'staging',
+      selectedId: 'staging',
+    };
+    const incoming: EnvironmentManagerState = {
+      ...baseline,
+      environments: [
+        {
+          id: 'staging',
+          name: 'Staging',
+          variables: [
+            { name: 'token', value: MASKED_VARIABLE_VALUE, sensitive: true },
+          ],
+        },
+      ],
+    };
+    const restored = restoreEnvironmentManagerState(incoming, baseline);
+    assert.equal(
+      restored.environments[0]?.variables.find((entry) => entry.name === 'token')
+        ?.value,
+      'sekritB',
+    );
+  });
+
+  test('restore does not pair orphan secrets after delete and rename in same save', () => {
+    const baseline: EnvironmentManagerState = {
+      environments: [
+        {
+          id: 'dev',
+          name: 'Development',
+          variables: [
+            { name: 'token', value: 'sekritA', sensitive: true },
+          ],
+        },
+        {
+          id: 'staging',
+          name: 'Staging',
+          variables: [
+            { name: 'token', value: 'sekritB', sensitive: true },
+          ],
+        },
+      ],
+      globalVariables: [],
+      workspaceVariables: [],
+      activeEnvironmentId: 'staging',
+      selectedId: 'staging',
+    };
+    const incoming: EnvironmentManagerState = {
+      ...baseline,
+      environments: [
+        {
+          id: 'prod',
+          name: 'Production',
+          variables: [
+            { name: 'token', value: MASKED_VARIABLE_VALUE, sensitive: true },
+          ],
+        },
+      ],
+      selectedId: 'prod',
+      activeEnvironmentId: 'prod',
+    };
+    const restored = restoreEnvironmentManagerState(incoming, baseline);
+    const token = restored.environments[0]?.variables.find(
+      (entry) => entry.name === 'token',
+    )?.value;
+    assert.notEqual(token, 'sekritA');
+    assert.notEqual(token, 'sekritB');
+    assert.equal(token, '');
+  });
+
+  test('restore skips orphan pairing when multiple environments are renamed', () => {
+    const baseline: EnvironmentManagerState = {
+      environments: [
+        {
+          id: 'dev',
+          name: 'Development',
+          variables: [
+            { name: 'token', value: 'sekritA', sensitive: true },
+          ],
+        },
+        {
+          id: 'staging',
+          name: 'Staging',
+          variables: [
+            { name: 'token', value: 'sekritB', sensitive: true },
+          ],
+        },
+      ],
+      globalVariables: [],
+      workspaceVariables: [],
+      activeEnvironmentId: 'dev',
+      selectedId: 'dev',
+    };
+    const incoming: EnvironmentManagerState = {
+      ...baseline,
+      environments: [
+        {
+          id: 'dev-renamed',
+          name: 'Development',
+          variables: [
+            { name: 'token', value: MASKED_VARIABLE_VALUE, sensitive: true },
+          ],
+        },
+        {
+          id: 'staging-renamed',
+          name: 'Staging',
+          variables: [
+            { name: 'token', value: MASKED_VARIABLE_VALUE, sensitive: true },
+          ],
+        },
+      ],
+      selectedId: 'dev-renamed',
+      activeEnvironmentId: 'dev-renamed',
+    };
+    const restored = restoreEnvironmentManagerState(incoming, baseline);
+    assert.equal(
+      restored.environments[0]?.variables.find((entry) => entry.name === 'token')
+        ?.value,
+      '',
+    );
+    assert.equal(
+      restored.environments[1]?.variables.find((entry) => entry.name === 'token')
+        ?.value,
+      '',
+    );
+    assert.notEqual(
+      restored.environments[0]?.variables.find((entry) => entry.name === 'token')
+        ?.value,
+      'sekritB',
+    );
+    assert.notEqual(
+      restored.environments[1]?.variables.find((entry) => entry.name === 'token')
+        ?.value,
+      'sekritA',
+    );
+  });
+
+  test('restore skips secret restoration when orphan pairing is ambiguous', () => {
+    const baseline: EnvironmentManagerState = {
+      environments: [
+        {
+          id: 'a',
+          name: 'A',
+          variables: [{ name: 'token', value: 'secretA', sensitive: true }],
+        },
+        {
+          id: 'b',
+          name: 'B',
+          variables: [{ name: 'token', value: 'secretB', sensitive: true }],
+        },
+      ],
+      globalVariables: [],
+      workspaceVariables: [],
+      activeEnvironmentId: 'a',
+      selectedId: 'a',
+    };
+    const incoming: EnvironmentManagerState = {
+      ...baseline,
+      environments: [
+        {
+          id: 'c',
+          name: 'C',
+          variables: [
+            { name: 'token', value: MASKED_VARIABLE_VALUE, sensitive: true },
+          ],
+        },
+      ],
+      selectedId: 'c',
+      activeEnvironmentId: 'c',
+    };
+    const restored = restoreEnvironmentManagerState(incoming, baseline);
+    assert.equal(
+      restored.environments[0]?.variables.find((entry) => entry.name === 'token')
+        ?.value,
+      '',
+    );
+  });
+
+  test('restore does not use orphan when new env has masked value and baseline has no orphans', () => {
+    const baseline: EnvironmentManagerState = {
+      environments: [],
+      globalVariables: [],
+      workspaceVariables: [],
+      activeEnvironmentId: undefined,
+      selectedId: 'global',
+    };
+    const incoming: EnvironmentManagerState = {
+      ...baseline,
+      environments: [
+        {
+          id: 'fresh',
+          name: 'Fresh',
+          variables: [
+            { name: 'token', value: MASKED_VARIABLE_VALUE, sensitive: true },
+          ],
+        },
+      ],
+      selectedId: 'fresh',
+      activeEnvironmentId: 'fresh',
+    };
+    const restored = restoreEnvironmentManagerState(incoming, baseline);
+    assert.equal(
+      restored.environments[0]?.variables.find((entry) => entry.name === 'token')
+        ?.value,
+      '',
+    );
+  });
+
   test('parseEnvironmentManagerMessage accepts dirty and setActiveEnvironment', () => {
     assert.deepEqual(parseEnvironmentManagerMessage({ type: 'dirty', dirty: true }), {
       type: 'dirty',
@@ -283,6 +679,25 @@ describe('environment-manager-html', () => {
     assert.match(html, /previousActiveEnvironmentId/u);
     assert.match(html, /activeEnvironmentSet/u);
     assert.match(html, /activeEnvironmentError/u);
+  });
+
+  test('environment manager HTML syncs id and selection on rename', () => {
+    const html = renderEnvironmentManagerHtml('renameNonce');
+    const envNameIdx = html.indexOf("el('envName').addEventListener('input'");
+    assert.ok(envNameIdx >= 0);
+    const handler = html.slice(envNameIdx, envNameIdx + 900);
+    assert.match(handler, /filter\(\(id\) => id !== oldId\)/u);
+    assert.match(handler, /allocateId\(name, collisionSet\)/u);
+    assert.match(handler, /selectedId: newId/u);
+    assert.match(
+      handler,
+      /activeEnvironmentId:\s*state\.activeEnvironmentId === oldId \? newId/u,
+    );
+    assert.match(handler, /render\(\)/u);
+    assert.match(
+      html,
+      /!haystack\.includes\(query\) && environment\.id !== state\.selectedId/u,
+    );
   });
 });
 

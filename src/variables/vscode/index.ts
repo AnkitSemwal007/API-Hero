@@ -5,6 +5,7 @@ export {
   isValidVariableName,
   maskEnvironmentManagerState,
   parseEnvironmentManagerMessage,
+  renameSelectedEnvironment,
   renderEnvironmentManagerHtml,
   restoreEnvironmentManagerState,
   validateEnvironmentManagerState,

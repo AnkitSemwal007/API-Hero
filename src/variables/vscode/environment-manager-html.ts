@@ -171,6 +171,49 @@ export function allocateEnvironmentId(
   return `${base}-${suffix}`;
 }
 
+/**
+ * Renames the selected environment and reallocates its id from the new name.
+ * No-ops when the selection is a scope (`global` / `workspace`) or unknown.
+ */
+export function renameSelectedEnvironment(
+  state: EnvironmentManagerState,
+  name: string,
+): EnvironmentManagerState {
+  const selectedId = state.selectedId;
+  if (
+    selectedId === undefined ||
+    selectedId === 'global' ||
+    selectedId === 'workspace'
+  ) {
+    return state;
+  }
+  const selected = state.environments.find(
+    (environment) => environment.id === selectedId,
+  );
+  if (selected === undefined) {
+    return state;
+  }
+  const collisionSet = new Set(
+    state.environments
+      .map((environment) => environment.id)
+      .filter((id) => id !== selectedId),
+  );
+  const newId = allocateEnvironmentId(name, collisionSet);
+  return {
+    ...state,
+    environments: state.environments.map((environment) =>
+      environment.id === selectedId
+        ? { ...environment, id: newId, name }
+        : environment,
+    ),
+    selectedId: newId,
+    activeEnvironmentId:
+      state.activeEnvironmentId === selectedId
+        ? newId
+        : state.activeEnvironmentId,
+  };
+}
+
 /** Masks sensitive values before posting state to the webview. */
 export function maskEnvironmentManagerState(
   state: EnvironmentManagerState,
@@ -189,6 +232,11 @@ export function maskEnvironmentManagerState(
 /**
  * Restores masked sensitive values from the last cleartext baseline so a
  * round-trip does not wipe secrets the user did not edit.
+ *
+ * Orphan pairing (e.g. after rename changed the id) is unambiguous 1:1 only:
+ * exactly one orphaned baseline and exactly one incoming env that needs
+ * unmask. Otherwise never pair orphans — prefer losing masked secrets over
+ * wrong pairing. No FIFO and no multi-orphan matching.
  */
 export function restoreEnvironmentManagerState(
   incoming: EnvironmentManagerState,
@@ -200,15 +248,39 @@ export function restoreEnvironmentManagerState(
       environment.variables,
     ]),
   );
+  const incomingIds = new Set(
+    incoming.environments.map((environment) => environment.id),
+  );
+  const orphanedBaselines = baseline.environments
+    .filter((environment) => !incomingIds.has(environment.id))
+    .map((environment) => environment.variables);
+  const needsOrphanRestore = incoming.environments.filter(
+    (environment) =>
+      baselineByEnv.get(environment.id) === undefined &&
+      environment.variables.some(
+        (variable) => variable.value === MASKED_VARIABLE_VALUE,
+      ),
+  );
+  const orphanRestoreByIncomingId =
+    orphanedBaselines.length === 1 && needsOrphanRestore.length === 1
+      ? new Map([
+          [needsOrphanRestore[0]!.id, orphanedBaselines[0]!],
+        ])
+      : undefined;
+
   return {
     ...incoming,
-    environments: incoming.environments.map((environment) => ({
-      ...environment,
-      variables: restoreVariables(
-        environment.variables,
-        baselineByEnv.get(environment.id) ?? [],
-      ),
-    })),
+    environments: incoming.environments.map((environment) => {
+      let baselineVariables = baselineByEnv.get(environment.id);
+      if (baselineVariables === undefined) {
+        baselineVariables =
+          orphanRestoreByIncomingId?.get(environment.id) ?? [];
+      }
+      return {
+        ...environment,
+        variables: restoreVariables(environment.variables, baselineVariables),
+      };
+    }),
     globalVariables: restoreVariables(
       incoming.globalVariables,
       baseline.globalVariables,
@@ -850,8 +922,8 @@ function setCurrentVariables(variables) {
   };
 }
 
-function allocateId(name) {
-  const existing = new Set(state.environments.map((entry) => entry.id));
+function allocateId(name, existingIds) {
+  const existing = existingIds || new Set(state.environments.map((entry) => entry.id));
   const base = String(name || 'environment')
     .trim()
     .toLowerCase()
@@ -871,7 +943,7 @@ function renderList() {
   let visibleCount = 0;
   for (const environment of state.environments) {
     const haystack = ((environment.name || '') + ' ' + (environment.id || '')).toLowerCase();
-    if (query && !haystack.includes(query)) continue;
+    if (query && !haystack.includes(query) && environment.id !== state.selectedId) continue;
     visibleCount += 1;
     const isSelected = state.selectedId === environment.id;
     const isActiveEnv = environment.id === state.activeEnvironmentId;
@@ -1117,14 +1189,30 @@ el('duplicateEnv').addEventListener('click', () => {
 });
 el('envName').addEventListener('input', () => {
   if (selectedScope() !== 'environment') return;
+  const oldId = state.selectedId;
+  if (!oldId) return;
   const name = el('envName').value;
+  const collisionSet = new Set(
+    state.environments.map((entry) => entry.id).filter((id) => id !== oldId),
+  );
+  const newId = allocateId(name, collisionSet);
   state = {
     ...state,
     environments: state.environments.map((entry) =>
-      entry.id === state.selectedId ? { ...entry, name } : entry),
+      entry.id === oldId ? { ...entry, id: newId, name } : entry),
+    selectedId: newId,
+    activeEnvironmentId:
+      state.activeEnvironmentId === oldId ? newId : state.activeEnvironmentId,
   };
   setDirty(true);
-  renderList();
+  // Preserve caret — renderMain rewrites #envName from state.
+  const nameInput = el('envName');
+  const selStart = nameInput.selectionStart;
+  const selEnd = nameInput.selectionEnd;
+  render();
+  if (typeof selStart === 'number' && typeof selEnd === 'number') {
+    nameInput.setSelectionRange(selStart, selEnd);
+  }
 });
 el('setActive').addEventListener('click', () => {
   if (selectedScope() !== 'environment' || !state.selectedId) return;
