@@ -67,10 +67,24 @@ History re-run and still opens the viewer.
 **Design choice:** during a collection run the response viewer is suppressed for
 every request. Completion is communicated via progress notification, status bar,
 a secret-free summary toast, and the **Collection Run Report** panel
-(`run-report-panel.ts` / `run-report-html.ts`). History still records each
+(`run-report-panel.ts` / `run-report-html.ts`), which doubles as the in-memory
+**Collection Run Debugger V1**. History still records each
 network-attempted (and cancelled-at-transport) request through the normal
 orchestrator capture path — including cancelled in-flight attempts that reached
 `execute`.
+
+### Collection Run Debugger (in-memory)
+
+The Run Report owns **`ResponsePresentation`** — it never renders
+`RuntimeResponse` directly. `ExecutionOrchestrator.runAtSourceLocation` attaches
+optional `execution` + secret-safe `resolvedVariables` on network-attempted
+paths; `mapOrchestratorResult` builds `RequestRunResult.presentation` once via
+`presentExecutionResult` (the same pipeline as the Single Request Viewer).
+Expandable per-request Details (Response / Headers / Cookies / Extracted /
+Assertions / Execution Details / Dependencies / Timeline) and report-level
+Variable Trace are derived from that presentation plus plan dependency edges.
+There is **no** run persistence, retention, or history DB for debugger state —
+data lives only in the finished `RunSummary` held by the report panel.
 
 The report's `CollectionRunReportModel` (Phase 2) additionally surfaces the
 dependency-aware execution order: an "Execution order" header with a

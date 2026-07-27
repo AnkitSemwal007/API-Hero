@@ -13,6 +13,7 @@ import type {
   RunAtSourceLocationResult,
   RunRequestSource,
 } from '../orchestration';
+import { freezeDetachedBytes } from '../shared';
 import {
   CollectionRunnerService,
   CollectionRunModes,
@@ -459,6 +460,177 @@ test('success with optional-only extraction skip stays Passed', async () => {
   assert.equal(summary.results[0]?.outcome, RequestRunOutcomeKinds.Passed);
   assert.equal(summary.statistics.passed, 1);
   assert.equal(summary.statistics.failed, 0);
+});
+
+test('mapOrchestratorResult retains presentation, extraction values, and assertion details', async () => {
+  const timing = Object.freeze({
+    startedAt: '2026-07-27T10:00:00.000Z',
+    completedAt: '2026-07-27T10:00:00.040Z',
+    durationMs: 40,
+  });
+  const executor = new FakeExecutor();
+  executor.outcomes = [
+    {
+      outcome: 'failed',
+      durationMs: 40,
+      statusCode: 200,
+      assertionFailed: true,
+      execution: {
+        success: true,
+        requestId: 'req-1',
+        request: { method: 'GET', url: 'https://example.test/users' },
+        response: {
+          requestId: 'req-1',
+          statusCode: 200,
+          statusText: 'OK',
+          headers: [{ name: 'Content-Type', value: 'application/json' }],
+          body: {
+            bytes: freezeDetachedBytes(
+              new TextEncoder().encode('{"token":"abc"}'),
+            ),
+            text: '{"token":"abc"}',
+            json: { token: 'abc' },
+          },
+          bodySizeBytes: 15,
+          contentType: 'application/json',
+          url: 'https://example.test/users',
+          redirected: false,
+          redirectCount: 0,
+          timing,
+        },
+        timing,
+      },
+      resolvedVariables: [
+        {
+          name: 'baseUrl',
+          scope: 'environment',
+          sensitive: false,
+          displayValue: 'https://example.test',
+        },
+      ],
+      assertions: {
+        suite: { assertions: [] },
+        results: [
+          {
+            outcome: 'passed',
+            durationMs: 0,
+            assertion: {
+              id: 'a1',
+              text: 'expect status == 200',
+              subject: { kind: 'status' },
+              operator: '==',
+              expected: 200,
+            },
+          },
+          {
+            outcome: 'failed',
+            durationMs: 0,
+            assertion: {
+              id: 'a2',
+              text: 'expect status == 201',
+              subject: { kind: 'status' },
+              operator: '==',
+              expected: 201,
+            },
+            failure: {
+              assertionText: 'expect status == 201',
+              expected: '201',
+              actual: '200',
+              reason: 'status mismatch',
+            },
+          },
+        ],
+        summary: {
+          total: 2,
+          passed: 1,
+          failed: 1,
+          skipped: 0,
+          malformed: 0,
+          passPercent: 50,
+          durationMs: 1,
+        },
+        context: {
+          requestId: 'req-1',
+          success: true,
+          statusCode: 200,
+          headers: [],
+          responseTimeMs: 40,
+        },
+      },
+      extraction: {
+        outcomes: [
+          {
+            rule: {
+              id: 'e1',
+              variableName: 'accessToken',
+              source: { kind: 'json-path', path: '$.token' },
+              targetScope: 'run',
+              sensitive: false,
+              required: true,
+              enabled: true,
+              when: { kind: 'always' },
+            },
+            kind: 'extracted',
+            maskedValue: 'abc',
+          },
+        ],
+        extractedCount: 1,
+        failedCount: 0,
+        skippedCount: 0,
+        malformedCount: 0,
+      },
+    },
+  ];
+  const runner = new CollectionRunnerService({
+    executor,
+    sourceReader: new FakeSourceReader(),
+  });
+  const plan = buildRunPlan({
+    aggregate: sampleAggregate(),
+    target: {
+      mode: CollectionRunModes.SelectedRequests,
+      collectionId: 'collection:ws',
+      requestIds: ['r1'],
+    },
+    failurePolicy: FailurePolicyKinds.ContinueOnError,
+  });
+
+  const summary = await runner.execute({ plan });
+  const result = summary.results[0];
+  assert.equal(result?.outcome, RequestRunOutcomeKinds.Failed);
+  assert.equal(result?.message, 'Assertions failed.');
+  assert.equal(result?.assertionsPassed, 1);
+  assert.equal(result?.assertionsFailed, 1);
+  assert.equal(result?.assertionsTotal, 2);
+  assert.deepEqual(result?.producedVariables, ['accessToken']);
+  assert.ok(result?.presentation !== undefined);
+  assert.equal(result?.presentation?.status?.code, 200);
+  assert.equal(result?.presentation?.body?.language, 'json');
+  assert.equal(result?.presentation?.assertions?.summary.failed, 1);
+  assert.equal(
+    result?.presentation?.assertions?.assertions[1]?.failure?.expected,
+    '201',
+  );
+  assert.equal(
+    result?.presentation?.assertions?.assertions[1]?.failure?.actual,
+    '200',
+  );
+  assert.equal(
+    result?.presentation?.extraction?.outcomes[0]?.variableName,
+    'accessToken',
+  );
+  assert.equal(
+    result?.presentation?.extraction?.outcomes[0]?.maskedValue,
+    'abc',
+  );
+  assert.deepEqual(result?.resolvedVariables, [
+    {
+      name: 'baseUrl',
+      scope: 'environment',
+      sensitive: false,
+      displayValue: 'https://example.test',
+    },
+  ]);
 });
 
 test('continue-on-error runs every request', async () => {

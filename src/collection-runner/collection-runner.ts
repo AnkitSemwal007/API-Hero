@@ -4,6 +4,7 @@ import type {
   RunAtSourceLocationResult,
   RunRequestSource,
 } from '../orchestration';
+import { presentExecutionResult } from '../response/presentation';
 import type { RunVariableStore } from '../variables';
 import { resolveFailurePolicy, type FailurePolicy } from './failure-policies';
 import {
@@ -375,6 +376,14 @@ function mapOrchestratorResult(
     planned.consumes !== undefined && planned.consumes.length > 0
       ? planned.consumes
       : undefined;
+  const presentation =
+    runResult.execution === undefined
+      ? undefined
+      : presentExecutionResult(
+          runResult.execution,
+          runResult.assertions,
+          runResult.extraction,
+        );
   const base = {
     requestId: planned.requestId,
     ordinal: planned.ordinal,
@@ -386,6 +395,10 @@ function mapOrchestratorResult(
     ...assertionFields,
     ...extractionFields,
     ...(consumedVariables === undefined ? {} : { consumedVariables }),
+    ...(presentation === undefined ? {} : { presentation }),
+    ...(runResult.resolvedVariables === undefined
+      ? {}
+      : { resolvedVariables: runResult.resolvedVariables }),
   };
 
   // Orchestrator contract: assertion failures return outcome 'failed' with

@@ -10,9 +10,12 @@ import {
   type DependencyEdge,
   type FailurePolicyKind as FailurePolicyKindType,
   type RequestRunOutcomeKind as OutcomeKind,
+  type RequestRunResult,
   type RunSummary,
 } from '../models';
 import { listFailurePolicies } from '../failure-policies';
+import type { ResponsePresentation } from '../../response/presentation';
+import type { ResolvedVariableSnapshot } from '../../variables';
 import {
   buildNonceOnlyCsp,
   escapeAttribute,
@@ -47,6 +50,41 @@ export interface CollectionRunReportRow {
   readonly consumedVariablesLabel?: string;
   /** Secret-free reason a dependent request was skipped (§10.1, §6.7). */
   readonly skipReason?: string;
+  /**
+   * Expandable debugger payload. Presentation-only — never RuntimeResponse.
+   * Absent for skipped / never-executed rows.
+   */
+  readonly details?: CollectionRunReportRequestDetails;
+}
+
+/**
+ * Per-request debugger sections for the Collection Run Report.
+ * All response formatting is {@link ResponsePresentation} (shared pipeline).
+ */
+export interface CollectionRunReportRequestDetails {
+  readonly presentation?: ResponsePresentation;
+  readonly resolvedVariables?: readonly ResolvedVariableSnapshot[];
+  /** Text labels for edges involving this request. */
+  readonly dependencyLabels?: readonly string[];
+  readonly timeline?: CollectionRunReportTimeline;
+}
+
+/**
+ * Timeline V1 — Start / End / Duration from presentation.statistics.
+ * Network Time is omitted until a distinct transport metric exists (do not
+ * alias durationMs under a second label).
+ */
+export interface CollectionRunReportTimeline {
+  readonly startedAt: string;
+  readonly completedAt: string;
+  readonly durationLabel: string;
+}
+
+/** Report-level variable produce/consume trace (secret-free names + labels). */
+export interface CollectionRunReportVariableTrace {
+  readonly variable: string;
+  readonly producedBy: readonly string[];
+  readonly consumedBy: readonly string[];
 }
 
 /** One `producer → consumer` dependency edge rendered as text (§10.1). */
@@ -83,6 +121,8 @@ export interface CollectionRunReportModel {
   readonly dependencyEdges: readonly CollectionRunReportEdge[];
   /** Variables consumed with no in-plan producer at enrich time (§6.7, §10.1). */
   readonly unresolvedConsumes: readonly CollectionRunReportUnresolvedConsume[];
+  /** Variable Trace V1 — produced by / consumed by from edges + result names. */
+  readonly variableTrace: readonly CollectionRunReportVariableTrace[];
 }
 
 export type CollectionRunReportInboundMessage =
@@ -125,6 +165,7 @@ export function buildCollectionRunReportModel(
     summary.plan.requests.map((request) => [request.requestId, request.label]),
   );
   const dependencies = summary.plan.extensions?.dependencies;
+  const edges = dependencies?.edges ?? [];
   const stats = summary.statistics;
   const rows: CollectionRunReportRow[] = summary.results.map((result) => {
     const planned =
@@ -138,6 +179,7 @@ export function buildCollectionRunReportModel(
       result.assertionsFailed,
       result.assertionsTotal,
     );
+    const details = buildRequestDetails(result, edges, labelByRequestId);
     return {
       requestId: result.requestId,
       ordinal: result.ordinal,
@@ -176,6 +218,7 @@ export function buildCollectionRunReportModel(
       ...(result.skipReason === undefined
         ? {}
         : { skipReason: result.skipReason }),
+      ...(details === undefined ? {} : { details }),
     };
   });
 
@@ -203,7 +246,7 @@ export function buildCollectionRunReportModel(
     total: stats.total,
     rows,
     reordered: dependencies?.reordered ?? false,
-    dependencyEdges: (dependencies?.edges ?? []).map((edge) => ({
+    dependencyEdges: edges.map((edge) => ({
       label: formatDependencyEdgeLabel(edge, labelByRequestId),
     })),
     unresolvedConsumes: (dependencies?.unresolvedConsumes ?? []).map(
@@ -212,7 +255,102 @@ export function buildCollectionRunReportModel(
         requestLabel: labelByRequestId.get(entry.requestId) ?? entry.requestId,
       }),
     ),
+    variableTrace: buildVariableTrace(summary.results, edges, labelByRequestId),
   };
+}
+
+/**
+ * Builds presentation-based debugger details for one request row.
+ * Never attaches RuntimeResponse — only ResponsePresentation fields.
+ */
+function buildRequestDetails(
+  result: RequestRunResult,
+  edges: readonly DependencyEdge[],
+  labelByRequestId: ReadonlyMap<string, string>,
+): CollectionRunReportRequestDetails | undefined {
+  const presentation = result.presentation;
+  const resolvedVariables = result.resolvedVariables;
+  const dependencyLabels = edges
+    .filter(
+      (edge) =>
+        edge.fromRequestId === result.requestId ||
+        edge.toRequestId === result.requestId,
+    )
+    .map((edge) => formatDependencyEdgeLabel(edge, labelByRequestId));
+  const hasPresentation = presentation !== undefined;
+  const hasResolved =
+    resolvedVariables !== undefined && resolvedVariables.length > 0;
+  const hasDeps = dependencyLabels.length > 0;
+  if (!hasPresentation && !hasResolved && !hasDeps) {
+    return undefined;
+  }
+  const timeline =
+    presentation === undefined
+      ? undefined
+      : {
+          startedAt: presentation.statistics.startedAt,
+          completedAt: presentation.statistics.completedAt,
+          durationLabel: formatDuration(presentation.statistics.durationMs),
+        };
+  return {
+    ...(presentation === undefined ? {} : { presentation }),
+    ...(hasResolved ? { resolvedVariables } : {}),
+    ...(hasDeps ? { dependencyLabels } : {}),
+    ...(timeline === undefined ? {} : { timeline }),
+  };
+}
+
+/**
+ * Report-level Variable Trace from dependency edges + produced/consumed names.
+ * Does not change graph construction — projection only.
+ */
+function buildVariableTrace(
+  results: readonly RequestRunResult[],
+  edges: readonly DependencyEdge[],
+  labelByRequestId: ReadonlyMap<string, string>,
+): readonly CollectionRunReportVariableTrace[] {
+  const byVariable = new Map<
+    string,
+    { producedBy: Set<string>; consumedBy: Set<string> }
+  >();
+  const ensure = (variable: string) => {
+    let entry = byVariable.get(variable);
+    if (entry === undefined) {
+      entry = { producedBy: new Set(), consumedBy: new Set() };
+      byVariable.set(variable, entry);
+    }
+    return entry;
+  };
+
+  for (const edge of edges) {
+    if (edge.variable === undefined) {
+      continue;
+    }
+    const entry = ensure(edge.variable);
+    entry.producedBy.add(
+      labelByRequestId.get(edge.fromRequestId) ?? edge.fromRequestId,
+    );
+    entry.consumedBy.add(
+      labelByRequestId.get(edge.toRequestId) ?? edge.toRequestId,
+    );
+  }
+
+  for (const result of results) {
+    for (const name of result.producedVariables ?? []) {
+      ensure(name).producedBy.add(result.label);
+    }
+    for (const name of result.consumedVariables ?? []) {
+      ensure(name).consumedBy.add(result.label);
+    }
+  }
+
+  return [...byVariable.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([variable, entry]) => ({
+      variable,
+      producedBy: [...entry.producedBy].sort(),
+      consumedBy: [...entry.consumedBy].sort(),
+    }));
 }
 
 /**
@@ -530,6 +668,102 @@ input[type="checkbox"] { accent-color: var(--vscode-focusBorder); }
   font-family: var(--vscode-editor-font-family, var(--vscode-font-family));
 }
 .unresolved-list li { color: var(--vscode-editorWarning-foreground); }
+.variable-trace {
+  margin: 0 0 var(--ah-space-2); padding: 0; list-style: none;
+  color: var(--vscode-descriptionForeground); font-size: .88em;
+}
+.variable-trace li {
+  padding: 4px 0; overflow-wrap: anywhere;
+  font-family: var(--vscode-editor-font-family, var(--vscode-font-family));
+}
+.variable-trace .var-name { font-weight: 600; color: var(--vscode-foreground); }
+.variable-trace .var-meta { margin-top: 2px; font-size: .92em; }
+tr.detail-row { cursor: default; }
+tr.detail-row:hover { background: transparent; }
+tr.detail-row td {
+  padding: 0 var(--ah-space-4) var(--ah-space-3);
+  background: var(--vscode-sideBar-background);
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+.detail-panel { padding: var(--ah-space-2) 0; }
+.detail-panel details {
+  margin: 0 0 var(--ah-space-2);
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 4px;
+  background: var(--vscode-editor-background);
+}
+.detail-panel details > summary {
+  cursor: pointer; padding: 6px 10px;
+  font-weight: 600; font-size: .9em;
+  color: var(--vscode-foreground);
+  list-style: none;
+}
+.detail-panel details > summary::-webkit-details-marker { display: none; }
+.detail-panel details > summary::before {
+  content: '▸'; display: inline-block; width: 1em;
+  color: var(--vscode-descriptionForeground);
+}
+.detail-panel details[open] > summary::before { content: '▾'; }
+.detail-body {
+  padding: 0 10px 10px;
+  color: var(--vscode-foreground);
+  font-size: .88em;
+}
+.detail-body pre, .detail-body code {
+  font-family: var(--vscode-editor-font-family, var(--vscode-font-family));
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.detail-body pre {
+  margin: 0; padding: 8px;
+  background: var(--vscode-textCodeBlock-background, rgba(127,127,127,.12));
+  border-radius: 3px; max-height: 24rem; overflow: auto;
+}
+.detail-table { width: 100%; border-collapse: collapse; }
+.detail-table th, .detail-table td {
+  text-align: left; padding: 4px 8px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+  position: static; text-transform: none; letter-spacing: normal;
+  font-size: inherit; font-weight: 400; background: transparent;
+}
+.detail-table th { color: var(--vscode-descriptionForeground); font-weight: 600; }
+.timeline-grid, .exec-grid {
+  display: grid; grid-template-columns: auto 1fr;
+  gap: 4px 12px; margin: 0;
+}
+.timeline-grid dt, .exec-grid dt {
+  color: var(--vscode-descriptionForeground); margin: 0;
+}
+.timeline-grid dd, .exec-grid dd { margin: 0; overflow-wrap: anywhere; }
+.assert-list, .extract-list, .resolved-list, .dep-list {
+  margin: 0; padding: 0; list-style: none;
+}
+.assert-item, .extract-item, .resolved-item, .dep-list li {
+  padding: 4px 0; border-bottom: 1px solid var(--vscode-panel-border);
+}
+.assert-item:last-child, .extract-item:last-child,
+.resolved-item:last-child, .dep-list li:last-child { border-bottom: none; }
+.assert-outcome {
+  display: inline-block; min-width: 4.5rem;
+  font-size: .8em; font-weight: 600; text-transform: uppercase;
+  margin-right: 6px;
+}
+.assert-pass .assert-outcome { color: var(--vscode-testing-iconPassed, #89d185); }
+.assert-fail .assert-outcome { color: var(--vscode-testing-iconFailed, var(--vscode-errorForeground)); }
+.assert-skip .assert-outcome { color: var(--vscode-descriptionForeground); }
+.assert-detail { margin-top: 4px; color: var(--vscode-descriptionForeground); }
+.assert-detail dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; margin: 4px 0 0; }
+.assert-detail dt { margin: 0; }
+.assert-detail dd { margin: 0; }
+.failure-block {
+  padding: 8px; border-radius: 3px;
+  border: 1px solid var(--vscode-inputValidation-errorBorder, var(--vscode-errorForeground));
+  background: var(--vscode-inputValidation-errorBackground, transparent);
+}
+.failure-block h3 { margin: 0 0 4px; font-size: 1em; }
+.muted-inline { color: var(--vscode-descriptionForeground); }
+.toggle-details {
+  padding: 2px 8px; font-size: .9em;
+}
 `;
 
 const REPORT_SCRIPT = `
@@ -538,6 +772,7 @@ const REPORT_SCRIPT = `
   const root = document.getElementById('root');
   let model = null;
   let filterFailed = false;
+  const expanded = {};
 
   function escapeHtml(value) {
     return String(value)
@@ -563,6 +798,235 @@ const REPORT_SCRIPT = `
       return [];
     }
     return filterFailed ? model.rows.filter(function (row) { return row.isFailure; }) : model.rows;
+  }
+
+  function renderBodySection(presentation) {
+    if (presentation.failure) {
+      const f = presentation.failure;
+      return '<div class="failure-block"><h3>' + escapeHtml(f.title) + '</h3>' +
+        '<p>' + escapeHtml(f.message) + '</p>' +
+        '<p class="muted-inline"><code>' + escapeHtml(f.code) + '</code>' +
+        (f.retryable ? ' · retryable' : '') + '</p></div>';
+    }
+    if (!presentation.body) {
+      return '<p class="muted-inline">No response body</p>';
+    }
+    const text = presentation.body.prettyAvailable
+      ? presentation.body.pretty
+      : presentation.body.raw;
+    const note = presentation.body.truncated
+      ? '<p class="muted-inline">Preview truncated</p>'
+      : '';
+    return note + '<pre>' + escapeHtml(text) + '</pre>';
+  }
+
+  function renderHeadersSection(presentation) {
+    const headers = presentation.headers || [];
+    if (headers.length === 0) {
+      return '<p class="muted-inline">No response headers</p>';
+    }
+    return '<table class="detail-table"><thead><tr><th>Name</th><th>Value</th></tr></thead><tbody>' +
+      headers.map(function (h) {
+        return '<tr><td>' + escapeHtml(h.name) + '</td><td><code>' +
+          escapeHtml(h.value) + '</code>' +
+          (h.masked ? ' <span class="muted-inline">masked</span>' : '') +
+          '</td></tr>';
+      }).join('') +
+      '</tbody></table>';
+  }
+
+  function renderCookiesSection(presentation) {
+    if (!presentation.cookies || !presentation.cookies.available) {
+      return '';
+    }
+    const entries = presentation.cookies.entries || [];
+    if (entries.length === 0) {
+      return '<p class="muted-inline">No cookies</p>';
+    }
+    return '<table class="detail-table"><thead><tr><th>Name</th><th>Value</th><th>Domain</th><th>Path</th></tr></thead><tbody>' +
+      entries.map(function (c) {
+        return '<tr><td>' + escapeHtml(c.name) + '</td><td><code>' +
+          escapeHtml(c.value) + '</code></td><td>' + escapeHtml(c.domain || '') +
+          '</td><td>' + escapeHtml(c.path || '') + '</td></tr>';
+      }).join('') +
+      '</tbody></table>';
+  }
+
+  function renderExtractionSection(presentation) {
+    if (!presentation.extraction) {
+      return '<p class="muted-inline">No extracted variables</p>';
+    }
+    const outcomes = presentation.extraction.outcomes || [];
+    if (outcomes.length === 0) {
+      return '<p class="muted-inline">No extracted variables</p>';
+    }
+    return '<ul class="extract-list">' +
+      outcomes.map(function (o) {
+        const value = o.maskedValue !== undefined
+          ? ' = <code>' + escapeHtml(o.maskedValue) + '</code>'
+          : '';
+        const reason = o.reason
+          ? ' <span class="muted-inline">(' + escapeHtml(o.reason) + ')</span>'
+          : '';
+        return '<li class="extract-item"><code>' + escapeHtml(o.variableName) +
+          '</code>' + value +
+          ' <span class="muted-inline">' + escapeHtml(o.outcome) +
+          ' · ' + escapeHtml(o.sourceLabel) + '</span>' + reason + '</li>';
+      }).join('') +
+      '</ul>';
+  }
+
+  function renderAssertionsSection(presentation) {
+    if (!presentation.assertions) {
+      return '<p class="muted-inline">No assertions</p>';
+    }
+    const items = presentation.assertions.assertions || [];
+    if (items.length === 0) {
+      return '<p class="muted-inline">No assertions</p>';
+    }
+    return '<ul class="assert-list">' +
+      items.map(function (item) {
+        const icon = item.outcome === 'passed' ? 'pass'
+          : item.outcome === 'skipped' ? 'skip' : 'fail';
+        let failure = '';
+        if (item.failure) {
+          failure = '<details class="assert-detail"><summary>Details</summary><dl>' +
+            '<div><dt>Reason</dt><dd>' + escapeHtml(item.failure.reason) + '</dd></div>' +
+            (item.failure.expected !== undefined
+              ? '<div><dt>Expected</dt><dd><code>' + escapeHtml(item.failure.expected) + '</code></dd></div>'
+              : '') +
+            (item.failure.actual !== undefined
+              ? '<div><dt>Actual</dt><dd><code>' + escapeHtml(item.failure.actual) + '</code></dd></div>'
+              : '') +
+            (item.failure.context !== undefined
+              ? '<div><dt>Context</dt><dd>' + escapeHtml(item.failure.context) + '</dd></div>'
+              : '') +
+            '</dl></details>';
+        }
+        return '<li class="assert-item assert-' + icon + '">' +
+          '<span class="assert-outcome">' + escapeHtml(item.outcome) + '</span>' +
+          '<code>' + escapeHtml(item.text) + '</code>' + failure + '</li>';
+      }).join('') +
+      '</ul>';
+  }
+
+  function renderExecutionDetails(details) {
+    const vars = details.resolvedVariables || [];
+    const deps = details.dependencyLabels || [];
+    if (vars.length === 0 && deps.length === 0) {
+      return '<p class="muted-inline">No execution details</p>';
+    }
+    let html = '';
+    if (vars.length > 0) {
+      html += '<ul class="resolved-list">' +
+        vars.map(function (v) {
+          return '<li class="resolved-item"><code>{{' + escapeHtml(v.name) +
+            '}}</code> → <code>' + escapeHtml(v.displayValue) + '</code>' +
+            ' <span class="muted-inline">(' + escapeHtml(v.scope) +
+            (v.sensitive ? ', sensitive' : '') + ')</span></li>';
+        }).join('') +
+        '</ul>';
+    }
+    if (deps.length > 0) {
+      html += '<p class="muted-inline" style="margin-top:8px">Depends on</p>' +
+        '<ul class="dep-list">' +
+        deps.map(function (d) {
+          return '<li>' + escapeHtml(d) + '</li>';
+        }).join('') +
+        '</ul>';
+    }
+    return html;
+  }
+
+  function renderDependenciesSection(details) {
+    const deps = details.dependencyLabels || [];
+    if (deps.length === 0) {
+      return '<p class="muted-inline">No dependencies</p>';
+    }
+    return '<ul class="dep-list">' +
+      deps.map(function (d) {
+        return '<li>' + escapeHtml(d) + '</li>';
+      }).join('') +
+      '</ul>';
+  }
+
+  function renderTimelineSection(details) {
+    if (!details.timeline) {
+      return '<p class="muted-inline">No timeline</p>';
+    }
+    const t = details.timeline;
+    return '<dl class="timeline-grid">' +
+      '<dt>Start</dt><dd>' + escapeHtml(t.startedAt) + '</dd>' +
+      '<dt>End</dt><dd>' + escapeHtml(t.completedAt) + '</dd>' +
+      '<dt>Duration</dt><dd>' + escapeHtml(t.durationLabel) + '</dd>' +
+      '</dl>';
+  }
+
+  function renderDetailPanel(details) {
+    if (!details) {
+      return '<p class="muted-inline">No debugger details for this request.</p>';
+    }
+    const presentation = details.presentation;
+    const sections = [];
+    sections.push({
+      id: 'timeline',
+      label: 'Timeline',
+      body: renderTimelineSection(details),
+      open: false,
+    });
+    if (presentation) {
+      sections.push({
+        id: 'response',
+        label: 'Response',
+        body: renderBodySection(presentation),
+        open: true,
+      });
+      sections.push({
+        id: 'headers',
+        label: 'Headers' + (presentation.headers ? ' (' + presentation.headers.length + ')' : ''),
+        body: renderHeadersSection(presentation),
+        open: false,
+      });
+      if (presentation.cookies && presentation.cookies.available) {
+        sections.push({
+          id: 'cookies',
+          label: 'Cookies',
+          body: renderCookiesSection(presentation),
+          open: false,
+        });
+      }
+      sections.push({
+        id: 'extraction',
+        label: 'Extracted Variables',
+        body: renderExtractionSection(presentation),
+        open: false,
+      });
+      sections.push({
+        id: 'assertions',
+        label: 'Assertions',
+        body: renderAssertionsSection(presentation),
+        open: false,
+      });
+    }
+    sections.push({
+      id: 'execution',
+      label: 'Execution Details',
+      body: renderExecutionDetails(details),
+      open: false,
+    });
+    sections.push({
+      id: 'dependencies',
+      label: 'Dependencies',
+      body: renderDependenciesSection(details),
+      open: false,
+    });
+    return '<div class="detail-panel">' +
+      sections.map(function (s) {
+        return '<details' + (s.open ? ' open' : '') + '>' +
+          '<summary>' + escapeHtml(s.label) + '</summary>' +
+          '<div class="detail-body">' + s.body + '</div></details>';
+      }).join('') +
+      '</div>';
   }
 
   function render() {
@@ -615,6 +1079,12 @@ const REPORT_SCRIPT = `
           const consumedVariables = row.consumedVariablesLabel
             ? '<div class="vars-consumed">' + escapeHtml(row.consumedVariablesLabel) + '</div>'
             : '';
+          const hasDetails = !!row.details;
+          const isExpanded = !!expanded[row.requestId];
+          const detailRow = hasDetails && isExpanded
+            ? '<tr class="detail-row" data-detail-for="' + escapeAttribute(row.requestId) + '">' +
+              '<td colspan="6">' + renderDetailPanel(row.details) + '</td></tr>'
+            : '';
           return '<tr data-request-id="' + escapeAttribute(row.requestId) + '" tabindex="0"' +
             (row.isFailure ? ' class="row-fail"' : '') + '>' +
             '<td>' + escapeHtml(String(row.ordinal + 1)) + '</td>' +
@@ -625,11 +1095,17 @@ const REPORT_SCRIPT = `
             '<td>' + escapeHtml(row.durationLabel) + '</td>' +
             '<td class="' + (row.isFailure && row.assertionsLabel && /fail/i.test(row.assertionsLabel) ? 'assertions-fail' : '') + '">' + escapeHtml(row.assertionsLabel) + '</td>' +
             '<td class="row-actions">' +
+              (hasDetails
+                ? '<button type="button" class="toggle-details"' +
+                  ' aria-expanded="' + (isExpanded ? 'true' : 'false') + '"' +
+                  ' aria-label="Toggle details">' +
+                  (isExpanded ? 'Hide' : 'Details') + '</button>'
+                : '') +
               '<button type="button" class="primary open-btn"' +
                 (row.canOpen ? '' : ' disabled') + ' aria-label="Open request">Open</button>' +
               '<button type="button" class="reveal-btn"' +
                 (row.canOpen ? '' : ' disabled') + ' aria-label="Reveal in Collections">Reveal</button>' +
-            '</td></tr>';
+            '</td></tr>' + detailRow;
         }).join('') +
         '</tbody></table></div>';
 
@@ -651,6 +1127,24 @@ const REPORT_SCRIPT = `
         }).join('') +
         '</ul>';
 
+    const variableTrace = model.variableTrace || [];
+    const variableTraceSection = variableTrace.length === 0
+      ? ''
+      : '<p class="section-label">Variable Trace</p>' +
+        '<ul class="variable-trace" aria-label="Variable trace">' +
+        variableTrace.map(function (entry) {
+          const produced = entry.producedBy.length
+            ? 'Produced by: ' + entry.producedBy.join(', ')
+            : 'Produced by: —';
+          const consumed = entry.consumedBy.length
+            ? 'Consumed by: ' + entry.consumedBy.join(', ')
+            : 'Consumed by: —';
+          return '<li><span class="var-name">' + escapeHtml(entry.variable) +
+            '</span><div class="var-meta">' + escapeHtml(produced) +
+            '<br>' + escapeHtml(consumed) + '</div></li>';
+        }).join('') +
+        '</ul>';
+
     root.innerHTML =
       '<div class="toolbar" role="toolbar" aria-label="Report filters">' +
         '<label><input type="checkbox" id="filterFailed"' +
@@ -665,6 +1159,7 @@ const REPORT_SCRIPT = `
         '<div class="stats-summary" aria-label="Run statistics">' + chips + '</div>' +
         dependenciesSection +
         unresolvedSection +
+        variableTraceSection +
       '</header>' +
       body;
 
@@ -676,7 +1171,7 @@ const REPORT_SCRIPT = `
       });
     }
 
-    root.querySelectorAll('tbody tr').forEach(function (tr) {
+    root.querySelectorAll('tbody tr[data-request-id]').forEach(function (tr) {
       const requestId = tr.getAttribute('data-request-id');
       if (!requestId) {
         return;
@@ -695,6 +1190,7 @@ const REPORT_SCRIPT = `
       });
       const openBtn = tr.querySelector('.open-btn');
       const revealBtn = tr.querySelector('.reveal-btn');
+      const toggleBtn = tr.querySelector('.toggle-details');
       if (openBtn) {
         openBtn.addEventListener('click', function (event) {
           event.stopPropagation();
@@ -705,6 +1201,13 @@ const REPORT_SCRIPT = `
         revealBtn.addEventListener('click', function (event) {
           event.stopPropagation();
           vscode.postMessage({ type: 'reveal', requestId: requestId });
+        });
+      }
+      if (toggleBtn) {
+        toggleBtn.addEventListener('click', function (event) {
+          event.stopPropagation();
+          expanded[requestId] = !expanded[requestId];
+          render();
         });
       }
     });
@@ -718,6 +1221,7 @@ const REPORT_SCRIPT = `
     if (data.type === 'init' && data.model) {
       model = data.model;
       filterFailed = false;
+      Object.keys(expanded).forEach(function (key) { delete expanded[key]; });
       render();
       return;
     }

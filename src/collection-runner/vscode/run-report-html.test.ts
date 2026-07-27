@@ -91,6 +91,7 @@ describe('collection-run-report-html', () => {
     assert.equal(model.reordered, false);
     assert.deepEqual(model.dependencyEdges, []);
     assert.deepEqual(model.unresolvedConsumes, []);
+    assert.deepEqual(model.variableTrace, []);
   });
 
   test('buildCollectionRunReportModel surfaces dependency order, produced vars, and skip reasons', () => {
@@ -107,6 +108,165 @@ describe('collection-run-report-html', () => {
     assert.equal(model.rows[0]?.outcomeLabel, 'Failed');
     assert.equal(model.rows[1]?.skipReason, 'Missing run variable: accessToken (producer Login failed)');
     assert.equal(model.rows[1]?.producedVariablesLabel, undefined);
+    assert.deepEqual(model.variableTrace, [
+      {
+        variable: 'accessToken',
+        producedBy: ['Login'],
+        consumedBy: ['Products'],
+      },
+    ]);
+  });
+
+  test('buildCollectionRunReportModel attaches presentation-based debugger details', () => {
+    const base = sampleSummary();
+    const withDetails: RunSummary = {
+      ...base,
+      results: [
+        {
+          ...base.results[0]!,
+          producedVariables: ['accessToken'],
+          consumedVariables: ['baseUrl'],
+          resolvedVariables: [
+            {
+              name: 'baseUrl',
+              scope: 'environment',
+              sensitive: false,
+              displayValue: 'https://example.test',
+            },
+          ],
+          presentation: {
+            success: true,
+            requestId: 'req_ok',
+            method: 'GET',
+            requestUrl: 'https://example.test/users',
+            status: { code: 200, text: 'OK' },
+            headers: [{ name: 'Content-Type', value: 'application/json', masked: false }],
+            cookies: { available: false, setCookieHeaderCount: 0 },
+            statistics: {
+              durationMs: 120,
+              startedAt: '2026-07-27T10:00:00.000Z',
+              completedAt: '2026-07-27T10:00:00.120Z',
+              headerCount: 1,
+              redirected: false,
+              redirectCount: 0,
+            },
+            body: {
+              language: 'json',
+              raw: '{"ok":true}',
+              pretty: '{\n  "ok": true\n}',
+              prettyAvailable: true,
+              truncated: false,
+              displayedUnits: 11,
+              totalUnits: 11,
+              unit: 'characters',
+            },
+            extraction: {
+              summary: {
+                total: 1,
+                extracted: 1,
+                failed: 0,
+                skipped: 0,
+                malformed: 0,
+              },
+              chipLabel: 'Extracted 1',
+              outcomes: [
+                {
+                  variableName: 'accessToken',
+                  sourceLabel: '$.token',
+                  outcome: 'extracted',
+                  maskedValue: 'tok',
+                },
+              ],
+            },
+            assertions: {
+              summary: {
+                total: 1,
+                passed: 1,
+                failed: 0,
+                skipped: 0,
+                malformed: 0,
+                passPercent: 100,
+                durationMs: 1,
+              },
+              assertions: [
+                { text: 'expect status == 200', outcome: 'passed' },
+              ],
+            },
+            summary: '200 OK · 120 ms · 0 B',
+          },
+        },
+        base.results[1]!,
+      ],
+      plan: {
+        ...base.plan,
+        extensions: {
+          dependencies: {
+            nodes: [],
+            edges: [
+              {
+                fromRequestId: 'req_ok',
+                toRequestId: 'req_fail',
+                kind: 'implicit',
+                variable: 'accessToken',
+              },
+            ],
+            reordered: false,
+            originalOrder: ['req_ok', 'req_fail'],
+            executionOrder: ['req_ok', 'req_fail'],
+            cycles: [],
+            unresolvedConsumes: [],
+          },
+        },
+      },
+    };
+    const model = buildCollectionRunReportModel(withDetails);
+    const details = model.rows[0]?.details;
+    assert.ok(details !== undefined);
+    assert.equal(details?.presentation?.status?.code, 200);
+    assert.equal(details?.presentation?.body?.pretty, '{\n  "ok": true\n}');
+    assert.equal(
+      details?.presentation?.extraction?.outcomes[0]?.maskedValue,
+      'tok',
+    );
+    assert.equal(
+      details?.presentation?.assertions?.assertions[0]?.outcome,
+      'passed',
+    );
+    assert.deepEqual(details?.resolvedVariables, [
+      {
+        name: 'baseUrl',
+        scope: 'environment',
+        sensitive: false,
+        displayValue: 'https://example.test',
+      },
+    ]);
+    assert.deepEqual(details?.dependencyLabels, [
+      'List users → Create user (accessToken)',
+    ]);
+    assert.equal(details?.timeline?.startedAt, '2026-07-27T10:00:00.000Z');
+    assert.equal(details?.timeline?.durationLabel, '120 ms');
+    assert.equal(details?.timeline?.durationLabel, '120 ms');
+    assert.equal(
+      details?.timeline && 'networkTimeLabel' in details.timeline,
+      false,
+    );
+    assert.deepEqual(model.variableTrace, [
+      {
+        variable: 'accessToken',
+        producedBy: ['List users'],
+        consumedBy: ['Create user'],
+      },
+      {
+        variable: 'baseUrl',
+        producedBy: [],
+        consumedBy: ['List users'],
+      },
+    ]);
+    // Model carries ResponsePresentation only — no RuntimeResponse fields.
+    assert.equal(
+      (details?.presentation as { response?: unknown } | undefined)?.response,
+      undefined,
+    );
   });
 
   test('producedVariablesLabel formats names only, never values', () => {
@@ -149,6 +309,9 @@ describe('collection-run-report-html', () => {
     assert.match(html, /Reordered/);
     assert.match(html, /Dependencies/);
     assert.match(html, /Unresolved/);
+    assert.match(html, /Variable Trace/);
+    assert.match(html, /toggle-details/);
+    assert.match(html, /renderDetailPanel/);
     assert.match(html, /vars-produced/);
     assert.match(html, /vars-consumed/);
     assert.match(html, /skip-reason/);

@@ -19,6 +19,7 @@ export type {
   RunRequestOutcome,
   RunRequestSource,
 } from './execution-orchestrator';
+export type { ResolvedVariableSnapshot } from '../variables';
 export {
   RequestSelectionError,
   selectRequestAtOffset,

@@ -1,5 +1,6 @@
 export type {
   RequestResolutionResult,
+  ResolvedVariableSnapshot,
   VariableAnalysis,
   VariableResolutionContext,
   VariableResolutionError,
@@ -10,6 +11,7 @@ export {
   DefaultVariableResolver,
   MASKED_VARIABLE_VALUE,
   VARIABLE_DIAGNOSTIC_CODES,
+  buildResolvedVariableSnapshots,
   maskVariableValue,
 } from './variable-resolver';
 export { EnvironmentManager, normalizeOptionalEnvironmentId } from './environment-manager';
