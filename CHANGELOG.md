@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.3.1] - 2026-07-27
+
+### Fixed
+
+- **Request Editor toolbar** — disable Method and URL in `multi`/`empty` modes so edits are not silently dropped (`scheduleUpdate` only runs in `form` mode)
+
 ## [2.3.0] - 2026-07-27
 
 Collection Run Debugger V1 — inspect an entire collection run from the Run Report without re-running APIs.
