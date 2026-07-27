@@ -682,20 +682,25 @@ describe('TC032–TC035 — request editor HTML (string assertions only)', () =>
 
   test('TC032 — Auto list present', () => {
     assert.match(html, /data-testid="auto-dependencies"/u);
-    assert.match(html, /Auto dependencies are computed/u);
+    assert.match(html, />✓ Auto</u);
+    assert.match(html, /id="dependenciesInfoBtn"/u);
   });
 
   test('TC033 — Manual picker present', () => {
     assert.match(html, /data-testid="depends-on-picker"/u);
-    assert.match(html, /Manual Depends on/u);
+    assert.match(html, />📌 Manual</u);
+    assert.match(html, /id="dependsOnAddBtn"/u);
+    assert.match(html, /\+ Add Dependency/u);
   });
 
   test('TC034 — Unknown list present (Create Extract suggestions PARTIAL)', () => {
     assert.match(html, /data-testid="unknown-variables"/u);
+    assert.match(html, /id="unknownVariablesSection"/u);
   });
 
   test('TC035 — Ambiguous list + pinAutoDependency present', () => {
     assert.match(html, /data-testid="ambiguous-producers"/u);
+    assert.match(html, /id="ambiguousProducersSection"/u);
     assert.match(html, /pinAutoDependency/u);
   });
 });

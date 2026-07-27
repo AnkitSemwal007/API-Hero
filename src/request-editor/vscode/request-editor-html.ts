@@ -75,30 +75,34 @@ export function renderRequestEditorHtml(nonce: string): string {
     </div>
     <p class="hint">Method and URL stay in the top bar. Query parameters are on the Params tab.</p>
     <div class="dependencies-block">
-      <h3 class="ah-section-title">Dependencies</h3>
-      <p class="hint">Auto dependencies are computed from extracts and are not written to the file. Pin converts Auto → Manual (<code>@depends-on</code>). Indexed over the whole collection; a folder or selection run may omit some Auto edges.</p>
+      <h3 class="ah-section-title dependencies-title">
+        Dependencies
+        <span id="dependenciesInfoBtn" class="dependencies-info-btn" role="img" title="Auto dependencies are computed from extracts and are not written to the file. Pin converts Auto → Manual (@depends-on). Indexed over the whole collection; a folder or selection run may omit some Auto edges. Select Manual requests by name from this collection. Dependencies are stored as readable names (or Folder/Name when needed). Renaming a request updates dependents." aria-label="About dependencies">ⓘ</span>
+      </h3>
       <p id="dependencyProjectionError" class="hint depends-projection-error" data-testid="dependency-projection-error" hidden></p>
-      <div class="field dependson-field">
-        <span>Auto <em class="optional-hint">computed</em></span>
+      <div class="field dependson-field depend-section">
+        <span>✓ Auto</span>
         <div id="autoDependenciesList" class="depends-projection-list" data-testid="auto-dependencies" aria-live="polite"></div>
       </div>
-      <div class="field dependson-field">
-        <span>Manual Depends on <em class="optional-hint">optional</em></span>
+      <div class="field dependson-field depend-section">
+        <span>📌 Manual</span>
         <div id="dependsOnPicker" class="depends-picker" data-testid="depends-on-picker">
           <div id="dependsOnChips" class="depends-chips" aria-live="polite"></div>
-          <input id="dependsOnSearch" type="search" placeholder="Search requests by name…" autocomplete="off" aria-label="Search dependency requests" aria-controls="dependsOnList" />
-          <div id="dependsOnList" class="depends-list" role="listbox" aria-multiselectable="true" hidden></div>
+          <button type="button" id="dependsOnAddBtn" class="secondary depends-add-btn">+ Add Dependency</button>
+          <div id="dependsOnPopover" class="depends-popover" hidden>
+            <input id="dependsOnSearch" type="search" placeholder="Search requests by name…" autocomplete="off" aria-label="Search dependency requests" aria-controls="dependsOnList" />
+            <div id="dependsOnList" class="depends-list" role="listbox" aria-multiselectable="true"></div>
+          </div>
         </div>
       </div>
-      <div class="field dependson-field">
-        <span>Unknown variables</span>
+      <div id="unknownVariablesSection" class="field dependson-field depend-section" hidden>
+        <span>⚠ Unknown</span>
         <div id="unknownVariablesList" class="depends-projection-list" data-testid="unknown-variables" aria-live="polite"></div>
       </div>
-      <div class="field dependson-field">
-        <span>Ambiguous producers</span>
+      <div id="ambiguousProducersSection" class="field dependson-field depend-section" hidden>
+        <span>⚠ Ambiguous</span>
         <div id="ambiguousProducersList" class="depends-projection-list" data-testid="ambiguous-producers" aria-live="polite"></div>
       </div>
-      <p class="hint">Select Manual requests by name from this collection. Dependencies are stored as readable names (or Folder/Name when needed). Renaming a request updates dependents.</p>
     </div>
   </section>
   <section id="tab-headers" class="panel" role="tabpanel" hidden>
@@ -373,21 +377,42 @@ body {
 }
 .dependencies-block {
   max-width: 36rem;
-  margin-bottom: var(--ah-space-2);
+  margin-bottom: var(--ah-space-1);
+  display: grid;
+  gap: 6px;
 }
-.dependencies-block .ah-section-title { margin-top: 0; }
+.dependencies-block .ah-section-title { margin-top: 0; margin-bottom: 0; }
+.dependencies-title {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.dependencies-info-btn {
+  border: none;
+  background: transparent;
+  color: var(--vscode-descriptionForeground);
+  cursor: help;
+  padding: 0 2px;
+  font-size: 12px;
+  line-height: 1;
+  opacity: 0.85;
+}
+.dependencies-info-btn:hover { opacity: 1; color: var(--vscode-foreground); }
 .dependson-field { margin: 0; }
+.depend-section {
+  gap: 2px;
+}
 .depends-projection-list {
   display: grid;
-  gap: var(--ah-space-1);
+  gap: 2px;
   min-height: 0;
 }
 .depends-projection-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
-  padding: 4px 6px;
+  gap: 4px;
+  padding: 2px 4px;
   border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
   border-radius: 2px;
   background: var(--vscode-input-background);
@@ -396,31 +421,51 @@ body {
   font-weight: 600;
   color: var(--vscode-foreground);
 }
-.depends-var-chip {
-  display: inline-block;
-  padding: 1px 6px;
-  border-radius: 2px;
-  background: var(--vscode-badge-background);
-  color: var(--vscode-badge-foreground);
-  font-size: 11px;
-}
-.depends-projection-empty {
+.depends-reason {
   color: var(--vscode-descriptionForeground);
-  font-size: 12px;
-  margin: 0;
+  font-size: 10px;
+  line-height: 1.3;
+}
+.depends-pin-btn {
+  padding: 0 4px;
+  min-height: 18px;
+  font-size: 11px;
+  line-height: 1.2;
+}
+.depends-pinned-badge {
+  font-size: 11px;
+  line-height: 1;
+  opacity: 0.9;
 }
 .depends-projection-error {
   color: var(--vscode-errorForeground);
-  margin: 0 0 var(--ah-space-1);
+  margin: 0;
 }
 .depends-picker {
   display: grid;
-  gap: var(--ah-space-1);
+  gap: 4px;
   border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
   border-radius: 2px;
-  padding: var(--ah-space-1);
+  padding: 4px;
   background: var(--vscode-input-background);
+  position: relative;
 }
+.depends-add-btn {
+  justify-self: start;
+  padding: 2px 8px;
+  min-height: 22px;
+  font-size: 11px;
+}
+.depends-popover {
+  display: grid;
+  gap: 4px;
+  border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
+  border-radius: 2px;
+  padding: 4px;
+  background: var(--vscode-editor-background, var(--vscode-input-background));
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+.depends-popover[hidden] { display: none; }
 .depends-chips {
   display: flex;
   flex-wrap: wrap;
@@ -1055,6 +1100,8 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
     const autoRoot = el('autoDependenciesList');
     const unknownRoot = el('unknownVariablesList');
     const ambiguousRoot = el('ambiguousProducersList');
+    const unknownSection = el('unknownVariablesSection');
+    const ambiguousSection = el('ambiguousProducersSection');
     if (!autoRoot || !unknownRoot || !ambiguousRoot) return;
 
     if (errorEl) {
@@ -1068,12 +1115,7 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
     }
 
     autoRoot.replaceChildren();
-    if (autoDependencies.length === 0) {
-      const empty = document.createElement('p');
-      empty.className = 'depends-projection-empty';
-      empty.textContent = 'No inferred producers for variables in this request.';
-      autoRoot.appendChild(empty);
-    } else {
+    if (autoDependencies.length > 0) {
       autoDependencies.forEach((entry) => {
         const row = document.createElement('div');
         row.className = 'depends-projection-row';
@@ -1082,10 +1124,10 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
         label.textContent = entry.dependRef;
         row.appendChild(label);
         (entry.variables || []).forEach((variable) => {
-          const chip = document.createElement('span');
-          chip.className = 'depends-var-chip';
-          chip.textContent = variable;
-          row.appendChild(chip);
+          const reason = document.createElement('span');
+          reason.className = 'depends-reason';
+          reason.textContent = 'Reason: ' + variable;
+          row.appendChild(reason);
         });
         const alreadyManual = manualDependencies.some(
           (manual) => manual.dependRef === entry.dependRef
@@ -1093,15 +1135,17 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
         if (!alreadyManual) {
           const pin = document.createElement('button');
           pin.type = 'button';
-          pin.className = 'secondary';
-          pin.textContent = 'Pin';
-          pin.title = 'Add as Manual @depends-on';
+          pin.className = 'secondary depends-pin-btn';
+          pin.textContent = '📌';
+          pin.title = 'Pin ' + entry.dependRef + ' as manual dependency';
+          pin.setAttribute('aria-label', 'Pin ' + entry.dependRef + ' as manual dependency');
           pin.addEventListener('click', () => pinAutoDependency(entry.dependRef));
           row.appendChild(pin);
         } else {
           const pinned = document.createElement('span');
-          pinned.className = 'depends-var-chip';
-          pinned.textContent = 'Pinned';
+          pinned.className = 'depends-pinned-badge';
+          pinned.textContent = '📌';
+          pinned.title = 'Already pinned as manual dependency';
           row.appendChild(pinned);
         }
         autoRoot.appendChild(row);
@@ -1109,12 +1153,10 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
     }
 
     unknownRoot.replaceChildren();
-    if (unknownVariables.length === 0) {
-      const empty = document.createElement('p');
-      empty.className = 'depends-projection-empty';
-      empty.textContent = 'No unknown variables.';
-      unknownRoot.appendChild(empty);
-    } else {
+    if (unknownSection) {
+      unknownSection.hidden = unknownVariables.length === 0;
+    }
+    if (unknownVariables.length > 0) {
       unknownVariables.forEach((name) => {
         const row = document.createElement('div');
         row.className = 'depends-projection-row';
@@ -1136,12 +1178,10 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
     }
 
     ambiguousRoot.replaceChildren();
-    if (ambiguousProducers.length === 0) {
-      const empty = document.createElement('p');
-      empty.className = 'depends-projection-empty';
-      empty.textContent = 'No ambiguous producers.';
-      ambiguousRoot.appendChild(empty);
-    } else {
+    if (ambiguousSection) {
+      ambiguousSection.hidden = ambiguousProducers.length === 0;
+    }
+    if (ambiguousProducers.length > 0) {
       ambiguousProducers.forEach((entry) => {
         const row = document.createElement('div');
         row.className = 'depends-projection-row';
@@ -1152,9 +1192,10 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
         (entry.producers || []).forEach((producer) => {
           const pin = document.createElement('button');
           pin.type = 'button';
-          pin.className = 'secondary';
-          pin.textContent = 'Pin ' + producer.dependRef;
-          pin.title = 'Add ' + producer.dependRef + ' as Manual @depends-on';
+          pin.className = 'secondary depends-pin-btn';
+          pin.textContent = '📌 ' + producer.dependRef;
+          pin.title = 'Pin as manual dependency';
+          pin.setAttribute('aria-label', 'Pin ' + producer.dependRef + ' as manual dependency');
           pin.addEventListener('click', () => pinAutoDependency(producer.dependRef));
           row.appendChild(pin);
         });
@@ -1777,19 +1818,39 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
 
   const dependsSearch = el('dependsOnSearch');
   const dependsList = el('dependsOnList');
-  if (dependsSearch && dependsList) {
-    dependsSearch.addEventListener('focus', () => {
-      dependsList.hidden = false;
+  const dependsAddBtn = el('dependsOnAddBtn');
+  const dependsPopover = el('dependsOnPopover');
+  if (dependsSearch && dependsList && dependsAddBtn && dependsPopover) {
+    function openDependsOnPopover() {
+      dependsPopover.hidden = false;
       renderDependsOnPicker();
+      dependsSearch.focus();
+    }
+    function closeDependsOnPopover() {
+      dependsPopover.hidden = true;
+      dependsAddBtn.focus();
+    }
+    dependsAddBtn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      if (dependsPopover.hidden) {
+        openDependsOnPopover();
+      } else {
+        closeDependsOnPopover();
+      }
     });
     dependsSearch.addEventListener('input', () => {
-      dependsList.hidden = false;
       renderDependsOnPicker();
+    });
+    dependsSearch.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeDependsOnPopover();
+      }
     });
     document.addEventListener('click', (event) => {
       const picker = el('dependsOnPicker');
       if (!picker || picker.contains(event.target)) return;
-      dependsList.hidden = true;
+      closeDependsOnPopover();
     });
   }
 
