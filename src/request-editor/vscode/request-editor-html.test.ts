@@ -78,23 +78,35 @@ describe('request editor webview helpers', () => {
     assert.match(html, /data-testid="depends-on-picker"/u);
     assert.match(html, /id="dependsOnSearch"/u);
     assert.match(html, /id="dependsOnList"/u);
+    assert.match(html, /id="dependsOnAddBtn"/u);
+    assert.match(html, /id="dependsOnPopover"/u);
+    assert.match(html, /id="dependenciesInfoBtn"/u);
+    assert.match(html, /id="unknownVariablesSection"/u);
+    assert.match(html, /id="ambiguousProducersSection"/u);
     assert.match(html, /class="dependencies-block"/u);
-    assert.match(html, />Dependencies</u);
+    assert.match(html, /Dependencies\s*<span id="dependenciesInfoBtn"/u);
+    assert.match(html, /\+ Add Dependency/u);
     assert.match(html, /data-testid="auto-dependencies"/u);
     assert.match(html, /data-testid="unknown-variables"/u);
     assert.match(html, /data-testid="ambiguous-producers"/u);
-    assert.match(html, /Auto dependencies are computed/u);
-    assert.match(html, /whole collection/u);
-    assert.match(html, /Manual Depends on/u);
+    assert.match(html, />✓ Auto</u);
+    assert.match(html, />📌 Manual</u);
+    assert.match(html, />⚠ Unknown</u);
+    assert.match(html, />⚠ Ambiguous</u);
     assert.match(html, /pinAutoDependency/u);
     assert.match(html, /dependencyProjectionError/u);
     assert.match(html, /renderDependencyProjections/u);
+    assert.match(html, /unknownSection\.hidden/u);
+    assert.match(html, /ambiguousSection\.hidden/u);
+    assert.match(html, /openDependsOnPopover/u);
     assert.match(html, /ignoreUnknownVariable/u);
-    assert.match(html, /Select Manual requests by name from this collection/u);
     assert.match(html, /dependsOnSelectedRefs/u);
     assert.match(html, /dependencyCatalog/u);
     assert.match(html, /displayLabelForDependsToken/u);
     assert.match(html, /Unknown request/u);
+    assert.doesNotMatch(html, /Manual Depends on/u);
+    assert.doesNotMatch(html, /No unknown variables\./u);
+    assert.doesNotMatch(html, /No ambiguous producers\./u);
     assert.doesNotMatch(
       html,
       /Comma-separated request names \(the value of <code>@name<\/code>/u,
