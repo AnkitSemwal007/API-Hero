@@ -1,4 +1,6 @@
 import { cloneDetached, deepFreeze } from '../shared';
+import type { ResponsePresentation } from '../response/presentation';
+import type { ResolvedVariableSnapshot } from '../variables';
 
 /** Opaque stable identity for one collection run. */
 export type RunIdentifier = string;
@@ -192,6 +194,15 @@ export interface RequestRunResult {
    * mapping (§9.4), not this flag alone.
    */
   readonly extractionFailed?: boolean;
+  /**
+   * Presentation-ready response for the Collection Run Debugger. Built once
+   * via `presentExecutionResult` — never store raw RuntimeResponse here.
+   */
+  readonly presentation?: ResponsePresentation;
+  /**
+   * Secret-safe variable snapshots for Execution Details (referenced vars only).
+   */
+  readonly resolvedVariables?: readonly ResolvedVariableSnapshot[];
 }
 
 /** Aggregate counts and timing for a finished run. */

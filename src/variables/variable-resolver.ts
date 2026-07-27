@@ -332,6 +332,42 @@ export function maskVariableValue(value: VariableValue): string {
   return value.sensitive ? MASKED_VARIABLE_VALUE : value.value;
 }
 
+/**
+ * Secret-safe snapshot of one resolved variable for debugger / Execution Details
+ * UI. Sensitive values use {@link MASKED_VARIABLE_VALUE}.
+ */
+export interface ResolvedVariableSnapshot {
+  readonly name: string;
+  readonly scope: string;
+  readonly sensitive: boolean;
+  readonly displayValue: string;
+}
+
+/**
+ * Builds secret-safe snapshots for variables referenced by `request` only
+ * (not the full analysis map). Names are sorted for stable UI / tests.
+ */
+export function buildResolvedVariableSnapshots(
+  request: RuntimeRequest,
+  values: ReadonlyMap<string, VariableValue>,
+): readonly ResolvedVariableSnapshot[] {
+  const names = [...collectRequestReferences(request)].sort();
+  const snapshots: ResolvedVariableSnapshot[] = [];
+  for (const name of names) {
+    const value = values.get(name);
+    if (value === undefined) {
+      continue;
+    }
+    snapshots.push({
+      name: value.name,
+      scope: value.scope,
+      sensitive: value.sensitive,
+      displayValue: maskVariableValue(value),
+    });
+  }
+  return Object.freeze(snapshots);
+}
+
 function resolveBody(
   body: RuntimeBody | undefined,
   replace: (source: string) => string,

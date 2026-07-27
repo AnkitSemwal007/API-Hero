@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.3.0] - 2026-07-27
+
+Collection Run Debugger V1 — inspect an entire collection run from the Run Report without re-running APIs.
+
+### Added
+
+- **Collection Run Debugger (in-memory)** — expandable per-request Details in the Run Report: Response, Headers, Cookies, Extracted Variables, Assertions, Execution Details, Dependencies, and Timeline (Start / End / Duration)
+- **Shared response presentation** — Run Report owns `ResponsePresentation` built once via `presentExecutionResult`; never renders `RuntimeResponse` (same pipeline as the Single Request Viewer)
+- **Secret-safe resolved variables** — Execution Details shows `{{name}}` → display value (masked when sensitive)
+- **Variable Trace** — report-level Produced by / Consumed by projection from existing dependency edges (no graph changes)
+
+### Unchanged
+
+- Collection Runner execution order, failure policies, dependency engine, and extraction logic
+- No run persistence / retention (V1 is last-run in-memory only)
+- Request files (`.api`) never store responses
+
+### Tests
+
+- Orchestrator attaches `execution` + `resolvedVariables`; runner maps through `presentExecutionResult`; Run Report model/HTML coverage
+
 ## [2.2.0] - 2026-07-26
 
 Intelligent Variable & Dependency Autofill (ADR 0003), array-root `@extract` paths, and a FakeStore-oriented regression catalog.

@@ -43,6 +43,8 @@ import {
 } from '../auth';
 import {
   DefaultVariableResolver,
+  buildResolvedVariableSnapshots,
+  type ResolvedVariableSnapshot,
   type VariableResolutionContext,
   type VariableResolver,
 } from '../variables';
@@ -225,6 +227,17 @@ export interface RunAtSourceLocationResult {
    * `extractionFailed` from this without re-running extraction).
    */
   readonly extraction?: ExtractionReport;
+  /**
+   * Raw execution result when a network attempt occurred (success, failed, or
+   * cancelled-at-transport with timing). Collection Runner maps this through
+   * `presentExecutionResult` — callers must not render RuntimeResponse directly.
+   */
+  readonly execution?: ExecutionResult;
+  /**
+   * Secret-safe snapshots of variables referenced by the request, captured
+   * after successful variable resolve. Absent when resolve failed or never ran.
+   */
+  readonly resolvedVariables?: readonly ResolvedVariableSnapshot[];
 }
 
 const DEFAULT_PIPELINE: RequestExecutionPipeline = Object.freeze({
@@ -422,6 +435,14 @@ export class ExecutionOrchestrator {
               showNotifications,
             );
           }
+          const resolvedVariables = buildResolvedVariableSnapshots(
+            request,
+            resolution.values,
+          );
+          const resolvedVariableFields =
+            resolvedVariables.length === 0
+              ? {}
+              : { resolvedVariables };
           if (run.controller.signal.aborted) {
             return this.finishCancellationResult(run.id);
           }
@@ -570,6 +591,8 @@ export class ExecutionOrchestrator {
               return {
                 outcome: 'failed',
                 durationMs: result.timing.durationMs,
+                execution: result,
+                ...resolvedVariableFields,
                 ...(result.success
                   ? { statusCode: result.response.statusCode }
                   : {}),
@@ -588,6 +611,8 @@ export class ExecutionOrchestrator {
             return {
               outcome: 'cancelled',
               durationMs: result.timing.durationMs,
+              execution: result,
+              ...resolvedVariableFields,
             };
           }
           if (result.success && !assertionFailed) {
@@ -599,6 +624,8 @@ export class ExecutionOrchestrator {
               outcome: 'success',
               durationMs: result.timing.durationMs,
               statusCode: result.response.statusCode,
+              execution: result,
+              ...resolvedVariableFields,
               ...(assertionReport === undefined
                 ? {}
                 : { assertions: assertionReport, assertionFailed: false }),
@@ -611,6 +638,8 @@ export class ExecutionOrchestrator {
           return {
             outcome: 'failed',
             durationMs: result.timing.durationMs,
+            execution: result,
+            ...resolvedVariableFields,
             ...(result.success
               ? { statusCode: result.response.statusCode }
               : {}),

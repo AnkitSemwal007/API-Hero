@@ -38,6 +38,7 @@ import {
 } from '../history';
 import {
   DefaultVariableResolver,
+  MASKED_VARIABLE_VALUE,
   type VariableResolutionContext,
   type VariableResolver,
 } from '../variables';
@@ -592,6 +593,73 @@ test('runAtSourceLocation can suppress the response viewer', async () => {
   assert.equal(result.statusCode, 200);
   assert.equal(h.viewer.results.length, 0);
   assert.equal(h.notifications.messages.length, 0);
+});
+
+test('runAtSourceLocation attaches execution and secret-safe resolvedVariables', async () => {
+  const h = harness(
+    {
+      async execute(request) {
+        return success(request, 200);
+      },
+    },
+    undefined,
+    undefined,
+    {
+      definitions: [
+        {
+          name: 'host',
+          value: 'example.test',
+          scope: 'environment',
+          sensitive: false,
+        },
+        {
+          name: 'token',
+          value: 'sekrit',
+          scope: 'environment',
+          sensitive: true,
+        },
+        {
+          name: 'unused',
+          value: 'nope',
+          scope: 'global',
+          sensitive: false,
+        },
+      ],
+    },
+  );
+  const result = await h.orchestrator.runAtSourceLocation(
+    source('GET https://{{host}}/items\nAuthorization: Bearer {{token}}\n', 0),
+    { showViewer: false, useProgressUi: false, showNotifications: false },
+  );
+
+  assert.equal(result.outcome, 'success');
+  assert.ok(result.execution?.success === true);
+  assert.equal(result.execution?.response.statusCode, 200);
+  assert.deepEqual(
+    result.resolvedVariables?.map((item) => item.name).sort(),
+    ['host', 'token'],
+  );
+  const token = result.resolvedVariables?.find((item) => item.name === 'token');
+  assert.equal(token?.sensitive, true);
+  assert.equal(token?.displayValue, MASKED_VARIABLE_VALUE);
+  const host = result.resolvedVariables?.find((item) => item.name === 'host');
+  assert.equal(host?.displayValue, 'example.test');
+});
+
+test('runAtSourceLocation attaches execution on cancelled-at-transport', async () => {
+  const h = harness({
+    async execute(request) {
+      return failure(request, 'CANCELLED');
+    },
+  });
+  const result = await h.orchestrator.runAtSourceLocation(
+    source('GET https://example.test', 0),
+    { showViewer: false, useProgressUi: false, showNotifications: false },
+  );
+  assert.equal(result.outcome, 'cancelled');
+  assert.ok(result.execution !== undefined);
+  assert.equal(result.execution?.success, false);
+  assert.equal(result.durationMs, 1);
 });
 
 test('merges historyCaptureContext override with provider environmentName', async () => {
