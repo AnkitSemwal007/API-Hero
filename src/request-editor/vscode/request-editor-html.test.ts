@@ -219,6 +219,38 @@ describe('request editor webview helpers', () => {
     });
   });
 
+  test('applyState disables toolbar url/method in multi and empty modes', () => {
+    const html = renderRequestEditorHtml('mode-nonce');
+
+    const multiIdx = html.indexOf("next.mode === 'multi'");
+    const emptyIdx = html.indexOf("next.mode === 'empty'");
+    const formIdx = html.indexOf('formRoot.hidden = false');
+    assert.ok(multiIdx >= 0 && emptyIdx > multiIdx && formIdx > emptyIdx);
+
+    const multiBranch = html.slice(multiIdx, emptyIdx);
+    assert.match(multiBranch, /el\('url'\)\.disabled = true/u);
+    assert.match(multiBranch, /el\('method'\)\.disabled = true/u);
+
+    const emptyBranch = html.slice(emptyIdx, formIdx);
+    assert.match(emptyBranch, /el\('url'\)\.disabled = true/u);
+    assert.match(emptyBranch, /el\('method'\)\.disabled = true/u);
+
+    const nameFieldIdx = html.indexOf("setFieldValue('name'", formIdx);
+    assert.ok(nameFieldIdx > formIdx);
+    const formBranch = html.slice(formIdx, nameFieldIdx);
+    assert.match(formBranch, /el\('url'\)\.disabled = false/u);
+    assert.match(formBranch, /el\('method'\)\.disabled = false/u);
+  });
+
+  test('scheduleUpdate gates on form mode only', () => {
+    const html = renderRequestEditorHtml('schedule-nonce');
+    assert.match(html, /state\.mode !== 'form'/u);
+    const scheduleIdx = html.indexOf('function scheduleUpdate()');
+    assert.ok(scheduleIdx >= 0);
+    const scheduleBody = html.slice(scheduleIdx, scheduleIdx + 200);
+    assert.match(scheduleBody, /state\.mode !== 'form'/u);
+  });
+
   test('renderRequestEditorHtml embeds ack and resubmit sync handlers', () => {
     const html = renderRequestEditorHtml('sync-nonce');
     assert.match(html, /message\.type === 'ack'/u);

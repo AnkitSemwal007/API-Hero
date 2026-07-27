@@ -1684,6 +1684,9 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
       manageAuthProfiles.disabled = true;
       selectAuthentication.disabled = true;
       manageEnvironments.disabled = true;
+      // Toolbar url/method sit outside formRoot; disable so edits are not lost.
+      el('url').disabled = true;
+      el('method').disabled = true;
       applying = false;
       refreshPreview();
       return;
@@ -1700,6 +1703,9 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
       manageAuthProfiles.disabled = true;
       selectAuthentication.disabled = true;
       manageEnvironments.disabled = true;
+      // Toolbar url/method sit outside formRoot; disable so edits are not lost.
+      el('url').disabled = true;
+      el('method').disabled = true;
       applying = false;
       refreshPreview();
       return;
@@ -1713,6 +1719,8 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
     manageAuthProfiles.disabled = false;
     selectAuthentication.disabled = false;
     manageEnvironments.disabled = false;
+    el('url').disabled = false;
+    el('method').disabled = false;
 
     const model = next.model || defaultModel();
     setFieldValue('name', model.name || '');
