@@ -110,7 +110,7 @@ Only push when you intend to publish the tag remotely.
 
 ### 11. Publish GitHub Release
 
-On GitHub: create a Release for tag `v<version>`, paste the CHANGELOG section (or [docs/release/v2.3.3-release-notes.md](docs/release/v2.3.3-release-notes.md) when shipping 2.3.3), and attach `release/api-hero-<version>.vsix` if desired.
+On GitHub: create a Release for tag `v<version>`, paste the CHANGELOG section (or [docs/release/v2.3.4-release-notes.md](docs/release/v2.3.4-release-notes.md) when shipping 2.3.4), and attach `release/api-hero-<version>.vsix` if desired.
 
 ---
 
@@ -128,4 +128,4 @@ On GitHub: create a Release for tag `v<version>`, paste the CHANGELOG section (o
 
 ## What stays out of the VSIX
 
-`.vscodeignore` excludes tests, coverage, `src/`, docs, examples, `release/`, source maps, git/agent metadata, `.vsix` / backup bundles, and maintainer files such as `RELEASE.md`. Runtime must still include `dist/`, `package.json`, `LICENSE`, `README.md`, `CHANGELOG.md`, icons, `language-configuration.json`, `syntaxes/`, and `snippets/`.
+`.vscodeignore` excludes tests, coverage, `src/`, docs, examples, `release/`, source maps, git/agent metadata, `.vsix` / backup bundles, Marketplace listing media under `images/marketplace/**`, and maintainer files such as `RELEASE.md`. Runtime must still include `dist/`, `package.json`, `LICENSE`, `README.md`, `CHANGELOG.md`, extension chrome icons (`images/icon.png`, `images/api-*.svg`, `images/execution-*.svg`), `language-configuration.json`, `syntaxes/`, and `snippets/`. Listing screenshots use Cloudinary CDN URLs in the README (see [docs/release/marketplace-assets.md](docs/release/marketplace-assets.md)).

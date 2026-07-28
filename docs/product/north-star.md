@@ -1,12 +1,12 @@
 # API Hero — North Star
 
-**Role:** Long-term product intent. For what ships **today** (v2.3.3), see [product/README.md](./README.md) and the [user guide](../user/getting-started.md). For sequencing, see [roadmap.md](./roadmap.md).
+**Role:** Long-term product intent. For what ships **today** (v2.3.4), see [product/README.md](./README.md) and the [user guide](../user/getting-started.md). For sequencing, see [roadmap.md](./roadmap.md).
 
 ## One-paragraph North Star
 
 You install API Hero, open your repo, and use **Collections**, **Execution**, and **History** in the Activity Bar. You create folders and requests visually, edit them in the **Request Editor**, pick an environment and auth profile from managers (panels — not extra sidebar views), press Run, and inspect a rich **Response** panel. Collection runs are monitored from **Execution**; per-request history stays in **History**. Everything you save is a normal `.api` file. Teammates review it in Git. Settings JSON and the raw DSL remain available, but everyday work stays UI-first.
 
-## Already true in v2.3.3
+## Already true in v2.3.4
 
 - UI-first Request Editor (default for `.api`; Dependencies + Extract) and Response Viewer (copy / save / search / extraction report)
 - `@extract` / `@sensitive-extract` with Extraction Engine and Request Editor Extract tab
@@ -15,11 +15,11 @@ You install API Hero, open your repo, and use **Collections**, **Execution**, an
 - Activity Bar **Execution** view (Execution Center) for live collection runs
 - Git-friendly collections and OpenAPI import wizard
 - Secret Storage for auth credentials; masked presentation in history/responses
+- Marketplace listing media on Cloudinary CDN; lean VSIX (extension chrome icons only)
 
 ## Still aspirational (not claimed as shipped)
 
 - First-run Walkthrough contribution
-- Optional Marketplace workflow GIF (static PNGs under `images/marketplace/` ship with **2.3.3**)
 - Run File (all requests in one editor)
 - OAuth / richer auth providers
 - Cookie jar

@@ -1,46 +1,42 @@
-# Marketplace readiness — 2.3.3
+# Marketplace readiness — 2.3.4
 
-Checklist for publishing **API Hero** `ankitsemwal.api-hero` **2.3.3** (Execution Center, Collection Runner / Run Report polish, dependency workflow, terminology / discoverability, Marketplace assets).
+Checklist for publishing **API Hero** `ankitsemwal.api-hero` **2.3.4** (Marketplace README redesign, Cloudinary listing media, packaging lean-up, documentation pins). Extension runtime is unchanged from **2.3.3**.
 
-## Metadata
+## Identity
 
-| Field | Expected |
+| Field | Value |
 | --- | --- |
-| `displayName` | API Hero |
-| `name` / publisher / ID | `api-hero` / `ankitsemwal` / `ankitsemwal.api-hero` |
-| `version` | `2.3.3` |
-| `description` / keywords / categories | Match shipped REST/HTTP scope (no GraphQL/OAuth claims) |
-| `icon` | `images/icon.png` (128×128) |
-| `galleryBanner` | `#0f766e` dark |
-| License / repo / bugs / homepage | MIT + GitHub links set |
-
-## Functional claims (listing must match)
-
-- Request Editor default for `.api` (including **Dependencies**, **Extract** tab with Collection/Workspace scopes)
-- Collections + **Execution** + History Activity Bar
-- Env Manager, Auth Manager, Overview, OpenAPI wizard
-- Assertions, **extraction** (`@extract` / `@sensitive-extract`), **Create Variable From Response**, **collection chaining** (`@depends-on`), Collection Runner + **Run Report** / **Collection Run Debugger** (last-run in-memory Details)
-- Stubs called out or omitted: Run File, Login, Logout
-- No OAuth2, cookie jar, Code Actions, GraphQL, or Variable Manager UI
+| `name` | `api-hero` |
+| `publisher` | `ankitsemwal` |
+| `version` | `2.3.4` |
+| Extension ID | `ankitsemwal.api-hero` |
+| License | MIT |
 
 ## Quality gates
 
-- [x] `npm run check` / `npm run lint` / `npm test` pass
-- [x] `npm run package` produces `release/api-hero-2.3.3.vsix`
-- [x] Stable IDs unchanged ([stable-identifiers.md](./stable-identifiers.md))
-- [ ] Manual smoke: create collection → new request → run → History metadata detail
-- [ ] Manual smoke: collection run → Execution view + Run Report Details (Debugger)
-- [ ] Manual smoke: multi/empty Request Editor → Method/URL disabled; Dependencies focus retained
-- [ ] Manual smoke: rename environment → selection + secrets intact
-- [ ] Manual smoke: extract rule → run → extraction report → variable reuse
-- [ ] Manual smoke: manage env/auth, filter collections, OpenAPI import
+- [x] `npm run lint`
+- [x] `npm test`
+- [x] `npm run build` / TypeScript compile
+- [x] `npm run package` produces `release/api-hero-2.3.4.vsix`
+- [x] README optimized for Marketplace + GitHub scanning
+- [x] Cloudinary listing URLs return HTTP 200
+- [x] No GraphQL / OAuth claims beyond shipped scope
 
 ## Assets
 
 See [marketplace-assets.md](./marketplace-assets.md), [banner placeholder](../marketplace/banner-placeholder.md), and the full presentation audit [marketplace-readiness-review.md](../marketplace/marketplace-readiness-review.md).
 
-README embeds PNGs under `images/marketplace/` (must ship in the VSIX — not `.vscodeignore`d).
+README embeds listing screenshots via **Cloudinary HTTPS URLs** (see [marketplace-assets.md](./marketplace-assets.md)). `images/marketplace/**` is `.vscodeignore`d and `.gitignore`d so those bytes are not in the VSIX or the repo. Extension chrome icons under `images/` still ship.
 
 ## Brand vs IDs
 
-User-facing **API Hero**; machine IDs remain `apiRunner.*`.
+Display name **API Hero**; contribution IDs stay stable — [stable-identifiers.md](./stable-identifiers.md).
+
+## Release notes
+
+- [v2.3.4-release-notes.md](./v2.3.4-release-notes.md)
+- Prior feature release: [v2.3.3-release-notes.md](./v2.3.3-release-notes.md)
+
+## Operator runbook
+
+[`RELEASE.md`](../../RELEASE.md) — version bump → lint/test/build → `npm run package` → manual portal upload.

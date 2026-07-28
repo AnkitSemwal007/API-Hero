@@ -1,32 +1,35 @@
-# Banner and screenshot placeholders
+# Marketplace banner & listing media
 
-Use this note until final Marketplace / GitHub media is checked in under `images/marketplace/`.
+Listing media for **API Hero 2.3.4** is hosted on **Cloudinary** (see [marketplace-assets.md](../release/marketplace-assets.md)). README uses absolute CDN URLs so the VSIX does not need to ship large screenshots.
 
-## Banner
+## Gallery banner color
 
-- Target ~**1280×640** wide PNG/JPG (GitHub social / promo).
-- Show **API Hero** UI or a branded wide mark; gallery banner color is teal `#0f766e`.
-- Avoid purple gradients and generic stock “API” illustrations.
+`package.json` `galleryBanner`:
 
-Suggested docs-only path (often not in VSIX): `docs/marketplace/marketing-api-hero.png`.  
-Ship listing media from: `images/marketplace/banner.png`, `images/marketplace/social-preview.png`.
+- Color: `#0f766e`
+- Theme: `dark`
 
-## Screenshots and GIFs
+## CDN links (verified)
 
-Placeholders until captured from a real **2.3.3** build (README already embeds these paths):
+- Banner: https://res.cloudinary.com/iaojzqjd/image/upload/banner_psgrx2.png
+- Social: https://res.cloudinary.com/iaojzqjd/image/upload/social-preview_jspifx.png
+- Hero: https://res.cloudinary.com/iaojzqjd/image/upload/hero_iluitq.png
 
-| Path | Subject |
+Optional docs-only path (often not in VSIX): `docs/marketplace/marketing-api-hero.png`.
+
+## Screenshot map
+
+| Role | CDN URL |
 | --- | --- |
-| `images/marketplace/hero.png` | Product hero |
-| `images/marketplace/screenshot-collections-editor.png` | Collections + Request Editor (+ Dependencies) |
-| `images/marketplace/screenshot-response.png` | Response viewer (Create Variable From Response, copy/save/search) |
-| `images/marketplace/screenshot-execution.png` | Execution Center |
-| `images/marketplace/screenshot-run-report.png` | Run Report with Details expanded |
-| `images/marketplace/screenshot-history.png` | History + detail |
-| `images/marketplace/screenshot-environments.png` | Environment Manager |
-| `images/marketplace/workflow.gif` | Short run loop (ships in 2.3.3) |
+| Collections + Request Editor | https://res.cloudinary.com/iaojzqjd/image/upload/screenshot-collections-editor_idcn2j.png |
+| Response Viewer | https://res.cloudinary.com/iaojzqjd/image/upload/screenshot-response_wt1caw.png |
+| Execution Center | https://res.cloudinary.com/iaojzqjd/image/upload/screenshot-execution_il1wy7.png |
+| Run Report | https://res.cloudinary.com/iaojzqjd/image/upload/screenshot-run-report_pxwll2.png |
+| History | https://res.cloudinary.com/iaojzqjd/image/upload/screenshot-history_k4zaq3.png |
+| Environments | https://res.cloudinary.com/iaojzqjd/image/upload/screenshot-environments_wfx7z1.png |
+| Workflow GIF | https://res.cloudinary.com/iaojzqjd/image/upload/workflow_qsb5jj.gif |
 
-For VSIX README embeds, keep finalized assets under `images/marketplace/` with root-relative paths (do not `.vscodeignore` `images/`).
+`images/marketplace/**` is excluded from the VSIX (`.vscodeignore`) and ignored in Git (`.gitignore`). Keep extension icons (`images/icon.png`, `images/api-*.svg`, `images/execution-*.svg`) in-package.
 
 ## Related
 

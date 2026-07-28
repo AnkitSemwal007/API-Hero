@@ -1,12 +1,12 @@
 # Roadmap
 
-Honest near-term plan for **API Hero** after **2.3.3** (Execution Center, Collection Runner / Run Report polish, dependency workflow, Marketplace screenshot wiring; Collection Run Debugger and dependency autofill already ship). Managers (Environments, Auth), Overview, History Detail, Run Report / Debugger, OpenAPI wizard, Response copy/save/search, response variable extraction, Create Variable From Response UX, and collection chaining (`@depends-on`, per-run store, collection variables) already ship — they are not roadmap gaps.
+Honest near-term plan for **API Hero** after **2.3.4** (Marketplace README + Cloudinary CDN assets + lean packaging; product features through **2.3.3** already ship — Execution Center, Collection Runner / Run Report polish, dependency workflow, Collection Run Debugger, dependency autofill). Managers (Environments, Auth), Overview, History Detail, Run Report / Debugger, OpenAPI wizard, Response copy/save/search, response variable extraction, Create Variable From Response UX, and collection chaining (`@depends-on`, per-run store, collection variables) already ship — they are not roadmap gaps.
 
 ## Near term
 
 | Item | Notes |
 | --- | --- |
-| Marketplace GIF / asset refresh | Optional `workflow.gif`; keep PNGs under `images/marketplace/` in sync with UI |
+| Marketplace asset refresh | Update Cloudinary captures when UI changes; keep README section images in sync |
 | Run File | Implement multi-request file execution (today: stub, palette-hidden) |
 | Examples pack | Curated `.api` samples including extract flows |
 | Docs drift checks | Keep user/architecture docs matched to `package.json` |
