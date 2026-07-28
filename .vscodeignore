@@ -52,5 +52,6 @@ release/**
 tmp/**
 temp/**
 
-# NOTE: Do NOT ignore images/ — Marketplace README embeds under images/marketplace/
-# must ship in the VSIX (hero, screenshots, banner, social-preview).
+# Extension chrome icons must ship (icon.png, api-*.svg, execution-*.svg).
+# Listing screenshots / banner / GIF are Cloudinary CDN URLs in README — exclude from VSIX.
+images/marketplace/**

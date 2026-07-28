@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.3.4] - 2026-07-28
+
+Marketplace presentation and documentation release. Extension behavior is unchanged from **2.3.3**.
+
+### Changed
+
+- Redesigned root README as a scannable Marketplace landing page (hero, benefits, comparison early, features with screenshots beside sections)
+- Marketplace listing media (hero, banner, social preview, screenshots, workflow GIF) served from Cloudinary CDN URLs
+- `images/marketplace/**` excluded from the VSIX (`.vscodeignore`) and ignored locally (`.gitignore`); extension chrome icons still ship
+- Release / readiness / asset docs pinned to **2.3.4**
+
 ## [2.3.3] - 2026-07-28
 
 Execution Center, Live Run Report polish, collection execution improvements, dependency workflow enhancements, Request Editor UX, repository cleanup, and Marketplace readiness.

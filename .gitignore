@@ -41,3 +41,6 @@ docs/*-AUDIT*.md
 docs/ux/*-audit.md
 docs/ux/*-hardening-audit.md
 docs/ux/v1-release-readiness.md
+
+# Marketplace listing media hosted on Cloudinary (see docs/release/marketplace-assets.md)
+images/marketplace/

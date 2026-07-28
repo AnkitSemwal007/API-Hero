@@ -14,6 +14,12 @@ Implementation is source of truth. Prefer [user docs](../user/getting-started.md
 
 Help developers author, run, assert, and review HTTP APIs without leaving the editor — with git-friendly text artifacts and secure secret handling.
 
+## What shipped through 2.3.4
+
+- Everything from **2.3.3** (Execution Center, Collection Runner / Live Run Report polish, dependency workflow, discoverability) plus **2.3.4** Marketplace README redesign, Cloudinary listing media, and leaner VSIX packaging — **no runtime feature changes**
+
+Not in 2.3.4: OAuth2, cookie jar, Code Actions, GraphQL, full Run File, Global-scope extract (manual only), Variable Manager UI, persistent Run Report.
+
 ## What shipped through 2.3.3
 
 - Everything from **2.2.0** / **2.3.0**–**2.3.2** (dependency autofill, Collection Run Debugger V1, Request Editor / Env Manager stability) plus **2.3.3** Execution Center, Collection Runner / Live Run Report polish, discoverability, and Marketplace screenshot wiring
