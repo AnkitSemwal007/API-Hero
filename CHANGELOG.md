@@ -7,10 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.3.5] - 2026-07-28
+
 ### Changed
 
 - Migrated contribution namespace from `apiRunner.*` to `apiHero.*` (commands, views, settings, webview panel types, secret key prefix). Legacy `apiRunner.*` command aliases, custom editor view type, and secret-key fallback remain for compatibility.
 - **Breaking (layout only):** Activity Bar container and view IDs are now `apiHero` / `apiHero.*`. Saved sidebar layouts and custom `when` clauses that reference `apiRunner.*` views will not restore those views; reopen the API Hero Activity Bar icon once after upgrading.
+
 ## [2.3.4] - 2026-07-28
 
 Marketplace presentation and documentation release. Extension behavior is unchanged from **2.3.3**.
