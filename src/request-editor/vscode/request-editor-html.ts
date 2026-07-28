@@ -12,6 +12,7 @@ import {
   buildNonceOnlyCsp,
   escapeAttribute,
   escapeHtml,
+  iconHtml,
   WEBVIEW_SHARED_CSS,
 } from '../../ui/webview';
 import type { RequestSourceDocument } from '../../request-source';
@@ -52,7 +53,7 @@ export function renderRequestEditorHtml(nonce: string): string {
     </label>
     <button type="button" id="envShortcut" class="chip" title="Switch Environment" aria-label="Switch Environment">Env: None</button>
     <button type="button" id="authShortcut" class="chip" title="Select Authentication" aria-label="Select Authentication">Auth</button>
-    <button type="button" id="run" class="primary run-btn">Run</button>
+    <button type="button" id="run" class="primary run-btn">${iconHtml('play', { decorative: true })} Run</button>
   </div>
 </header>
 <nav class="tabs" role="tablist" aria-label="Request sections">
@@ -73,19 +74,28 @@ export function renderRequestEditorHtml(nonce: string): string {
         <button type="button" id="openText" class="ghost" title="Open With Text Editor">Open Text Editor</button>
       </div>
     </div>
-    <p class="hint">Method and URL stay in the top bar. Query parameters are on the Params tab.</p>
-    <div class="dependencies-block">
-      <h3 class="ah-section-title dependencies-title">
-        Dependencies
-        <span id="dependenciesInfoBtn" class="dependencies-info-btn" role="img" title="Auto dependencies are computed from extracts and are not written to the file. Pin converts Auto → Manual (@depends-on). Indexed over the whole collection; a folder or selection run may omit some Auto edges. Select Manual requests by name from this collection. Dependencies are stored as readable names (or Folder/Name when needed). Renaming a request updates dependents." aria-label="About dependencies">ⓘ</span>
+    <div class="execution-block dependencies-block">
+      <h3 class="ah-section-title execution-title">
+        Execution
+        <span id="dependenciesInfoBtn" class="dependencies-info-btn" title="Dependencies are other requests this one needs. Detected ones stay off the file until you pin them. A folder or selection run may not include every detected dependency." role="img" aria-label="Dependencies are other requests this one needs. Detected ones stay off the file until you pin them. A folder or selection run may not include every detected dependency.">${iconHtml('info', { className: 'ah-icon--muted', decorative: true })}</span>
       </h3>
-      <p id="dependencyProjectionError" class="hint depends-projection-error" data-testid="dependency-projection-error" hidden></p>
-      <div class="field dependson-field depend-section">
-        <span>✓ Auto</span>
-        <div id="autoDependenciesList" class="depends-projection-list" data-testid="auto-dependencies" aria-live="polite"></div>
+      <div id="executionStatus" class="execution-status" role="status" data-testid="execution-status">
+        <span id="executionStatusIcon" class="execution-status-icon">${iconHtml('check-circle', { className: 'ah-icon--success ah-icon--status', decorative: true })}</span>
+        <div class="execution-status-copy">
+          <div id="executionStatusHeadline" class="execution-status-headline">Runs independently</div>
+          <div id="executionStatusDetail" class="execution-status-detail">No dependencies required.</div>
+        </div>
       </div>
-      <div class="field dependson-field depend-section">
-        <span>📌 Manual</span>
+      <p id="dependencyProjectionError" class="hint depends-projection-error" data-testid="dependency-projection-error" hidden></p>
+      <div id="dependenciesContent" class="dependencies-content" hidden>
+        <h4 class="execution-subsection-heading">Dependencies</h4>
+        <div id="autoDependenciesSection" class="depend-section" hidden>
+          <span class="execution-subsection-label">Automatically detected</span>
+          <div id="autoDependenciesList" class="depends-projection-list" data-testid="auto-dependencies" aria-live="polite"></div>
+        </div>
+      </div>
+      <div id="manualDependenciesSection" class="depend-section">
+        <span id="pinnedLabel" class="execution-subsection-label" hidden>Pinned</span>
         <div id="dependsOnPicker" class="depends-picker" data-testid="depends-on-picker">
           <div id="dependsOnChips" class="depends-chips" aria-live="polite"></div>
           <button type="button" id="dependsOnAddBtn" class="secondary depends-add-btn">+ Add Dependency</button>
@@ -95,13 +105,18 @@ export function renderRequestEditorHtml(nonce: string): string {
           </div>
         </div>
       </div>
-      <div id="unknownVariablesSection" class="field dependson-field depend-section" hidden>
-        <span>⚠ Unknown</span>
-        <div id="unknownVariablesList" class="depends-projection-list" data-testid="unknown-variables" aria-live="polite"></div>
-      </div>
-      <div id="ambiguousProducersSection" class="field dependson-field depend-section" hidden>
-        <span>⚠ Ambiguous</span>
-        <div id="ambiguousProducersList" class="depends-projection-list" data-testid="ambiguous-producers" aria-live="polite"></div>
+      <div id="issuesContent" class="issues-content" hidden>
+        <h4 class="execution-subsection-heading">Issues</h4>
+        <div id="unknownVariablesSection" class="depend-section" hidden>
+          <span class="execution-subsection-label">Missing variables</span>
+          <p class="execution-issue-explain">Variables without a producer.</p>
+          <div id="unknownVariablesList" class="depends-projection-list" data-testid="unknown-variables" aria-live="polite"></div>
+        </div>
+        <div id="ambiguousProducersSection" class="depend-section" hidden>
+          <span class="execution-subsection-label">Multiple producers</span>
+          <p class="execution-issue-explain">More than one request produces the same variable.</p>
+          <div id="ambiguousProducersList" class="depends-projection-list" data-testid="ambiguous-producers" aria-live="polite"></div>
+        </div>
       </div>
     </div>
   </section>
@@ -375,14 +390,16 @@ body {
   gap: var(--ah-space-1);
   align-items: center;
 }
+.execution-block,
 .dependencies-block {
   max-width: 36rem;
   margin-bottom: var(--ah-space-1);
   display: grid;
-  gap: 6px;
+  gap: 8px;
 }
+.execution-block .ah-section-title,
 .dependencies-block .ah-section-title { margin-top: 0; margin-bottom: 0; }
-.dependencies-title {
+.execution-title {
   display: flex;
   align-items: center;
   gap: 4px;
@@ -396,26 +413,78 @@ body {
   font-size: 12px;
   line-height: 1;
   opacity: 0.85;
+  display: inline-flex;
+  align-items: center;
 }
 .dependencies-info-btn:hover { opacity: 1; color: var(--vscode-foreground); }
+.execution-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.execution-status-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+}
+.execution-status-copy {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+.execution-status-headline {
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--vscode-foreground);
+}
+.execution-status-detail {
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+  line-height: 1.3;
+}
+.execution-subsection-heading {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--vscode-foreground);
+}
+.execution-subsection-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--vscode-descriptionForeground);
+}
+.execution-issue-explain {
+  margin: 0;
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+  line-height: 1.3;
+}
+.dependencies-content,
+.issues-content {
+  display: grid;
+  gap: 6px;
+}
+.dependencies-content[hidden],
+.issues-content[hidden] { display: none; }
 .dependson-field { margin: 0; }
 .depend-section {
-  gap: 2px;
+  display: grid;
+  gap: 4px;
 }
+.depend-section[hidden] { display: none; }
 .depends-projection-list {
   display: grid;
-  gap: 2px;
+  gap: 4px;
   min-height: 0;
 }
 .depends-projection-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px;
-  padding: 2px 4px;
-  border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
-  border-radius: 2px;
-  background: var(--vscode-input-background);
+  gap: 6px;
+  padding: 4px 0;
 }
 .depends-projection-row .dep-label {
   font-weight: 600;
@@ -423,7 +492,7 @@ body {
 }
 .depends-reason {
   color: var(--vscode-descriptionForeground);
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1.3;
 }
 .depends-pin-btn {
@@ -444,10 +513,7 @@ body {
 .depends-picker {
   display: grid;
   gap: 4px;
-  border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
-  border-radius: 2px;
-  padding: 4px;
-  background: var(--vscode-input-background);
+  padding: 0;
   position: relative;
 }
 .depends-add-btn {
@@ -1079,12 +1145,14 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
     else set.delete(dependRef);
     dependsOnSelectedRefs = Array.from(set);
     renderDependsOnPicker();
+    renderDependencyProjections();
     scheduleUpdate();
   }
 
   function removeDependsOnRef(dependRef) {
     dependsOnSelectedRefs = dependsOnSelectedRefs.filter((ref) => ref !== dependRef);
     renderDependsOnPicker();
+    renderDependencyProjections();
     scheduleUpdate();
   }
 
@@ -1095,6 +1163,20 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
     toggleDependsOnRef(dependRef, true);
   }
 
+  const EXEC_ICON_READY = ${JSON.stringify(iconHtml('check-circle', { className: 'ah-icon--success ah-icon--status', decorative: true }))};
+  const EXEC_ICON_DEPS = ${JSON.stringify(iconHtml('network', { className: 'ah-icon--info ah-icon--status', decorative: true }))};
+  const EXEC_ICON_ISSUE = ${JSON.stringify(iconHtml('alert-triangle', { className: 'ah-icon--warning ah-icon--status', decorative: true }))};
+  // pin/remove use shared ahIconSpan from VARIABLE_INTELLISENSE_SCRIPT (single client helper).
+
+  function setExecutionStatus(iconHtmlMarkup, headline, detail) {
+    const iconEl = el('executionStatusIcon');
+    const headlineEl = el('executionStatusHeadline');
+    const detailEl = el('executionStatusDetail');
+    if (iconEl) iconEl.innerHTML = iconHtmlMarkup;
+    if (headlineEl) headlineEl.textContent = headline;
+    if (detailEl) detailEl.textContent = detail;
+  }
+
   function renderDependencyProjections() {
     const errorEl = el('dependencyProjectionError');
     const autoRoot = el('autoDependenciesList');
@@ -1102,6 +1184,10 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
     const ambiguousRoot = el('ambiguousProducersList');
     const unknownSection = el('unknownVariablesSection');
     const ambiguousSection = el('ambiguousProducersSection');
+    const dependenciesContent = el('dependenciesContent');
+    const autoSection = el('autoDependenciesSection');
+    const pinnedLabel = el('pinnedLabel');
+    const issuesContent = el('issuesContent');
     if (!autoRoot || !unknownRoot || !ambiguousRoot) return;
 
     if (errorEl) {
@@ -1114,8 +1200,64 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
       }
     }
 
+    const hasAuto = autoDependencies.length > 0;
+    const hasManual = dependsOnSelectedRefs.length > 0;
+    const hasUnknown = unknownVariables.length > 0;
+    const hasAmbiguous = ambiguousProducers.length > 0;
+    const hasIssues = hasUnknown || hasAmbiguous;
+
+    if (hasUnknown && hasAmbiguous) {
+      setExecutionStatus(
+        EXEC_ICON_ISSUE,
+        'Needs attention',
+        'Fix missing variables and multiple producers'
+      );
+    } else if (hasUnknown) {
+      setExecutionStatus(
+        EXEC_ICON_ISSUE,
+        'Missing required variables',
+        'One or more variables have no producer'
+      );
+    } else if (hasAmbiguous) {
+      setExecutionStatus(
+        EXEC_ICON_ISSUE,
+        'Multiple producers found',
+        'Choose which request should provide each value'
+      );
+    } else {
+      const uniqueRefs = new Set();
+      autoDependencies.forEach((entry) => {
+        if (entry && entry.dependRef) uniqueRefs.add(entry.dependRef);
+      });
+      dependsOnSelectedRefs.forEach((ref) => {
+        if (ref) uniqueRefs.add(ref);
+      });
+      manualDependencies.forEach((entry) => {
+        if (entry && entry.dependRef) uniqueRefs.add(entry.dependRef);
+      });
+      const n = uniqueRefs.size;
+      if (n > 0) {
+        setExecutionStatus(
+          EXEC_ICON_DEPS,
+          'Depends on ' + n + ' request' + (n === 1 ? '' : 's'),
+          'Will run after its dependencies'
+        );
+      } else {
+        setExecutionStatus(
+          EXEC_ICON_READY,
+          'Runs independently',
+          'No dependencies required.'
+        );
+      }
+    }
+
+    if (dependenciesContent) dependenciesContent.hidden = !hasAuto;
+    if (autoSection) autoSection.hidden = !hasAuto;
+    if (pinnedLabel) pinnedLabel.hidden = !hasManual;
+    if (issuesContent) issuesContent.hidden = !hasIssues;
+
     autoRoot.replaceChildren();
-    if (autoDependencies.length > 0) {
+    if (hasAuto) {
       autoDependencies.forEach((entry) => {
         const row = document.createElement('div');
         row.className = 'depends-projection-row';
@@ -1126,26 +1268,28 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
         (entry.variables || []).forEach((variable) => {
           const reason = document.createElement('span');
           reason.className = 'depends-reason';
-          reason.textContent = 'Reason: ' + variable;
+          reason.textContent = 'Uses ' + variable;
           row.appendChild(reason);
         });
-        const alreadyManual = manualDependencies.some(
-          (manual) => manual.dependRef === entry.dependRef
-        );
+        const alreadyManual =
+          dependsOnSelectedRefs.includes(entry.dependRef) ||
+          manualDependencies.some((manual) => manual.dependRef === entry.dependRef);
         if (!alreadyManual) {
           const pin = document.createElement('button');
           pin.type = 'button';
           pin.className = 'secondary depends-pin-btn';
-          pin.textContent = '📌';
-          pin.title = 'Pin ' + entry.dependRef + ' as manual dependency';
-          pin.setAttribute('aria-label', 'Pin ' + entry.dependRef + ' as manual dependency');
+          pin.innerHTML = ahIconSpan('pin');
+          pin.title = 'Keep dependency ' + entry.dependRef;
+          pin.setAttribute('aria-label', 'Keep dependency ' + entry.dependRef);
           pin.addEventListener('click', () => pinAutoDependency(entry.dependRef));
           row.appendChild(pin);
         } else {
           const pinned = document.createElement('span');
           pinned.className = 'depends-pinned-badge';
-          pinned.textContent = '📌';
-          pinned.title = 'Already pinned as manual dependency';
+          pinned.innerHTML = ahIconSpan('pin');
+          pinned.title = 'Already pinned: ' + entry.dependRef;
+          pinned.setAttribute('role', 'img');
+          pinned.setAttribute('aria-label', 'Already pinned: ' + entry.dependRef);
           row.appendChild(pinned);
         }
         autoRoot.appendChild(row);
@@ -1154,9 +1298,9 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
 
     unknownRoot.replaceChildren();
     if (unknownSection) {
-      unknownSection.hidden = unknownVariables.length === 0;
+      unknownSection.hidden = !hasUnknown;
     }
-    if (unknownVariables.length > 0) {
+    if (hasUnknown) {
       unknownVariables.forEach((name) => {
         const row = document.createElement('div');
         row.className = 'depends-projection-row';
@@ -1164,11 +1308,15 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
         label.className = 'dep-label';
         label.textContent = name;
         row.appendChild(label);
+        const explain = document.createElement('span');
+        explain.className = 'depends-reason';
+        explain.textContent = 'No request produces this value.';
+        row.appendChild(explain);
         const ignore = document.createElement('button');
         ignore.type = 'button';
         ignore.className = 'ghost';
         ignore.textContent = 'Ignore';
-        ignore.title = 'Suppress this unknown variable in this workspace';
+        ignore.title = 'Hide this variable in this workspace';
         ignore.addEventListener('click', () => {
           post({ type: 'ignoreUnknownVariable', name });
         });
@@ -1179,9 +1327,9 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
 
     ambiguousRoot.replaceChildren();
     if (ambiguousSection) {
-      ambiguousSection.hidden = ambiguousProducers.length === 0;
+      ambiguousSection.hidden = !hasAmbiguous;
     }
-    if (ambiguousProducers.length > 0) {
+    if (hasAmbiguous) {
       ambiguousProducers.forEach((entry) => {
         const row = document.createElement('div');
         row.className = 'depends-projection-row';
@@ -1189,13 +1337,21 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
         label.className = 'dep-label';
         label.textContent = entry.variable;
         row.appendChild(label);
+        const explain = document.createElement('span');
+        explain.className = 'depends-reason';
+        explain.textContent = 'Choose which request should provide this value.';
+        row.appendChild(explain);
         (entry.producers || []).forEach((producer) => {
           const pin = document.createElement('button');
           pin.type = 'button';
           pin.className = 'secondary depends-pin-btn';
-          pin.textContent = '📌 ' + producer.dependRef;
-          pin.title = 'Pin as manual dependency';
-          pin.setAttribute('aria-label', 'Pin ' + producer.dependRef + ' as manual dependency');
+          pin.innerHTML = ahIconSpan('pin');
+          pin.appendChild(document.createTextNode(' ' + producer.dependRef));
+          pin.title = 'Use ' + producer.dependRef + ' for this value';
+          pin.setAttribute(
+            'aria-label',
+            'Use ' + producer.dependRef + ' for this value'
+          );
           pin.addEventListener('click', () => pinAutoDependency(producer.dependRef));
           row.appendChild(pin);
         });
@@ -1220,7 +1376,7 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
       const remove = document.createElement('button');
       remove.type = 'button';
       remove.setAttribute('aria-label', 'Remove ' + label.textContent);
-      remove.textContent = '×';
+      remove.innerHTML = ahIconSpan('x');
       remove.addEventListener('click', () => removeDependsOnRef(token));
       chip.appendChild(label);
       chip.appendChild(remove);
@@ -1835,6 +1991,7 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
       dependsSearch.focus();
     }
     function closeDependsOnPopover() {
+      if (dependsPopover.hidden) return;
       dependsPopover.hidden = true;
       dependsAddBtn.focus();
     }
@@ -1858,6 +2015,7 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
     document.addEventListener('click', (event) => {
       const picker = el('dependsOnPicker');
       if (!picker || picker.contains(event.target)) return;
+      if (dependsPopover.hidden) return;
       closeDependsOnPopover();
     });
   }

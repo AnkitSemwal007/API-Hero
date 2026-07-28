@@ -9,11 +9,13 @@ import {
   RequestRunOutcomeKind,
   type DependencyEdge,
   type FailurePolicyKind as FailurePolicyKindType,
+  type PlannedRequest,
   type RequestRunOutcomeKind as OutcomeKind,
   type RequestRunResult,
   type RunSummary,
 } from '../models';
 import { listFailurePolicies } from '../failure-policies';
+import type { CollectionRunSessionSnapshot } from '../run-session-models';
 import type { ResponsePresentation } from '../../response/presentation';
 import type { ResolvedVariableSnapshot } from '../../variables';
 import {
@@ -35,7 +37,8 @@ export interface CollectionRunReportRow {
   readonly method: string;
   readonly methodBadgeClass: string;
   readonly url: string;
-  readonly outcome: OutcomeKind;
+  /** Terminal outcomes plus live Running / Pending placeholders. */
+  readonly outcome: OutcomeKind | 'running' | 'pending';
   readonly outcomeLabel: string;
   readonly statusBadgeText: string;
   readonly statusBadgeClass: string;
@@ -102,7 +105,10 @@ export interface CollectionRunReportUnresolvedConsume {
 export interface CollectionRunReportModel {
   readonly runId: string;
   readonly collectionName: string;
-  readonly status: (typeof CollectionRunStatus)[keyof typeof CollectionRunStatus];
+  readonly status:
+    | (typeof CollectionRunStatus)[keyof typeof CollectionRunStatus]
+    | 'running'
+    | 'failed';
   readonly statusLabel: string;
   readonly failurePolicyLabel: string;
   readonly summaryLine: string;
@@ -123,6 +129,8 @@ export interface CollectionRunReportModel {
   readonly unresolvedConsumes: readonly CollectionRunReportUnresolvedConsume[];
   /** Variable Trace V1 — produced by / consumed by from edges + result names. */
   readonly variableTrace: readonly CollectionRunReportVariableTrace[];
+  /** True while the run is still in progress (panel remains open for live updates). */
+  readonly live?: boolean;
 }
 
 export type CollectionRunReportInboundMessage =
@@ -130,8 +138,14 @@ export type CollectionRunReportInboundMessage =
   | { readonly type: 'open'; readonly requestId: string }
   | { readonly type: 'reveal'; readonly requestId: string };
 
+/**
+ * Host → webview messages.
+ * Prefer `live` for progress refreshes; `update` is accepted as a legacy alias.
+ */
 export type CollectionRunReportOutboundMessage =
   | { readonly type: 'init'; readonly model: CollectionRunReportModel }
+  | { readonly type: 'live'; readonly model: CollectionRunReportModel }
+  | { readonly type: 'update'; readonly model: CollectionRunReportModel }
   | { readonly type: 'error'; readonly message: string };
 
 /** Setting values for `apiRunner.collectionRunner.failurePolicy`. */
@@ -257,6 +271,190 @@ export function buildCollectionRunReportModel(
     ),
     variableTrace: buildVariableTrace(summary.results, edges, labelByRequestId),
   };
+}
+
+/**
+ * Builds a report model from a live (or just-failed) session snapshot.
+ * Finished sessions with a summary reuse {@link buildCollectionRunReportModel}.
+ */
+export function buildLiveCollectionRunReportModel(
+  session: CollectionRunSessionSnapshot,
+): CollectionRunReportModel {
+  if (session.summary !== undefined) {
+    return {
+      ...buildCollectionRunReportModel(session.summary),
+      live: false,
+    };
+  }
+
+  const { plan } = session;
+  const labelByRequestId = new Map(
+    plan.requests.map((request) => [request.requestId, request.label]),
+  );
+  const dependencies = plan.extensions?.dependencies;
+  const edges = dependencies?.edges ?? [];
+  const resultsByOrdinal = new Map(
+    session.results.map((result) => [result.ordinal, result]),
+  );
+  const currentOrdinal = session.current?.ordinal;
+  const rows: CollectionRunReportRow[] = plan.requests.map((planned) => {
+    const finished = resultsByOrdinal.get(planned.ordinal);
+    if (finished !== undefined) {
+      return mapResultRow(finished, planned, edges, labelByRequestId);
+    }
+    if (
+      session.status === 'running' &&
+      currentOrdinal !== undefined &&
+      planned.ordinal === currentOrdinal
+    ) {
+      return mapPlaceholderRow(planned, 'running');
+    }
+    return mapPlaceholderRow(planned, 'pending');
+  });
+
+  const passed = session.results.filter(
+    (result) => result.outcome === RequestRunOutcomeKind.Passed,
+  ).length;
+  const failed = session.results.filter(
+    (result) => result.outcome === RequestRunOutcomeKind.Failed,
+  ).length;
+  const skipped = session.results.filter(
+    (result) => result.outcome === RequestRunOutcomeKind.Skipped,
+  ).length;
+  const cancelled = session.results.filter(
+    (result) => result.outcome === RequestRunOutcomeKind.Cancelled,
+  ).length;
+
+  const live = session.status === 'running';
+  const status =
+    session.status === 'running'
+      ? ('running' as const)
+      : session.status === 'failed'
+        ? ('failed' as const)
+        : session.status === 'cancelled'
+          ? CollectionRunStatus.Cancelled
+          : session.status === 'stopped'
+            ? CollectionRunStatus.Stopped
+            : CollectionRunStatus.Completed;
+
+  return {
+    runId: session.runId,
+    collectionName: session.collectionName,
+    status,
+    statusLabel: liveStatusLabel(status),
+    failurePolicyLabel:
+      POLICY_LABELS[session.failurePolicy] ?? session.failurePolicy,
+    summaryLine: live
+      ? `${session.completed}/${session.total} completed · running`
+      : `${passed} passed, ${failed} failed, ${skipped} skipped, ${cancelled} cancelled`,
+    durationLabel: formatDuration(session.elapsedMs),
+    averageDurationLabel: '—',
+    assertionsLabel: '—',
+    passed,
+    failed,
+    skipped,
+    cancelled,
+    total: plan.requests.length,
+    rows,
+    reordered: dependencies?.reordered ?? false,
+    dependencyEdges: edges.map((edge) => ({
+      label: formatDependencyEdgeLabel(edge, labelByRequestId),
+    })),
+    unresolvedConsumes: (dependencies?.unresolvedConsumes ?? []).map(
+      (entry) => ({
+        variable: entry.variable,
+        requestLabel: labelByRequestId.get(entry.requestId) ?? entry.requestId,
+      }),
+    ),
+    variableTrace: buildVariableTrace(session.results, edges, labelByRequestId),
+    live,
+  };
+}
+
+function mapResultRow(
+  result: RequestRunResult,
+  planned: PlannedRequest | undefined,
+  edges: readonly DependencyEdge[],
+  labelByRequestId: ReadonlyMap<string, string>,
+): CollectionRunReportRow {
+  const statusBadge = resolveOutcomeBadge(result.outcome, result.statusCode);
+  const assertionsLabel = formatAssertions(
+    result.assertionsPassed,
+    result.assertionsFailed,
+    result.assertionsTotal,
+  );
+  const details = buildRequestDetails(result, edges, labelByRequestId);
+  return {
+    requestId: result.requestId,
+    ordinal: result.ordinal,
+    label: result.label,
+    method: planned?.method ?? '—',
+    methodBadgeClass: methodBadgeClass(planned?.method ?? ''),
+    url: planned?.url ?? '',
+    outcome: result.outcome,
+    outcomeLabel: outcomeLabel(result.outcome),
+    statusBadgeText: statusBadge.text,
+    statusBadgeClass: statusBadge.className,
+    durationLabel: formatDuration(result.durationMs),
+    assertionsLabel,
+    ...(result.statusCode === undefined ? {} : { statusCode: result.statusCode }),
+    ...(result.message === undefined ? {} : { message: result.message }),
+    canOpen: result.requestId.trim().length > 0,
+    isFailure: result.outcome === RequestRunOutcomeKind.Failed,
+    ...((): Partial<CollectionRunReportRow> => {
+      const producedVariablesLabel = formatProducedVariablesLabel(
+        result.producedVariables,
+      );
+      const consumedVariablesLabel = formatConsumedVariablesLabel(
+        result.consumedVariables,
+      );
+      return {
+        ...(producedVariablesLabel === undefined
+          ? {}
+          : { producedVariablesLabel }),
+        ...(consumedVariablesLabel === undefined
+          ? {}
+          : { consumedVariablesLabel }),
+      };
+    })(),
+    ...(result.skipReason === undefined ? {} : { skipReason: result.skipReason }),
+    ...(details === undefined ? {} : { details }),
+  };
+}
+
+function mapPlaceholderRow(
+  planned: PlannedRequest,
+  phase: 'running' | 'pending',
+): CollectionRunReportRow {
+  return {
+    requestId: planned.requestId,
+    ordinal: planned.ordinal,
+    label: planned.label,
+    method: planned.method,
+    methodBadgeClass: methodBadgeClass(planned.method),
+    url: planned.url,
+    outcome: phase,
+    outcomeLabel: phase === 'running' ? 'Running' : 'Pending',
+    statusBadgeText: phase === 'running' ? 'Running' : 'Pending',
+    statusBadgeClass: phase === 'running' ? 'status-running' : 'status-pending',
+    durationLabel: '—',
+    assertionsLabel: '—',
+    ...(phase === 'running' ? { message: 'Executing request...' } : {}),
+    canOpen: planned.requestId.trim().length > 0,
+    isFailure: false,
+  };
+}
+
+function liveStatusLabel(
+  status: CollectionRunReportModel['status'],
+): string {
+  if (status === 'running') {
+    return 'Running';
+  }
+  if (status === 'failed') {
+    return 'Failed';
+  }
+  return statusLabel(status);
 }
 
 /**
@@ -419,6 +617,29 @@ export function parseCollectionRunReportMessage(
   return undefined;
 }
 
+/**
+ * Pure host→webview message apply helper (mirrors REPORT_SCRIPT).
+ * Returns undefined for unknown types or malformed payloads (including `error`).
+ */
+export function applyCollectionRunReportHostMessage(
+  _current: CollectionRunReportModel | undefined,
+  message: { type: string; model?: CollectionRunReportModel },
+): { model: CollectionRunReportModel | undefined; resetExpanded: boolean } | undefined {
+  if (message.type === 'init') {
+    if (message.model === undefined) {
+      return undefined;
+    }
+    return { model: message.model, resetExpanded: true };
+  }
+  if (message.type === 'live' || message.type === 'update') {
+    if (message.model === undefined) {
+      return undefined;
+    }
+    return { model: message.model, resetExpanded: false };
+  }
+  return undefined;
+}
+
 /** Builds a self-contained Collection Run Report document with CSP nonce. */
 export function renderCollectionRunReportHtml(nonce: string): string {
   const safeNonce = escapeAttribute(nonce);
@@ -428,7 +649,7 @@ export function renderCollectionRunReportHtml(nonce: string): string {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta http-equiv="Content-Security-Policy" content="${buildNonceOnlyCsp(nonce, { allowDataImages: true })}">
-<title>Collection Run Report</title>
+<title>Run Report</title>
 <style nonce="${safeNonce}">${REPORT_CSS}</style>
 </head>
 <body>
@@ -506,7 +727,7 @@ function formatSummaryLine(summary: RunSummary): string {
   );
 }
 
-function outcomeLabel(outcome: OutcomeKind): string {
+function outcomeLabel(outcome: OutcomeKind | 'running' | 'pending'): string {
   switch (outcome) {
     case RequestRunOutcomeKind.Passed:
       return 'Passed';
@@ -516,6 +737,10 @@ function outcomeLabel(outcome: OutcomeKind): string {
       return 'Skipped';
     case RequestRunOutcomeKind.Cancelled:
       return 'Cancelled';
+    case 'running':
+      return 'Running';
+    case 'pending':
+      return 'Pending';
     default:
       return 'Unknown';
   }
@@ -537,7 +762,7 @@ function statusLabel(
 }
 
 function resolveOutcomeBadge(
-  outcome: OutcomeKind,
+  outcome: OutcomeKind | 'running' | 'pending',
   statusCode: number | undefined,
 ): { readonly text: string; readonly className: string } {
   switch (outcome) {
@@ -555,6 +780,10 @@ function resolveOutcomeBadge(
       return { text: 'Skipped', className: 'status-neutral' };
     case RequestRunOutcomeKind.Cancelled:
       return { text: 'Cancelled', className: 'status-cancelled' };
+    case 'running':
+      return { text: 'Running', className: 'status-running' };
+    case 'pending':
+      return { text: 'Pending', className: 'status-pending' };
     default:
       return { text: '—', className: 'status-neutral' };
   }
@@ -610,6 +839,35 @@ main { display: flex; flex-direction: column; min-height: 100vh; }
 }
 .header .section-label { margin: var(--ah-space-3) 0 var(--ah-space-2); }
 .header .status-badge { text-transform: none; letter-spacing: normal; }
+.status-running {
+  color: var(--vscode-charts-blue);
+  border-color: color-mix(in srgb, var(--vscode-charts-blue) 45%, transparent);
+}
+tr.row-running td:first-child {
+  /* Static cue that remains under prefers-reduced-motion (on td for collapsed tables) */
+  box-shadow: inset 3px 0 0 0 color-mix(in srgb, var(--vscode-charts-blue) 55%, transparent);
+}
+@media (prefers-reduced-motion: no-preference) {
+  tr.row-running td {
+    background-image: linear-gradient(
+      90deg,
+      transparent 0%,
+      color-mix(in srgb, var(--vscode-foreground) 6%, transparent) 50%,
+      transparent 100%
+    );
+    background-size: 200% 100%;
+    background-repeat: no-repeat;
+    animation: ah-row-shimmer 1.8s ease-in-out infinite;
+  }
+  @keyframes ah-row-shimmer {
+    0% { background-position: 100% 0; }
+    100% { background-position: -100% 0; }
+  }
+}
+.status-pending {
+  color: var(--vscode-descriptionForeground);
+  opacity: 0.85;
+}
 .table-wrap { overflow: auto; padding: 0 0 var(--ah-space-4); }
 table {
   width: 100%; border-collapse: collapse;
@@ -1085,8 +1343,12 @@ const REPORT_SCRIPT = `
             ? '<tr class="detail-row" data-detail-for="' + escapeAttribute(row.requestId) + '">' +
               '<td colspan="6">' + renderDetailPanel(row.details) + '</td></tr>'
             : '';
+          const rowClass = [
+            row.isFailure ? 'row-fail' : '',
+            row.outcome === 'running' ? 'row-running' : '',
+          ].filter(Boolean).join(' ');
           return '<tr data-request-id="' + escapeAttribute(row.requestId) + '" tabindex="0"' +
-            (row.isFailure ? ' class="row-fail"' : '') + '>' +
+            (rowClass ? ' class="' + rowClass + '"' : '') + '>' +
             '<td>' + escapeHtml(String(row.ordinal + 1)) + '</td>' +
             '<td><span class="status-badge ' + escapeAttribute(row.statusBadgeClass) + '">' +
               escapeHtml(row.statusBadgeText) + '</span></td>' +
@@ -1156,6 +1418,7 @@ const REPORT_SCRIPT = `
           ' · ' + escapeHtml(model.failurePolicyLabel) +
           (model.cancelled > 0 ? ' · ' + model.cancelled + ' cancelled' : '') +
         '</p>' +
+        '<p class="muted-inline">Collection Run Debugger / Details inspect the last in-memory run (not History).</p>' +
         '<div class="stats-summary" aria-label="Run statistics">' + chips + '</div>' +
         dependenciesSection +
         unresolvedSection +
@@ -1222,6 +1485,11 @@ const REPORT_SCRIPT = `
       model = data.model;
       filterFailed = false;
       Object.keys(expanded).forEach(function (key) { delete expanded[key]; });
+      render();
+      return;
+    }
+    if ((data.type === 'live' || data.type === 'update') && data.model) {
+      model = data.model;
       render();
       return;
     }

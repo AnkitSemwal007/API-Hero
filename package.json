@@ -1,8 +1,8 @@
 {
   "name": "api-hero",
   "displayName": "API Hero",
-  "description": "Git-first REST/HTTP client for VS Code. Edit .api requests in a UI Request Editor, run with assertions, manage collections, environments, and auth, import OpenAPI, and inspect History and Run Reports.",
-  "version": "2.3.1",
+  "description": "Git-first REST/HTTP client for VS Code. Edit .api requests in a UI Request Editor, run with assertions, manage collections, environments, and auth, import OpenAPI, and inspect Execution, History, and Run Reports.",
+  "version": "2.3.3",
   "publisher": "ankitsemwal",
   "license": "MIT",
   "homepage": "https://github.com/AnkitSemwal007/API-Hero",
@@ -191,6 +191,41 @@
         "category": "API Hero"
       },
       {
+        "command": "apiRunner.focusExecution",
+        "title": "Focus Execution",
+        "category": "API Hero"
+      },
+      {
+        "command": "apiRunner.cancelCollectionRun",
+        "title": "Cancel Collection Run",
+        "icon": "$(debug-stop)",
+        "category": "API Hero"
+      },
+      {
+        "command": "apiRunner.openLiveRunReport",
+        "title": "Open Live Report",
+        "icon": "$(open-preview)",
+        "category": "API Hero"
+      },
+      {
+        "command": "apiRunner.openRecentRunReport",
+        "title": "Open Run Report",
+        "icon": "$(open-preview)",
+        "category": "API Hero"
+      },
+      {
+        "command": "apiRunner.revealExecutionCollection",
+        "title": "Reveal Collection",
+        "icon": "$(folder-opened)",
+        "category": "API Hero"
+      },
+      {
+        "command": "apiRunner.copyCollectionRunId",
+        "title": "Copy Run ID",
+        "icon": "$(copy)",
+        "category": "API Hero"
+      },
+      {
         "command": "apiRunner.openHistoryEntry",
         "title": "Open History Entry",
         "category": "API Hero"
@@ -335,7 +370,7 @@
       {
         "command": "apiRunner.moveRequest",
         "title": "Move Request",
-        "shortTitle": "Move…",
+        "shortTitle": "Move\u2026",
         "category": "API Hero"
       },
       {
@@ -500,6 +535,31 @@
           "command": "apiRunner.openOverview",
           "when": "view == apiRunner.history",
           "group": "1_more@3"
+        },
+        {
+          "command": "apiRunner.focusCollections",
+          "when": "view == apiRunner.execution",
+          "group": "navigation@1"
+        },
+        {
+          "command": "apiRunner.cancelCollectionRun",
+          "when": "view == apiRunner.execution",
+          "group": "navigation@2"
+        },
+        {
+          "command": "apiRunner.openLiveRunReport",
+          "when": "view == apiRunner.execution",
+          "group": "navigation@3"
+        },
+        {
+          "command": "apiRunner.focusHistory",
+          "when": "view == apiRunner.execution",
+          "group": "1_more@1"
+        },
+        {
+          "command": "apiRunner.openOverview",
+          "when": "view == apiRunner.execution",
+          "group": "1_more@2"
         }
       ],
       "view/item/context": [
@@ -662,6 +722,41 @@
           "command": "apiRunner.deleteHistoryEntry",
           "when": "view == apiRunner.history && viewItem == historyEntry",
           "group": "3_modify"
+        },
+        {
+          "command": "apiRunner.cancelCollectionRun",
+          "when": "view == apiRunner.execution && viewItem == executionActiveRun",
+          "group": "inline@1"
+        },
+        {
+          "command": "apiRunner.openLiveRunReport",
+          "when": "view == apiRunner.execution && viewItem == executionActiveRun",
+          "group": "inline@2"
+        },
+        {
+          "command": "apiRunner.revealExecutionCollection",
+          "when": "view == apiRunner.execution && viewItem == executionActiveRun",
+          "group": "inline@3"
+        },
+        {
+          "command": "apiRunner.copyCollectionRunId",
+          "when": "view == apiRunner.execution && viewItem == executionActiveRun",
+          "group": "1_more@1"
+        },
+        {
+          "command": "apiRunner.openRecentRunReport",
+          "when": "view == apiRunner.execution && viewItem == executionRecentRun",
+          "group": "inline@1"
+        },
+        {
+          "command": "apiRunner.revealExecutionCollection",
+          "when": "view == apiRunner.execution && viewItem == executionRecentRun",
+          "group": "inline@2"
+        },
+        {
+          "command": "apiRunner.copyCollectionRunId",
+          "when": "view == apiRunner.execution && viewItem == executionRecentRun",
+          "group": "1_more@1"
         }
       ]
     },
@@ -681,6 +776,14 @@
           "name": "Collections"
         },
         {
+          "id": "apiRunner.execution",
+          "name": "Execution",
+          "icon": {
+            "light": "images/execution-light.svg",
+            "dark": "images/execution-dark.svg"
+          }
+        },
+        {
           "id": "apiRunner.history",
           "name": "History"
         }
@@ -689,11 +792,15 @@
     "viewsWelcome": [
       {
         "view": "apiRunner.collections",
-        "contents": "No collections yet.\nOpen a folder workspace, create a collection, then add a request — or import OpenAPI.\n\n[New Collection](command:apiRunner.createCollection)\n[New Request](command:apiRunner.createRequest)\n[Import OpenAPI](command:apiRunner.importOpenApi)\n\n[Open Overview](command:apiRunner.openOverview)"
+        "contents": "No collections yet.\nOpen a folder workspace, create a collection, then add a request \u2014 or import OpenAPI.\n\n[New Collection](command:apiRunner.createCollection)\n[New Request](command:apiRunner.createRequest)\n[Import OpenAPI](command:apiRunner.importOpenApi)\n\n[Open Overview](command:apiRunner.openOverview)"
+      },
+      {
+        "view": "apiRunner.execution",
+        "contents": "No collection runs yet.\nRun a collection, folder, or selected requests from Collections \u2014 live progress appears here.\n\n[Focus Collections](command:apiRunner.focusCollections)\n[Open Overview](command:apiRunner.openOverview)"
       },
       {
         "view": "apiRunner.history",
-        "contents": "No request history yet.\nAfter you Run a request, results appear here.\n\n[Focus Collections](command:apiRunner.focusCollections)\n[Open Overview](command:apiRunner.openOverview)"
+        "contents": "No request history yet.\nHistory lists past runs (metadata only \u2014 not request files; response bodies are not stored).\n\n[Focus Collections](command:apiRunner.focusCollections)\n[Open Overview](command:apiRunner.openOverview)"
       }
     ],
     "keybindings": [

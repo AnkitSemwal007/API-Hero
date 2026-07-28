@@ -4,14 +4,45 @@
  */
 
 import { MASKED_VARIABLE_VALUE, VARIABLE_SCOPE_UI } from '../../variables';
+import { AH_ICON_SVG } from '../../ui/webview';
+
+/**
+ * Icons the Request Editor client script renders dynamically (var-suggest
+ * popup + Dependencies pin/remove chrome). This string is spliced directly
+ * into the outer Request Editor IIFE (see `request-editor-html.ts`).
+ * `ahIconSpan` / `AH_ICON_SVG_MAP` are the single client-side icon helpers —
+ * do not redefine `ahIconSpan` elsewhere in that IIFE.
+ */
+const AH_ICON_SVG_SUBSET: Readonly<Record<string, string>> = Object.freeze({
+  play: AH_ICON_SVG.play,
+  'file-text': AH_ICON_SVG['file-text'],
+  globe: AH_ICON_SVG.globe,
+  package: AH_ICON_SVG.package,
+  folder: AH_ICON_SVG.folder,
+  network: AH_ICON_SVG.network,
+  lock: AH_ICON_SVG.lock,
+  pin: AH_ICON_SVG.pin,
+  x: AH_ICON_SVG.x,
+});
 
 /** JavaScript body (no IIFE wrapper) injected into the Request Editor webview. */
 export const VARIABLE_INTELLISENSE_SCRIPT = `
   var DOCUMENT_SCOPE_UI = ${JSON.stringify({
     sourceLabel: VARIABLE_SCOPE_UI.document.sourceLabel,
-    icon: VARIABLE_SCOPE_UI.document.icon,
+    icon: VARIABLE_SCOPE_UI.document.iconName,
   })};
   var MASKED_VAR = ${JSON.stringify(MASKED_VARIABLE_VALUE)};
+  var AH_ICON_SVG_MAP = ${JSON.stringify(AH_ICON_SVG_SUBSET)};
+
+  function ahIconSpan(iconName, className) {
+    var markup = AH_ICON_SVG_MAP[iconName];
+    if (!markup) return '';
+    var cls = 'ah-icon' + (className ? ' ' + className : '');
+    return '<span class="' + cls + '" aria-hidden="true">' +
+      '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+      'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false">' +
+      markup + '</svg></span>';
+  }
   var varSuggestEl = el('varSuggest');
   var varCatalog = [];
   var varActive = null;
@@ -81,9 +112,7 @@ export const VARIABLE_INTELLISENSE_SCRIPT = `
         name: name,
         scope: 'document',
         sourceLabel: DOCUMENT_SCOPE_UI.sourceLabel,
-        icon: row.sensitive
-          ? DOCUMENT_SCOPE_UI.icon + '🔒'
-          : DOCUMENT_SCOPE_UI.icon,
+        icon: DOCUMENT_SCOPE_UI.icon,
         sensitive: row.sensitive === true,
         description: row.sensitive
           ? DOCUMENT_SCOPE_UI.sourceLabel + ' · sensitive'
@@ -126,8 +155,14 @@ export const VARIABLE_INTELLISENSE_SCRIPT = `
   function fillVarDetail(root, item) {
     if (!root || !item) return;
     root.querySelector('.var-suggest-name').textContent = item.name;
-    root.querySelector('.var-suggest-meta').textContent =
-      'Effective source: ' + (item.icon || '') + ' ' + (item.sourceLabel || '');
+    var metaEl = root.querySelector('.var-suggest-meta');
+    metaEl.innerHTML = '';
+    metaEl.appendChild(document.createTextNode('Effective source: '));
+    metaEl.insertAdjacentHTML('beforeend', ahIconSpan(item.icon));
+    if (item.sensitive) {
+      metaEl.insertAdjacentHTML('beforeend', ahIconSpan('lock', 'ah-icon--muted'));
+    }
+    metaEl.appendChild(document.createTextNode(' ' + (item.sourceLabel || '')));
     root.querySelector('.var-suggest-value').textContent = item.sensitive
       ? MASKED_VAR
       : (item.valuePreview != null && item.valuePreview !== '' ? item.valuePreview : '(empty)');
@@ -165,7 +200,8 @@ export const VARIABLE_INTELLISENSE_SCRIPT = `
         '<span class="var-suggest-icon"></span>' +
         '<span class="var-suggest-label"></span>' +
         '<span class="var-suggest-source"></span>';
-      row.querySelector('.var-suggest-icon').textContent = item.icon || '';
+      row.querySelector('.var-suggest-icon').innerHTML =
+        ahIconSpan(item.icon) + (item.sensitive ? ahIconSpan('lock', 'ah-icon--muted') : '');
       row.querySelector('.var-suggest-label').textContent = item.name;
       row.querySelector('.var-suggest-source').textContent = item.sourceLabel || '';
       row.addEventListener('mousedown', function (event) {

@@ -32,6 +32,10 @@ describe('environment-manager-html', () => {
       html,
       /Run overrides Request overrides Environment overrides Collection overrides Workspace overrides Global/u,
     );
+    assert.match(
+      html,
+      /Collection variables live in api-hero\.variables\.json or via Extract Variable with collection scope/u,
+    );
     assert.match(html, /id="activeEnvStrip"/u);
     assert.match(html, /Active environment: None/u);
   });

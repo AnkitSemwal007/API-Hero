@@ -25,6 +25,10 @@ describe('history-detail-html', () => {
     assert.match(html, /default-src 'none'/u);
     assert.match(html, /id="root"/u);
     assert.match(html, /Loading history entry/u);
+    assert.match(
+      html,
+      /History shows run metadata only — not request files\. Response bodies are not stored\./u,
+    );
     assert.match(html, /--vscode-editor-background/u);
     assert.doesNotMatch(html, /connect-src [^']*https/u);
   });

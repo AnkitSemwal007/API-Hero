@@ -8,6 +8,8 @@ import {
   type StatusBarItem,
 } from 'vscode';
 
+import { COMMAND_IDS } from '../../constants';
+import type { CollectionRunManager } from '../collection-run-manager';
 import type {
   CollectionRunProgressPort,
   RunProgressEvent,
@@ -26,24 +28,77 @@ export class VsCodeCollectionRunSourceReader {
 }
 
 /**
- * Progress notification + status bar for a whole collection run.
- * Per-request response viewers stay suppressed by the runner service.
+ * Status bar hub subscribed to {@link CollectionRunManager}.
+ * Idle: Ready; Running: Running(N). Click focuses the Execution view.
+ */
+export class CollectionRunStatusBar implements Disposable {
+  private readonly item: StatusBarItem;
+  private disposed = false;
+  private readonly subscription: { dispose(): void };
+
+  public constructor(
+    private readonly manager: CollectionRunManager,
+    private readonly setRequestStatusSuppressed?: (
+      suppressed: boolean,
+    ) => void,
+  ) {
+    this.item = window.createStatusBarItem(StatusBarAlignment.Left, 99);
+    this.item.name = 'API Hero Execution';
+    this.item.command = COMMAND_IDS.focusExecution;
+    this.subscription = manager.onDidChange(() => {
+      this.refresh();
+    });
+    this.refresh();
+    this.item.show();
+  }
+
+  public dispose(): void {
+    if (this.disposed) {
+      return;
+    }
+    this.disposed = true;
+    this.subscription.dispose();
+    this.setRequestStatusSuppressed?.(false);
+    this.item.dispose();
+  }
+
+  private refresh(): void {
+    if (this.disposed) {
+      return;
+    }
+    const count = this.manager.activeCount;
+    this.setRequestStatusSuppressed?.(count > 0);
+    if (count === 0) {
+      this.item.text = '$(check) API Hero Ready';
+      this.item.tooltip = 'API Hero - open Execution view';
+      return;
+    }
+    this.item.text = `$(sync~spin) API Hero Running (${count})`;
+    const active = this.manager.listActive();
+    this.item.tooltip =
+      active.length === 1
+        ? formatRunningTooltip(active[0]!)
+        : active
+            .map(
+              (session) =>
+                `${session.collectionName}: ${session.completed}/${session.total}`,
+            )
+            .join('\n');
+  }
+}
+
+/**
+ * Per-run notification progress only (no status bar). Bind a reporter via
+ * {@link withCollectionRunProgress}.
  */
 export class VsCodeCollectionRunProgress
   implements CollectionRunProgressPort, Disposable
 {
-  private readonly item: StatusBarItem;
   private disposed = false;
   private report:
     | ((value: { message?: string; increment?: number }) => void)
     | undefined;
   private lastReportedPercent: number | undefined;
-  private hideTimer: ReturnType<typeof setTimeout> | undefined;
-
-  public constructor() {
-    this.item = window.createStatusBarItem(StatusBarAlignment.Left, 99);
-    this.item.name = 'API Hero Collection Run';
-  }
 
   public bindReporter(
     report: (value: { message?: string; increment?: number }) => void,
@@ -57,8 +112,6 @@ export class VsCodeCollectionRunProgress
       return;
     }
     const label = event.current?.label;
-    // Align the displayed request index with the progress bar:
-    // request-started uses completed+1 (in flight); finished/completed use completed.
     const displayed =
       event.phase === 'request-started'
         ? Math.min(event.completed + 1, event.total)
@@ -83,47 +136,6 @@ export class VsCodeCollectionRunProgress
       message,
       ...(increment !== undefined && increment > 0 ? { increment } : {}),
     });
-    this.item.text = `$(sync~spin) API Hero: ${message}`;
-    this.item.tooltip = `Elapsed ${formatDuration(event.elapsedMs)}`;
-    this.item.show();
-  }
-
-  public showSummary(summary: RunSummary): void {
-    if (this.disposed) {
-      return;
-    }
-    const { statistics: stats, status } = summary;
-    const assertionPart =
-      stats.assertionsTotal > 0
-        ? `, assertions ${stats.assertionsPassed}/${stats.assertionsTotal}`
-        : '';
-    const text =
-      status === 'cancelled'
-        ? `Cancelled — ${stats.passed} passed, ${stats.failed} failed, ${stats.skipped} skipped${assertionPart}`
-        : status === 'stopped'
-          ? `Stopped — ${stats.passed} passed, ${stats.failed} failed, ${stats.skipped} skipped${assertionPart}`
-          : `Done — ${stats.passed} passed, ${stats.failed} failed, ${stats.skipped} skipped${assertionPart}`;
-    this.item.text =
-      stats.failed > 0 || stats.assertionsFailed > 0
-        ? `$(error) API Hero: ${text}`
-        : `$(check) API Hero: ${text}`;
-    this.item.tooltip =
-      `Collection run finished in ${formatDuration(stats.durationMs)}. ` +
-      `Average ${formatDuration(stats.averageResponseTimeMs)}. ` +
-      'See the Collection Run Report panel for per-request details.';
-    this.item.show();
-  }
-
-  public hideSoon(delayMs = 5_000): void {
-    if (this.hideTimer !== undefined) {
-      clearTimeout(this.hideTimer);
-    }
-    this.hideTimer = setTimeout(() => {
-      this.hideTimer = undefined;
-      if (!this.disposed) {
-        this.item.hide();
-      }
-    }, delayMs);
   }
 
   public dispose(): void {
@@ -132,11 +144,54 @@ export class VsCodeCollectionRunProgress
     }
     this.disposed = true;
     this.report = undefined;
-    if (this.hideTimer !== undefined) {
-      clearTimeout(this.hideTimer);
-      this.hideTimer = undefined;
+  }
+}
+
+/** Fans progress events to a fixed set plus dynamically added ports. */
+export class MultiplexCollectionRunProgress
+  implements CollectionRunProgressPort
+{
+  private readonly fixed: readonly CollectionRunProgressPort[];
+  private readonly dynamic = new Set<CollectionRunProgressPort>();
+
+  public constructor(
+    fixed: readonly CollectionRunProgressPort[] = [],
+  ) {
+    this.fixed = fixed;
+  }
+
+  public add(port: CollectionRunProgressPort): void {
+    this.dynamic.add(port);
+  }
+
+  public remove(port: CollectionRunProgressPort): void {
+    this.dynamic.delete(port);
+  }
+
+  public onProgress(event: RunProgressEvent): void {
+    for (const port of this.fixed) {
+      port.onProgress(event);
     }
-    this.item.dispose();
+    for (const port of this.dynamic) {
+      port.onProgress(event);
+    }
+  }
+}
+
+/** Forwards progress only when `event.runId` matches the scoped run. */
+export class RunScopedCollectionRunProgress
+  implements CollectionRunProgressPort
+{
+  public constructor(
+    private readonly runId: string,
+    private readonly inner: CollectionRunProgressPort,
+  ) {}
+
+  public onProgress(event: RunProgressEvent): void {
+    if (event.runId !== this.runId) {
+      return;
+    }
+    this.inner.onProgress(event);
   }
 }
 
@@ -145,6 +200,7 @@ export async function withCollectionRunProgress<T>(
   title: string,
   progressUi: VsCodeCollectionRunProgress,
   task: (signal: AbortSignal) => Promise<T>,
+  abortController?: AbortController,
 ): Promise<T> {
   return window.withProgress(
     {
@@ -154,7 +210,7 @@ export async function withCollectionRunProgress<T>(
     },
     async (progress, token) => {
       progressUi.bindReporter((value) => progress.report(value));
-      const controller = new AbortController();
+      const controller = abortController ?? new AbortController();
       const cancellation = token.onCancellationRequested(() =>
         controller.abort('cancelled'),
       );
@@ -194,9 +250,45 @@ export function formatRunSummaryMessage(summary: RunSummary): string {
   );
 }
 
-function formatDuration(ms: number): string {
+function formatRunningTooltip(session: {
+  readonly collectionName: string;
+  readonly current?: { readonly label: string };
+  readonly lastProgress?: { readonly phase: string };
+  readonly completed: number;
+  readonly total: number;
+  readonly elapsedMs: number;
+}): string {
+  const current =
+    session.current?.label !== undefined && session.current.label.length > 0
+      ? session.current.label
+      : 'Starting...';
+  const displayed =
+    session.lastProgress?.phase === 'request-started'
+      ? Math.min(session.completed + 1, session.total)
+      : session.completed;
+  return [
+    session.collectionName,
+    `Request: ${current}`,
+    `Progress: ${displayed} / ${session.total}`,
+    `Elapsed: ${formatDuration(session.elapsedMs)}`,
+  ].join('\n');
+}
+
+export function formatDuration(ms: number): string {
   if (ms < 1_000) {
     return `${ms} ms`;
   }
   return `${(ms / 1_000).toFixed(1)} s`;
+}
+
+export function formatUnexpectedFailMessage(
+  session: { readonly collectionName?: string } | undefined,
+  fallbackMessage?: string,
+): string {
+  const name = session?.collectionName ?? 'collection';
+  const detail =
+    fallbackMessage !== undefined && fallbackMessage.trim().length > 0
+      ? (' ' + fallbackMessage.trim())
+      : '';
+  return 'API Hero could not complete the collection run for "' + name + '".' + detail;
 }

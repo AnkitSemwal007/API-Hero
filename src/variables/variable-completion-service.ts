@@ -1,5 +1,6 @@
 import type { VariableDefinition, VariableScope } from '../models';
 import { deepFreeze } from '../shared';
+import type { AhIconName } from '../ui/webview';
 import { VARIABLE_SCOPE_UI } from './variable-scope-ui';
 import {
   DefaultVariableResolver,
@@ -15,7 +16,8 @@ export interface VariableCompletionItem {
   readonly name: string;
   readonly scope: VariableScope;
   readonly sourceLabel: string;
-  readonly icon: string;
+  /** Scope icon only — sensitivity is conveyed separately via `sensitive`. */
+  readonly icon: AhIconName;
   readonly sensitive: boolean;
   readonly description?: string;
   /** Present only when the value is not sensitive. */
@@ -70,12 +72,11 @@ export class VariableCompletionService {
       .sort((left, right) => left.name.localeCompare(right.name))
       .map((value) => {
         const ui = VARIABLE_SCOPE_UI[value.scope];
-        const icon = value.sensitive ? `${ui.icon}🔒` : ui.icon;
         return deepFreeze({
           name: value.name,
           scope: value.scope,
           sourceLabel: ui.sourceLabel,
-          icon,
+          icon: ui.iconName,
           sensitive: value.sensitive,
           description: value.sensitive
             ? `${ui.sourceLabel} · sensitive`
@@ -162,7 +163,7 @@ export class VariableCompletionService {
       : (item.valuePreview ?? '');
     const documentation = [
       item.name,
-      `Effective source: ${item.icon} ${item.sourceLabel}`,
+      `Effective source: ${item.sourceLabel}`,
       'Current Value',
       valueDisplay || '(empty)',
       'Sensitive',

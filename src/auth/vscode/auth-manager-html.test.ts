@@ -28,6 +28,7 @@ describe('auth-manager-html', () => {
     assert.match(html, /aria-label="Authentication navigation"/u);
     assert.match(html, /aria-label="Add profile"/u);
     assert.match(html, /aria-label="Profile id"/u);
+    assert.match(html, /@auth uses this id; the label is display-only\./u);
     assert.match(html, /id="save"/u);
     assert.match(html, /id="duplicateProfile"/u);
     assert.match(html, /id="profileSearch"/u);

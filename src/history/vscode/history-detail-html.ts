@@ -461,7 +461,7 @@ const DETAIL_SCRIPT = `
           ? '<section class="meta-group"><h2>Response</h2>' +
             '<aside class="meta-grid" aria-label="Response metadata">' + responseMeta + '</aside></section>'
           : '') +
-        '<aside class="notice muted">Metadata only — response bodies are not stored in history.</aside>' +
+        '<aside class="notice muted">History shows run metadata only — not request files. Response bodies are not stored.</aside>' +
       '</div>';
 
     document.getElementById('rerun').addEventListener('click', function () {

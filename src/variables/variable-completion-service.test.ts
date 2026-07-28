@@ -100,7 +100,7 @@ test('scope precedence yields one effective item with winning scope', () => {
   assert.equal(items[0]?.name, 'host');
   assert.equal(items[0]?.scope, 'document');
   assert.equal(items[0]?.sourceLabel, 'Request');
-  assert.equal(items[0]?.icon, '📄');
+  assert.equal(items[0]?.icon, 'file-text');
 });
 
 test('sensitive values never appear in completion models or hover', () => {
@@ -113,7 +113,8 @@ test('sensitive values never appear in completion models or hover', () => {
   const token = service.getCompletions('').find((item) => item.name === 'token');
   assert.equal(token?.sensitive, true);
   assert.equal(token?.valuePreview, undefined);
-  assert.ok(token?.icon.includes('🔒'));
+  // Scope icon only — sensitivity is a separate flag, never baked into the icon.
+  assert.equal(token?.icon, 'globe');
   assert.doesNotMatch(JSON.stringify(token), /super-secret/);
 
   const hover = service.getHoverInfo('token');

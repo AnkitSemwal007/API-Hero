@@ -119,6 +119,14 @@ export {
 export type { NavigationIndex } from './navigation';
 
 export {
+  minimalReorderForConstraints,
+} from './minimal-dependency-reorder';
+export type {
+  MinimalReorderResult,
+  OrderConstraint,
+} from './minimal-dependency-reorder';
+
+export {
   findTreeNodeByCollectionId,
   findTreeNodeByFolderPath,
   findTreeNodeByRequestFilePath,

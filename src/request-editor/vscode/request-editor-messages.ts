@@ -5,6 +5,7 @@
 
 import type { VariableScope } from '../../models';
 import { HTTP_METHODS, type HttpMethod } from '../../types';
+import type { AhIconName } from '../../ui/webview';
 import type {
   RequestSourceBody,
   RequestSourceDocument,
@@ -22,7 +23,8 @@ export interface RequestEditorVariableCompletion {
   readonly name: string;
   readonly scope: VariableScope;
   readonly sourceLabel: string;
-  readonly icon: string;
+  /** Scope icon name only — sensitivity is conveyed separately via `sensitive`. */
+  readonly icon: AhIconName;
   readonly sensitive: boolean;
   readonly description?: string;
   readonly valuePreview?: string;

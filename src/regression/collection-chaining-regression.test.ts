@@ -682,13 +682,16 @@ describe('TC032–TC035 — request editor HTML (string assertions only)', () =>
 
   test('TC032 — Auto list present', () => {
     assert.match(html, /data-testid="auto-dependencies"/u);
-    assert.match(html, />✓ Auto</u);
+    assert.match(html, /data-testid="execution-status"/u);
+    assert.match(html, /id="autoDependenciesSection"/u);
     assert.match(html, /id="dependenciesInfoBtn"/u);
+    assert.match(html, /Automatically detected/u);
   });
 
   test('TC033 — Manual picker present', () => {
     assert.match(html, /data-testid="depends-on-picker"/u);
-    assert.match(html, />📌 Manual</u);
+    assert.match(html, /id="manualDependenciesSection"/u);
+    assert.match(html, /id="pinnedLabel"/u);
     assert.match(html, /id="dependsOnAddBtn"/u);
     assert.match(html, /\+ Add Dependency/u);
   });

@@ -90,6 +90,15 @@ export interface RequestEditorProviderOptions {
     readonly newName: string;
   }) => Promise<{ readonly skippedOpenPaths?: readonly string[] } | void>;
   /**
+   * After Manual `@depends-on` refs are added and saved, optionally reorder
+   * same-folder siblings so producers precede consumers.
+   */
+  readonly alignCollectionOrderAfterDependsOn?: (options: {
+    readonly documentPath: string;
+    readonly previousDependsOn: readonly string[];
+    readonly nextDependsOn: readonly string[];
+  }) => Promise<void>;
+  /**
    * Runs the document request (same pipeline as `apiRunner.runRequest`).
    * Preferred over executeCommand so Custom Text Editors work without an
    * active TextEditor.
@@ -382,6 +391,7 @@ class RequestEditorDocumentSync implements Disposable {
       parsed.document,
     );
     const previousName = parsed.document.name.trim();
+    const previousDependsOn = parsed.document.dependsOn ?? [];
     const prepared = prepareModelForSerialize(
       restored,
       this.options.getDependencyCatalog?.(this.document.uri.fsPath) ?? [],
@@ -464,6 +474,25 @@ class RequestEditorDocumentSync implements Disposable {
               : 'Could not cascade dependency renames.',
         });
       }
+    }
+
+    const nextDependsOn = prepared.dependsOn ?? [];
+    if (
+      this.options.alignCollectionOrderAfterDependsOn !== undefined &&
+      hasAddedDependRefs(previousDependsOn, nextDependsOn)
+    ) {
+      fireAndForget(
+        this.options.alignCollectionOrderAfterDependsOn({
+          documentPath: this.document.uri.fsPath,
+          previousDependsOn,
+          nextDependsOn,
+        }),
+        (error: unknown) =>
+          this.reportBackgroundError(
+            error,
+            'Could not reorder the collection for new dependencies.',
+          ),
+      );
     }
 
     await this.postAck();
@@ -600,4 +629,20 @@ export async function openRequestEditor(uri: Uri): Promise<void> {
     uri,
     REQUEST_EDITOR_VIEW_TYPE,
   );
+}
+
+function hasAddedDependRefs(
+  previous: readonly string[],
+  next: readonly string[],
+): boolean {
+  const prevSet = new Set(
+    previous.map((entry) => entry.trim()).filter((entry) => entry.length > 0),
+  );
+  for (const entry of next) {
+    const trimmed = entry.trim();
+    if (trimmed.length > 0 && !prevSet.has(trimmed)) {
+      return true;
+    }
+  }
+  return false;
 }
