@@ -1,6 +1,6 @@
-# Marketplace readiness — 2.3.5
+# Marketplace readiness — 2.3.6
 
-Checklist for publishing **API Hero** `ankitsemwal.api-hero` **2.3.5** (contribution namespace migration `apiRunner.*` → `apiHero.*` with compatibility aliases).
+Checklist for publishing **API Hero** `ankitsemwal.api-hero` **2.3.6** (Activity Bar view registration fix; builds on 2.3.5 contribution namespace migration).
 
 ## Identity
 
@@ -8,7 +8,7 @@ Checklist for publishing **API Hero** `ankitsemwal.api-hero` **2.3.5** (contribu
 | --- | --- |
 | `name` | `api-hero` |
 | `publisher` | `ankitsemwal` |
-| `version` | `2.3.5` |
+| `version` | `2.3.6` |
 | Extension ID | `ankitsemwal.api-hero` |
 | License | MIT |
 
@@ -17,7 +17,7 @@ Checklist for publishing **API Hero** `ankitsemwal.api-hero` **2.3.5** (contribu
 - [x] `npm run lint`
 - [x] `npm test`
 - [x] `npm run build` / TypeScript compile
-- [x] `npm run package` produces `release/api-hero-2.3.5.vsix`
+- [x] `npm run package` produces `release/api-hero-2.3.6.vsix`
 - [x] README Marketplace presentation + Cloudinary listing URLs
 - [x] No GraphQL / OAuth claims beyond shipped scope
 - [x] Namespace migration compatibility aliases documented in [stable-identifiers.md](./stable-identifiers.md)
@@ -32,8 +32,8 @@ Display name **API Hero**; canonical contribution IDs are now **`apiHero.*`** �
 
 ## Release notes
 
-- [v2.3.5-release-notes.md](./v2.3.5-release-notes.md)
-- Prior: [v2.3.4-release-notes.md](./v2.3.4-release-notes.md)
+- [CHANGELOG.md](../../CHANGELOG.md) — **2.3.6**
+- Prior: [v2.3.5-release-notes.md](./v2.3.5-release-notes.md)
 
 ## Operator runbook
 

@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.3.6] - 2026-07-28
+
+### Fixed
+
+- Fixed Activity Bar view registration caused by an invalid `Execution` view manifest contribution.
+- Restored Collections, Execution, and History view registration.
+- Removed renderer contribution warnings for the invalid view `icon` shape.
+
 ## [2.3.5] - 2026-07-28
 
 ### Changed

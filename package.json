@@ -2,7 +2,7 @@
   "name": "api-hero",
   "displayName": "API Hero",
   "description": "Git-first REST/HTTP client for VS Code. Edit .api requests in a UI Request Editor, run with assertions, manage collections, environments, and auth, import OpenAPI, and inspect Execution, History, and Run Reports.",
-  "version": "2.3.5",
+  "version": "2.3.6",
   "publisher": "ankitsemwal",
   "license": "MIT",
   "homepage": "https://github.com/AnkitSemwal007/API-Hero",
@@ -1283,10 +1283,7 @@
         {
           "id": "apiHero.execution",
           "name": "Execution",
-          "icon": {
-            "light": "images/execution-light.svg",
-            "dark": "images/execution-dark.svg"
-          }
+          "icon": "images/execution-dark.svg"
         },
         {
           "id": "apiHero.history",
