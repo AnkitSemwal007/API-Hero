@@ -4,9 +4,9 @@
 
 `ankitsemwal.api-hero`. Command IDs still use the `apiRunner.*` prefix.
 
-## Why only Collections and History in the Activity Bar?
+## Why Collections, Execution, and History in the Activity Bar?
 
-Managers (Environments, Auth), Overview, Response, History Detail, Run Report, and wizards open as editors or panels. That keeps the Activity Bar focused.
+**Collections** organize requests, **Execution** monitors live collection runs, and **History** keeps per-request results. Managers (Environments, Auth), Overview, Response, History Detail, Run Report, and wizards open as editors or panels — Environments are intentionally not an Activity Bar view.
 
 ## Is GraphQL supported?
 

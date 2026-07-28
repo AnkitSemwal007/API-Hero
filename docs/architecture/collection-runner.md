@@ -53,7 +53,7 @@ CollectionRunnerService
 Collection runs call `runAtSourceLocation` with:
 
 - `showViewer: false` — **no per-request response viewer** (avoids spam)
-- `useProgressUi: false` — one collection-level progress notification instead
+- `useProgressUi: false` — collection-level status via CollectionRunManager / status bar
 - `showNotifications: false` — failures roll into the run summary
 - `signal` — collection-level cancellation aborts the active request
 - `historyCaptureContext` — merge of the composition history provider
@@ -65,7 +65,7 @@ History re-run and still opens the viewer.
 ## Viewer and history
 
 **Design choice:** during a collection run the response viewer is suppressed for
-every request. Completion is communicated via progress notification, status bar,
+every request. Completion is communicated via the Execution view, status bar,
 a secret-free summary toast, and the **Collection Run Report** panel
 (`run-report-panel.ts` / `run-report-html.ts`), which doubles as the in-memory
 **Collection Run Debugger V1**. History still records each
@@ -111,14 +111,20 @@ rather than a second execution path.
 | Layer | Location | Responsibility |
 | --- | --- | --- |
 | Models | `src/collection-runner/models.ts` | Immutable run plan/result/summary + extension bags |
+| Session manager | `src/collection-runner/collection-run-manager.ts` | Active/recent sessions, cancel, progress SSoT (`CollectionRunManager`) |
 | Plan builder | `src/collection-runner/plan-builder.ts` | Snapshot → ordered `RunPlan` |
 | Failure policies | `src/collection-runner/failure-policies.ts` | Stop / continue / skip-invalid |
 | Runner service | `src/collection-runner/collection-runner.ts` | Sequential execute + progress events |
-| VS Code adapters | `src/collection-runner/vscode/` | Commands, progress UI, source reader, Collection Run Report panel |
+| VS Code adapters | `src/collection-runner/vscode/` | Commands, Execution TreeView, status bar, source reader, Collection Run Report panel |
 
 The domain barrel (`src/collection-runner/index.ts`) must not import `vscode`.
-`extension.ts` composes via `registerCollectionRunner` after
-`registerCollections`.
+`extension.ts` composes `CollectionRunManager` once, then `registerExecutionView` and
+`registerCollectionRunner` after `registerCollections`. The manager is the
+session registry — it does not execute HTTP. Callers still use
+`CollectionRunnerService.execute` with the manager's `AbortSignal`. v1 allows
+**one** active collection run at a time (a second `begin` with a different
+`runId` is rejected). Concurrent multi-run is deferred until run-scoped
+variable isolation.
 
 ```mermaid
 flowchart TB
@@ -127,21 +133,28 @@ flowchart TB
   PLAN --> ANALYZE[analyzeRunPlanDependencies]
   ANALYZE --> ENRICH[enrichRunPlanWithDependencies]
   ENRICH -->|cycle / ambiguous| BLOCK[Error notification — run does not start]
-  ENRICH -->|ok| BEGIN[CollectionRunVariableContext.begin + per-run store]
-  BEGIN --> RUN[CollectionRunnerService]
+  ENRICH -->|ok| BEGIN[CollectionRunManager.begin]
+  BEGIN --> CTX[CollectionRunVariableContext.begin + per-run store]
+  CTX --> RUN[CollectionRunnerService]
   RUN --> SRC[Source reader]
   RUN --> ORCH[ExecutionOrchestrator.runAtSourceLocation]
   ORCH --> HIST[HistoryRecorder]
   ORCH -.->|showViewer false| VIEW[Response viewer skipped]
-  RUN --> UI[Progress + summary notification + report]
-  RUN --> END[finally clear store + context.end]
+  RUN -->|RunProgressEvent| CRM[CollectionRunManager]
+  CRM --> SB[Status bar Ready or Running N]
+  CRM --> ACT[Execution Activity TreeView]
+  CRM --> RPT[Live then finished Run Report]
+  RUN --> END[complete or fail then clear store and context]
 ```
 
 ## Progress
 
 `RunProgressEvent` exposes phase, current request, completed/remaining/total,
-and elapsed time. The VS Code adapter drives one cancellable notification plus
-a status bar item for the whole run.
+and elapsed time. `CollectionRunManager.onProgress` accumulates results into the
+active session snapshot. The VS Code adapter drives a status bar
+(`Ready` / `Running (N)`), the Execution Activity TreeView, optional
+cancellable notification progress per run, and live Run Report updates.
+Terminal toasts use `formatRunSummaryMessage`.
 
 ## Dependency graph and run variable store (Phase 2)
 

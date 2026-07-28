@@ -1,13 +1,12 @@
 # Roadmap
 
-Honest near-term plan for **API Hero** after **2.1.3** (patch: array-root JSON path fix; Create Variable From Response + Phase 1/2 extraction and chaining otherwise unchanged). Managers (Environments, Auth), Overview, History Detail, Run Report, OpenAPI wizard, Response copy/save/search, response variable extraction, Create-from-Response UX, and collection chaining (`@depends-on`, per-run store, collection variables) already ship — they are not roadmap gaps.
+Honest near-term plan for **API Hero** after **2.3.3** (Execution Center, Collection Runner / Run Report polish, dependency workflow, Marketplace screenshot wiring; Collection Run Debugger and dependency autofill already ship). Managers (Environments, Auth), Overview, History Detail, Run Report / Debugger, OpenAPI wizard, Response copy/save/search, response variable extraction, Create Variable From Response UX, and collection chaining (`@depends-on`, per-run store, collection variables) already ship — they are not roadmap gaps.
 
 ## Near term
 
 | Item | Notes |
 | --- | --- |
-| Marketplace screenshots / GIFs | Capture Request Editor (Extract), Collections, Response (Create Variable + extraction report), History, managers |
-| README / listing copy | Align with shipped 2.1.3 features only |
+| Marketplace GIF / asset refresh | Optional `workflow.gif`; keep PNGs under `images/marketplace/` in sync with UI |
 | Run File | Implement multi-request file execution (today: stub, palette-hidden) |
 | Examples pack | Curated `.api` samples including extract flows |
 | Docs drift checks | Keep user/architecture docs matched to `package.json` |
@@ -24,7 +23,7 @@ Honest near-term plan for **API Hero** after **2.1.3** (patch: array-root JSON p
 
 ## Explicitly not claiming
 
-Do not schedule "build Env Manager / Auth Manager / Overview / Extraction / collection chaining" — those exist. Prefer polish, docs, and assets before large new auth protocols.
+Do not schedule "build Env Manager / Auth Manager / Overview / Extraction / collection chaining / Execution Center" — those exist. Prefer polish, docs, and assets before large new auth protocols.
 
 ## Related
 

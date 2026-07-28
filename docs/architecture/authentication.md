@@ -145,4 +145,4 @@ flows, refresh tokens, persist variable values, or render credentials.
 (`src/auth/vscode/auth-manager-panel.ts`). It edits
 `apiRunner.authentication.profiles` metadata and prompts for Secret Storage
 writes; the webview never receives cleartext secrets after storage. This panel
-is not an Activity Bar view — Activity Bar remains Collections + History only.
+is not an Activity Bar view — Activity Bar remains Collections, Execution, and History.

@@ -24,6 +24,7 @@ flowchart TB
   EXT --> OV[Overview]
 
   COLL --> TREE[Activity Bar: Collections]
+  CR --> ETREE[Activity Bar: Execution]
   HIST --> HTREE[Activity Bar: History]
   ORCH --> EXEC[RequestExecutor]
   ORCH --> HIST
@@ -33,7 +34,7 @@ flowchart TB
   OAPI --> SRC
 ```
 
-Activity Bar hosts **Collections** and **History** only. Environment Manager, Auth Manager, Overview, History Detail, Collection Run Report, OpenAPI wizard, and Response viewer are panels/editors opened on demand.
+Activity Bar hosts **Collections**, **Execution**, and **History**. Environment Manager, Auth Manager, Overview, History Detail, Collection Run Report, OpenAPI wizard, and Response viewer are panels/editors opened on demand. Environments are **not** an Activity Bar view.
 
 ## Request lifecycle
 
