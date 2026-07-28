@@ -4,7 +4,7 @@ Install **API Hero** (`ankitsemwal.api-hero`) from the Marketplace or a VSIX, th
 
 ## First five minutes
 
-1. Open the **API Hero** Activity Bar icon. You see **Collections** and **History** only.
+1. Open the **API Hero** Activity Bar icon. You see **Collections**, **Execution**, and **History**.
 2. In Collections, choose **New Collection** (or **API Hero: New Collection**). Fill the **Create Collection** dialog (**Name** required, **Description** optional). The collection is created under `Collections/<name>/` only after you confirm **Create** — Cancel writes nothing.
 3. Choose **New Request**, set a name/method/URL in the dialog, then edit in the **Request Editor** (default for `*.api`).
 4. Click **Run** in the Request Editor toolbar, or press `Ctrl+Alt+R` / `Cmd+Alt+R` while the Request Editor (or text editor) is focused.

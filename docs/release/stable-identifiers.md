@@ -94,6 +94,7 @@ All settings keys use the `apiRunner.*` namespace (for example `apiRunner.logLev
 | --- | --- |
 | Activity Bar container | `apiRunner` |
 | Collections view | `apiRunner.collections` |
+| Execution view | `apiRunner.execution` |
 | History view | `apiRunner.history` |
 
 ## Language, grammar, and editors

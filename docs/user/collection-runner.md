@@ -13,7 +13,23 @@ From the Collections tree:
 | Selected request nodes | **API Hero: Run Selected Requests** |
 | Collection with tests | **API Hero: Run Collection Tests** |
 
-Progress appears as a cancellable notification and status bar item. When finished, the **Collection Run Report** panel summarizes outcomes.
+Progress appears in the **Execution** Activity Bar view and the status bar (`API Hero Running`). When finished, a toast summarizes outcomes and the **Collection Run Report** panel opens.
+
+## Execution view
+
+The **Execution** view (Activity Bar → API Hero → Execution) is the management surface for collection runs:
+
+| Area | Behavior |
+| --- | --- |
+| Running | Compact card with progress, current request, elapsed time, mode/policy |
+| Actions | **Open Live Report**, **Cancel**, **Reveal Collection** |
+| Recent Runs | Last 20 terminal sessions (newest first); click opens the finished report |
+
+Only one collection run can be active at a time. Starting another shows a warning — cancel from the Execution view or the progress notification first. Status bar idle text is **API Hero Ready**; click it to focus Execution.
+
+## Live Run Report
+
+**Open Live Report** opens the Collection Run Report panel while the run is in progress. Rows fill in as requests finish. When the run completes, the panel switches to the full finished report (including debugger details).
 
 ## Failure policy
 
@@ -79,6 +95,21 @@ The **Collection Run Report** shows the resulting execution order (with a
 (`+name`) and planned to consume (`-name`), skip reasons, and a text list of
 dependency edges such as `Login → Products (accessToken)` — variable **names**
 only, never values.
+
+## Collection Run Debugger
+
+After a collection (or folder / selection) run, open the **Collection Run Report**
+and expand a request’s **Details** to inspect that attempt without re-running APIs:
+
+- Response, Headers, Cookies
+- Extracted Variables
+- Assertions
+- Execution Details (including secret-safe resolved `{{variables}}`)
+- Dependencies and Timeline (Start / End / Duration)
+
+Debugger data is **in-memory for the last run only** (V1) — it is not persisted
+into History or `.api` files. Presentation uses the same response pipeline as the
+single-request Response Viewer.
 
 ## Collection variables
 

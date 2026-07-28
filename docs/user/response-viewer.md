@@ -34,9 +34,9 @@ Body leaf scalars appear in the tree for inspection (including values that look 
 | Extract Variable… | Opens the confirmation sheet (scalars with extractable paths only) |
 | Expand / Collapse | Object and array nodes |
 
-### Save as variable
+### Save as Variable
 
-When an extractable scalar leaf is selected, the body toolbar **Save as variable** opens the same confirmation sheet.
+When an extractable scalar leaf is selected, the body toolbar **Save as Variable** opens the same confirmation sheet.
 
 ### Extract Variable sheet
 
@@ -48,6 +48,7 @@ Confirm before writing (not one-click):
 4. Sensitive checkbox (defaults on for names/paths matching token, secret, password, api_key, Authorization)
 5. Value preview (masked when sensitive)
 6. Overwrite warning when the name is already known
+7. Confirm with **Save Extract Rule**
 
 On confirm, API Hero:
 

@@ -2,7 +2,7 @@
 
 History records completed single-request executions (including transport failures and cancelled-at-transport runs). Precondition failures before network (parse, validate, variables, auth) are **not** stored.
 
-Entries are **metadata-only**: sanitized URL, status, timing, names — not Authorization headers, bodies, or secrets.
+Entries are **metadata-only** summaries of past **runs** (not request files): sanitized URL, status, timing, names — not Authorization headers, response bodies, or secrets.
 
 ## Browse
 

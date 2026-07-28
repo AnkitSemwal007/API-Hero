@@ -160,7 +160,7 @@ are fixed variable stores edited in the same panel. The active environment is
 called out with a persistent detail strip, an **Active** badge on the list row
 and header, and bold list labeling. An **environment status bar** item reflects
 the active environment and opens the switch flow. These UI surfaces sit outside
-the Activity Bar (Collections + History only).
+the Activity Bar (Collections, Execution, and History).
 
 ## Exclusions
 

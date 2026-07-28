@@ -7,6 +7,92 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.3.3] - 2026-07-28
+
+Execution Center, Live Run Report polish, collection execution improvements, dependency workflow enhancements, Request Editor UX, repository cleanup, and Marketplace readiness.
+
+### Added
+
+- **Execution Center** — Activity Bar **Execution** view for live collection runs: Running and Recent sessions, progress, cancel, open Live Report, and reveal collection
+
+### Improved
+
+**Live Run Report**
+
+- Live progress while a collection is running (rows update as requests finish)
+- Subtle shimmer on the currently executing request so the active row is easy to spot
+- Clearer messaging that **Collection Run Debugger** / **Details** inspect the **last in-memory run** (not History)
+- Panel title aligned to **Run Report**
+
+**Collection execution**
+
+- Clearer progress in the Execution view and status bar during collection runs
+- Smoother handoff from live progress to the finished Run Report
+
+**Request Editor**
+
+- More reliable editing when the editor is not focused on a single request (Method/URL behave correctly outside form mode)
+- Dependencies panel focus and keyboard behavior improvements
+
+**Dependency workflow**
+
+- Clearer Auto / Manual / Unknown / Ambiguous projections and pin-to-manual flow
+- Better alignment between editor Depends-on order and collection run order
+
+**Discoverability & UX polish**
+
+- Overview Quick Actions: **New Collection** before **New Request**
+- Environment Manager hint for collection variables (`api-hero.variables.json` / Extract Variable with collection scope)
+- History welcome and detail copy clarify runs are metadata-only (bodies not stored)
+- Auth Manager hint: `@auth` uses profile **id** (label is display-only)
+- Consistent **Save as Variable** / **Save Extract Rule** labeling in the Response Viewer
+
+**Docs & Marketplace**
+
+- README screenshots, banner, social preview, and workflow GIF under `images/marketplace/`
+- Release notes and readiness docs pinned to **2.3.3**
+
+### Fixed
+
+- Environment rename keeps selection and secrets in sync (carried through from **2.3.2**)
+- Request Editor focus no longer stolen by the Dependencies panel (carried through from **2.3.2**)
+
+## [2.3.2] - 2026-07-27
+
+Stability and UX patch following **2.3.0** / **2.3.1**.
+
+### Fixed
+
+**Request Editor**
+
+- Fixed global focus-stealing issue introduced during the Dependencies panel redesign (document outside-click always focused **+ Add Dependency**, so any editable input lost focus on click)
+- Fixed dependency picker outside-click behavior so it no longer steals focus from active inputs when the popover is already closed
+- Fixed URL/Method appearing editable in multi/empty mode while silently ignoring edits (also shipped in **2.3.1**)
+- Disabled URL and Method controls when the editor is not in form mode
+
+**Environment Manager**
+
+- Fixed environment rename synchronization
+- Fixed selection after rename
+- Fixed "Unknown environment" after renaming new environments
+- Fixed environment ID re-keying
+- Implemented deterministic secret restoration
+- Ambiguous secret restoration is now skipped instead of guessing
+
+### Improved
+
+- Cleaner Dependencies panel
+- Better keyboard accessibility
+- Hidden empty diagnostics
+- Improved manual dependency workflow
+- Additional regression coverage
+
+### Internal
+
+- No execution pipeline changes
+- No dependency engine changes
+- No request persistence changes
+
 ## [2.3.1] - 2026-07-27
 
 ### Fixed
