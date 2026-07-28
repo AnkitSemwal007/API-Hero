@@ -3,6 +3,10 @@ import { test } from 'node:test';
 
 import type { SecretStorage, SecretStorageChangeEvent } from 'vscode';
 
+import {
+  AUTH_SECRET_KEY_PREFIX,
+  LEGACY_AUTH_SECRET_KEY_PREFIX,
+} from '../constants';
 import { SecretStorageService } from './secret-storage-service';
 
 class FakeSecretStorage implements SecretStorage {
@@ -49,15 +53,16 @@ class FakeSecretStorage implements SecretStorage {
 test('get set and delete round-trip through SecretStorageService', async () => {
   const storage = new FakeSecretStorage();
   const service = new SecretStorageService(storage);
+  const key = `${AUTH_SECRET_KEY_PREFIX}demo`;
 
-  assert.equal(await service.get('apiRunner.auth.profile.demo'), undefined);
-  await service.set('apiRunner.auth.profile.demo', 'sekrit');
-  assert.equal(await service.get('apiRunner.auth.profile.demo'), 'sekrit');
-  await service.delete('apiRunner.auth.profile.demo');
-  assert.equal(await service.get('apiRunner.auth.profile.demo'), undefined);
+  assert.equal(await service.get(key), undefined);
+  await service.set(key, 'sekrit');
+  assert.equal(await service.get(key), 'sekrit');
+  await service.delete(key);
+  assert.equal(await service.get(key), undefined);
 });
 
-test('onDidChange fires only for apiRunner.auth.profile.* keys', () => {
+test('onDidChange fires for canonical and legacy auth.profile.* keys', () => {
   const storage = new FakeSecretStorage();
   const service = new SecretStorageService(storage);
   let fired = 0;
@@ -65,16 +70,18 @@ test('onDidChange fires only for apiRunner.auth.profile.* keys', () => {
     fired += 1;
   });
 
-  storage.emit('apiRunner.auth.profile.one');
-  storage.emit('apiRunner.auth.profile.two.token');
-  assert.equal(fired, 2);
+  storage.emit(`${AUTH_SECRET_KEY_PREFIX}one`);
+  storage.emit(`${AUTH_SECRET_KEY_PREFIX}two.token`);
+  storage.emit(`${LEGACY_AUTH_SECRET_KEY_PREFIX}legacy`);
+  assert.equal(fired, 3);
 
   storage.emit('unrelated.key');
+  storage.emit('apiHero.other');
   storage.emit('apiRunner.other');
   storage.emit('authentication');
-  assert.equal(fired, 2);
+  assert.equal(fired, 3);
 
   disposable.dispose();
-  storage.emit('apiRunner.auth.profile.three');
-  assert.equal(fired, 2);
+  storage.emit(`${AUTH_SECRET_KEY_PREFIX}three`);
+  assert.equal(fired, 3);
 });

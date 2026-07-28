@@ -112,7 +112,7 @@ first observed event determines classification. An already-aborted caller is
 classified as `CANCELLED` before URL validation or transport work.
 
 `ExecutionContext.maxResponseBytes` caps buffered response bodies. The setting
-`apiRunner.maxResponseBytes` (default **10 MiB** / `10485760`) is supplied by
+`apiHero.maxResponseBytes` (default **10 MiB** / `10485760`) is supplied by
 activation. `0` means unlimited. When the limit is exceeded while the Node
 transport reads chunks, buffering aborts and execution returns non-retryable
 `RESPONSE_TOO_LARGE`.
@@ -173,7 +173,7 @@ in competing unused modules:
   [openapi-import.md](./openapi-import.md))
 - AI-assisted features
 - Placeholder commands still contributed but not implemented:
-  `apiRunner.runFile`, `apiRunner.login`, `apiRunner.logout`
+  `apiHero.runFile`, `apiHero.login`, `apiHero.logout`
   (thin stubs show an information message that the feature is not
   available in this release; no unused service scaffolding)
 

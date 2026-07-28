@@ -23,7 +23,7 @@ line, headers, body, `expect` lines).
 
 - `CollectionMutationService.createRequest(..., content?)` writes optional
   content; `createRequestFromModel` serializes then writes.
-- `apiRunner.createRequest` opens the New Request webview dialog
+- `apiHero.createRequest` opens the New Request webview dialog
   (`src/collections/vscode/new-request-dialog.ts`), preselecting collection /
   folder from tree context.
 - Request Editor Custom Text Editor uses parse ↔ serialize for bidirectional

@@ -130,28 +130,28 @@ Import OpenAPI, plus Open Overview.
 
 Commands:
 
-- `apiRunner.refreshCollections` — full rediscovery
-- `apiRunner.revealActiveRequest` — reveal cursor request in the tree
-- `apiRunner.openCollectionRequest` — open `.api` and position at the request
-- `apiRunner.focusCollections` — focus the Collections view
-- `apiRunner.createCollection` / `renameCollection` / `deleteCollection` /
+- `apiHero.refreshCollections` — full rediscovery
+- `apiHero.revealActiveRequest` — reveal cursor request in the tree
+- `apiHero.openCollectionRequest` — open `.api` and position at the request
+- `apiHero.focusCollections` — focus the Collections view
+- `apiHero.createCollection` / `renameCollection` / `deleteCollection` /
   `duplicateCollection` — native collection CRUD (`Collections/<Name>/` + marker).
   **Create Collection** is prompt-first (see workflow below). Explicit
   **Rename Collection** uses the same CRUD prompt webview host after the
   collection already exists (not `showInputBox`) — it is not part of create.
   Collections view keybindings: **F2** rename, **Delete** / **⌘⌫** delete
   (modal confirm), scoped by focused `viewItem`.
-- `apiRunner.exportCollection` — copy a native collection folder (with marker)
+- `apiHero.exportCollection` — copy a native collection folder (with marker)
   to a user-chosen destination directory
-- `apiRunner.importCollection` — import a collection folder into
+- `apiHero.importCollection` — import a collection folder into
   `Collections/<Name>/`, ensure marker, refresh discovery (Rename / Overwrite
   on name collision)
-- `apiRunner.createFolder` / `renameFolder` / `deleteFolder` / `duplicateFolder`
+- `apiHero.createFolder` / `renameFolder` / `deleteFolder` / `duplicateFolder`
   — **Create Folder** still uses Explorer-style allocate-then-rename (allocate
   on disk, then open the rename dialog). That pattern is folder-only; it does
   **not** apply to Create Collection. Folder rename uses the CRUD prompt
   webview.
-- `apiRunner.createRequest` / `renameRequest` / `duplicateRequest` /
+- `apiHero.createRequest` / `renameRequest` / `duplicateRequest` /
   `deleteRequest` / `moveRequest` — one `.api` file per UI-created request.
   **New Request** opens a webview dialog (name, method, URL, description,
   collection, folder); content is written via
@@ -159,8 +159,8 @@ Commands:
   **Rename Request** uses the CRUD prompt webview. **Move Request** uses the
   destination-picker webview (collection + folder), with allowlisting against
   the destinations presented to the user.
-- `apiRunner.openWorkspace` — wraps `vscode.openFolder`
-- `apiRunner.runCollection` / `runFolder` / `runSelectedRequests` — see
+- `apiHero.openWorkspace` — wraps `vscode.openFolder`
+- `apiHero.runCollection` / `runFolder` / `runSelectedRequests` — see
   [collection-runner.md](./collection-runner.md)
 
 ### Create Collection workflow
@@ -215,7 +215,7 @@ While editing `.api` files, selection changes reveal the matching tree node
 Sibling ordering / drag-and-drop is implemented via the collection marker
 (`order`, `folderOrder`, `requestOrder`) in Phase 1b — not via extension bags.
 
-OpenAPI 3.0/3.1 **import** is implemented via `apiRunner.importOpenApi`.
+OpenAPI 3.0/3.1 **import** is implemented via `apiHero.importOpenApi`.
 Run Collection is implemented — see [collection-runner.md](./collection-runner.md).
 Do not scaffold competing unused modules for the remaining bags.
 

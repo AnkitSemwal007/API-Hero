@@ -12,6 +12,8 @@ import {
   type ExtensionContext,
 } from 'vscode';
 
+import { registerCommandWithLegacyAlias } from '../../commands';
+
 import type { CollectionDiscoveryService } from '../../collections/discovery';
 import { COMMAND_IDS, EXTENSION_ID } from '../../constants';
 import type { HistoryRepository } from '../../history/repository';
@@ -34,12 +36,12 @@ export function registerOverview(
   const { context, historyRepository, discovery } = options;
   const panel = new OverviewPanel({ historyRepository, discovery });
 
-  const command = commands.registerCommand(COMMAND_IDS.openOverview, () => {
+  const command = registerCommandWithLegacyAlias(COMMAND_IDS.openOverview, () => {
     panel.show();
   });
 
   /** Shell/IA navigation shortcut — opens a folder in the current window. */
-  const openWorkspace = commands.registerCommand(
+  const openWorkspace = registerCommandWithLegacyAlias(
     COMMAND_IDS.openWorkspace,
     async () => {
       await commands.executeCommand('vscode.openFolder');
@@ -47,7 +49,7 @@ export function registerOverview(
   );
 
   /** Shell/IA navigation shortcut — opens API Hero extension settings. */
-  const openSettings = commands.registerCommand(
+  const openSettings = registerCommandWithLegacyAlias(
     COMMAND_IDS.openSettings,
     async () => {
       await commands.executeCommand(

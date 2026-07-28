@@ -13,7 +13,7 @@ The importer **never executes** imported HTTP content. Specifications are
 treated as untrusted. Export, Swagger 2.0, Postman, Insomnia, and GraphQL are
 out of scope.
 
-Command: `apiRunner.importOpenApi`  
+Command: `apiHero.importOpenApi`  
 Title: **API Hero: Import OpenAPI Specification**
 
 ## Pipeline
@@ -115,7 +115,7 @@ Generated content includes:
 ### Environments
 
 - First `servers[]` entry → primary environment `imported-<api-slug>`,
-  **activated** via `apiRunner.activeEnvironment`.
+  **activated** via `apiHero.activeEnvironment`.
 - Up to four additional servers → separate environments.
 - Server `{variables}` become environment variables; URL templates use
   `{{var}}` inside `baseUrl`.
@@ -148,7 +148,7 @@ plaintext settings. The summary lists SecretStorage hints for the user.
 ## Security
 
 - Never execute imported content.
-- Configurable size cap: `apiRunner.import.maxFileBytes` (default 5 MiB,
+- Configurable size cap: `apiHero.import.maxFileBytes` (default 5 MiB,
   hard max 50 MiB). The VS Code adapter `stat`s the file and rejects oversized
   specs **before** `readFile`; the loader re-checks decoded UTF-8 byte length.
 - `$ref` depth / cycle protection.

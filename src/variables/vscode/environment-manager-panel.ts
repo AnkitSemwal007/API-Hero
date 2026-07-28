@@ -26,7 +26,7 @@ import {
   writeEnvironmentManagerState,
 } from './environment-settings-writer';
 
-const PANEL_VIEW_TYPE = 'apiRunner.environmentManager';
+const PANEL_VIEW_TYPE = 'apiHero.environmentManager';
 const PANEL_TITLE = 'Environment Manager';
 
 /** Owns a singleton Environment Manager panel. */

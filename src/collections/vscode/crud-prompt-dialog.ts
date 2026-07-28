@@ -14,7 +14,7 @@ import {
   type CrudPromptDialogConfig,
 } from './crud-prompt-dialog-html';
 
-const PANEL_VIEW_TYPE = 'apiRunner.crudPrompt';
+const PANEL_VIEW_TYPE = 'apiHero.crudPrompt';
 
 export type { CrudPromptDialogConfig };
 

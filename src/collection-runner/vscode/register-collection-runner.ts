@@ -1,11 +1,12 @@
 import {
-  commands,
   window,
   workspace,
   type Disposable,
   type ExtensionContext,
   type TreeView,
 } from 'vscode';
+
+import { registerCommandWithLegacyAlias } from '../../commands';
 
 import type { CollectionDiscoveryService } from '../../collections';
 import type { CollectionTreeNode } from '../../collections';
@@ -249,17 +250,17 @@ export function registerCollectionRunner(
     statusBar,
     reportPanel,
     liveReportSubscription,
-    commands.registerCommand(COMMAND_IDS.runCollection, async (node?: CollectionTreeNode) => {
+    registerCommandWithLegacyAlias(COMMAND_IDS.runCollection, async (node?: CollectionTreeNode) => {
       const collectionId = node?.kind === 'collection' ? node.id : await pickCollectionId(discovery);
       if (collectionId === undefined) return;
       await runWithTarget({ mode: 'collection', collectionId });
     }),
-    commands.registerCommand(COMMAND_IDS.runCollectionTests, async (node?: CollectionTreeNode) => {
+    registerCommandWithLegacyAlias(COMMAND_IDS.runCollectionTests, async (node?: CollectionTreeNode) => {
       const collectionId = node?.kind === 'collection' ? node.id : await pickCollectionId(discovery);
       if (collectionId === undefined) return;
       await runWithTarget({ mode: 'collection', collectionId });
     }),
-    commands.registerCommand(COMMAND_IDS.runFolder, async (node?: CollectionTreeNode) => {
+    registerCommandWithLegacyAlias(COMMAND_IDS.runFolder, async (node?: CollectionTreeNode) => {
       const folderNode =
         node?.kind === 'folder'
           ? node
@@ -274,7 +275,7 @@ export function registerCollectionRunner(
         folderId: folderNode.folderId,
       });
     }),
-    commands.registerCommand(COMMAND_IDS.runSelectedRequests, async (node?: CollectionTreeNode) => {
+    registerCommandWithLegacyAlias(COMMAND_IDS.runSelectedRequests, async (node?: CollectionTreeNode) => {
       const selected = collectSelectedRequestIds(collectionsTreeView, node);
       if (selected === undefined) {
         await window.showErrorMessage('Select one or more requests in the Collections view to run.');

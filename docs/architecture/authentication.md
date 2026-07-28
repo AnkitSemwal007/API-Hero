@@ -53,7 +53,7 @@ directive, which takes precedence over the explicit session default selected by
 `API Hero: Select Authentication Profile`. If none exists, `none` is used.
 The picker does not edit `.api` files or persist a default.
 
-Non-secret profile metadata lives in `apiRunner.authentication.profiles`:
+Non-secret profile metadata lives in `apiHero.authentication.profiles`:
 
 ```json
 {
@@ -73,7 +73,7 @@ Credential sources are:
 
 Literal values are intentionally marked unsafe. Variable-derived values are
 read from the already-resolved per-run variable snapshot and are never written
-to secret storage. The `apiRunner.authentication.profiles` JSON schema enforces
+to secret storage. The `apiHero.authentication.profiles` JSON schema enforces
 this: a `literal` source requires both `value` and `unsafe: true`, and a
 `variable` source requires `name`.
 
@@ -103,7 +103,7 @@ never configured fails with `MISSING_PROFILE`. Both carry names only.
 `DefaultAuthenticationSecretRepository` provides get/store/delete without
 enumeration. Stable keys use:
 
-`apiRunner.auth.profile.<encoded-profile-id>.<encoded-field>`
+`apiHero.auth.profile.<encoded-profile-id>.<encoded-field>`
 
 Profile fields are fixed by provider metadata; profile configuration cannot
 redirect secret reads to arbitrary keys. Removing a profile does not enumerate
@@ -143,6 +143,6 @@ flows, refresh tokens, persist variable values, or render credentials.
 
 **API Hero: Manage Authentication** opens the Auth Manager webview
 (`src/auth/vscode/auth-manager-panel.ts`). It edits
-`apiRunner.authentication.profiles` metadata and prompts for Secret Storage
+`apiHero.authentication.profiles` metadata and prompts for Secret Storage
 writes; the webview never receives cleartext secrets after storage. This panel
 is not an Activity Bar view — Activity Bar remains Collections, Execution, and History.

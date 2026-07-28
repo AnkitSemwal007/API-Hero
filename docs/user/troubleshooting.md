@@ -6,11 +6,11 @@
 - Fix Problems diagnostics (syntax, unknown method, duplicate variables).
 - Ensure required `{{variables}}` resolve for the active environment.
 - Check auth: missing profile, duplicate profile id, or missing secret fields block execution.
-- Verify `apiRunner.requestTimeout` and network reachability.
+- Verify `apiHero.requestTimeout` and network reachability.
 
 ## Response too large
 
-`RESPONSE_TOO_LARGE` means the download exceeded `apiRunner.maxResponseBytes` (default 10 MiB). Raise the limit or set `0` for no limit (use carefully).
+`RESPONSE_TOO_LARGE` means the download exceeded `apiHero.maxResponseBytes` (default 10 MiB). Raise the limit or set `0` for no limit (use carefully).
 
 ## Collections empty or stale
 

@@ -18,7 +18,7 @@ import {
   renderHistoryDetailHtml,
 } from './history-detail-html';
 
-const PANEL_VIEW_TYPE = 'apiRunner.historyDetail';
+const PANEL_VIEW_TYPE = 'apiHero.historyDetail';
 
 export interface HistoryDetailPanelActions {
   readonly rerun: (entry: HistoryEntry) => Promise<void>;

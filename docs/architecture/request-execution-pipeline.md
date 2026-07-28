@@ -11,7 +11,7 @@ See [Authentication](authentication.md).
 
 ## End-to-end flow
 
-All single-request entry points converge on `apiRunner.runRequest`:
+All single-request entry points converge on `apiHero.runRequest`:
 
 ```mermaid
 flowchart LR

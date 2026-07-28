@@ -1,8 +1,8 @@
 import type { Disposable } from 'vscode';
-import { commands } from 'vscode';
 
 import type { Logger } from '../shared';
 import type { CommandDefinition } from './command-definition';
+import { registerCommandWithLegacyAlias } from './register-command-with-legacy-alias';
 
 /** Registers framework-neutral commands with VS Code. */
 export class CommandRegistrar {
@@ -14,7 +14,7 @@ export class CommandRegistrar {
   ): readonly Disposable[] {
     return definitions.map((definition) => {
       this.logger.debug('Registering command', { commandId: definition.id });
-      return commands.registerCommand(definition.id, definition.execute);
+      return registerCommandWithLegacyAlias(definition.id, definition.execute);
     });
   }
 }

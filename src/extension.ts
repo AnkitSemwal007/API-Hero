@@ -92,6 +92,10 @@ import {
 import { registerAuth } from './auth/vscode';
 import { registerOverview } from './overview/vscode';
 import { registerProjectStore } from './project-store/vscode';
+import {
+  createVsCodeNamespaceMigrationPorts,
+  migrateConfigurationNamespace,
+} from './migration';
 
 /** Composes infrastructure adapters and registers extension entry points. */
 export async function activate(context: ExtensionContext): Promise<void> {
@@ -101,6 +105,16 @@ export async function activate(context: ExtensionContext): Promise<void> {
   // only after first command/view use, without changing registration order.
   const outputChannel = window.createOutputChannel(EXTENSION_NAME);
   const logger = new Logger(new VsCodeLogSink(outputChannel));
+  try {
+    await migrateConfigurationNamespace(
+      context.globalState,
+      createVsCodeNamespaceMigrationPorts(),
+    );
+  } catch (error) {
+    logger.warning('Configuration namespace migration failed; continuing activation', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
   const registrar = new CommandRegistrar(logger);
   const settingsProvider = new VsCodeSettingsProvider();
   // Migrate / load `.apihero` before EnvironmentManager first capture so

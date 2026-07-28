@@ -20,7 +20,7 @@ Open the **History** Activity Bar view. Entries group by time (Today, Yesterday,
 
 ## Retention
 
-`apiRunner.history.maxEntries` (default 1000) keeps the newest entries. Storage is under the extension global storage file.
+`apiHero.history.maxEntries` (default 1000) keeps the newest entries. Storage is under the extension global storage file.
 
 ## Related
 

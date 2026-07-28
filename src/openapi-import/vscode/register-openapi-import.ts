@@ -1,12 +1,13 @@
 import { mkdir, readdir, rmdir, unlink, writeFile } from 'node:fs/promises';
 
 import {
-  commands,
   ConfigurationTarget,
   workspace,
   type Disposable,
   type ExtensionContext,
 } from 'vscode';
+
+import { registerCommandWithLegacyAlias } from '../../commands';
 
 import type { CollectionDiscoveryService } from '../../collections';
 import {
@@ -34,7 +35,7 @@ export interface OpenApiImportRegistration {
 }
 
 /**
- * Registers `apiRunner.importOpenApi` to open the multi-step import wizard.
+ * Registers `apiHero.importOpenApi` to open the multi-step import wizard.
  * Called from `extension.ts` only — keeps activate composition-only.
  */
 export function registerOpenApiImport(
@@ -42,7 +43,7 @@ export function registerOpenApiImport(
 ): OpenApiImportRegistration {
   const { context, logger, discovery } = options;
 
-  const registration = commands.registerCommand(
+  const registration = registerCommandWithLegacyAlias(
     COMMAND_IDS.importOpenApi,
     async () => {
       await openOpenApiImportWizard({

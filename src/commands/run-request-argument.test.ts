@@ -60,12 +60,19 @@ test('manifest entry points converge on the one Run Request command', () => {
   );
   assert.match(
     manifest.contributes.keybindings[0]?.when ?? '',
-    /activeCustomEditorId == 'apiRunner\.requestEditor'/,
+    /activeCustomEditorId == 'apiHero\.requestEditor'/,
   );
   assert.match(
+    manifest.contributes.keybindings[0]?.when ?? '',
+    /activeCustomEditorId == 'apiRunner\.requestEditor'/,
+  );
+  const revealWhen =
     manifest.contributes.menus['editor/context'].find(
       (entry) => entry.command === COMMAND_IDS.revealActiveRequest,
-    )?.when ?? '',
+    )?.when ?? '';
+  assert.match(revealWhen, /activeCustomEditorId == 'apiHero\.requestEditor'/);
+  assert.match(
+    revealWhen,
     /activeCustomEditorId == 'apiRunner\.requestEditor'/,
   );
 });

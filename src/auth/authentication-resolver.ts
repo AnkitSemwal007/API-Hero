@@ -1,3 +1,7 @@
+import {
+  authenticationSecretKey,
+  legacyAuthenticationSecretKey,
+} from '../constants';
 import type {
   AuthenticatedRequest,
   AuthenticationProfile,
@@ -12,10 +16,7 @@ import {
 } from './authentication-provider';
 import type { AuthenticationProfileIssue } from './authentication-profile-validation';
 
-/** Stable secret names are derived; profiles cannot redirect reads arbitrarily. */
-export function authenticationSecretKey(profileId: string, field: string): string {
-  return `apiRunner.auth.profile.${encodeURIComponent(profileId)}.${encodeURIComponent(field)}`;
-}
+export { authenticationSecretKey, legacyAuthenticationSecretKey };
 
 export interface AuthenticationSecretRepository {
   get(profileId: string, field: string): Promise<string | undefined>;
@@ -25,6 +26,9 @@ export interface AuthenticationSecretRepository {
 
 export class DefaultAuthenticationSecretRepository
 implements AuthenticationSecretRepository {
+  /** Serializes get/store/delete per profile field so lazy migrate cannot race delete. */
+  private readonly fieldLocks = new Map<string, Promise<unknown>>();
+
   public constructor(
     private readonly secretStore: {
       get(key: string): Promise<string | undefined>;
@@ -33,8 +37,31 @@ implements AuthenticationSecretRepository {
     },
   ) {}
 
-  public get(profileId: string, field: string): Promise<string | undefined> {
-    return this.secretStore.get(authenticationSecretKey(profileId, field));
+  public get(
+    profileId: string,
+    field: string,
+  ): Promise<string | undefined> {
+    return this.withFieldLock(profileId, field, async () => {
+      const canonicalKey = authenticationSecretKey(profileId, field);
+      const canonical = await this.secretStore.get(canonicalKey);
+      if (canonical !== undefined) {
+        return canonical;
+      }
+
+      const legacyKey = legacyAuthenticationSecretKey(profileId, field);
+      const legacy = await this.secretStore.get(legacyKey);
+      if (legacy === undefined) {
+        return undefined;
+      }
+
+      try {
+        await this.secretStore.set(canonicalKey, legacy);
+        await this.secretStore.delete(legacyKey);
+      } catch {
+        // Best-effort migrate: still return the value already read from legacy.
+      }
+      return legacy;
+    });
   }
 
   public store(
@@ -42,11 +69,36 @@ implements AuthenticationSecretRepository {
     field: string,
     value: string,
   ): Promise<void> {
-    return this.secretStore.set(authenticationSecretKey(profileId, field), value);
+    return this.withFieldLock(profileId, field, () =>
+      this.secretStore.set(authenticationSecretKey(profileId, field), value),
+    );
   }
 
   public delete(profileId: string, field: string): Promise<void> {
-    return this.secretStore.delete(authenticationSecretKey(profileId, field));
+    return this.withFieldLock(profileId, field, async () => {
+      await this.secretStore.delete(authenticationSecretKey(profileId, field));
+      await this.secretStore.delete(
+        legacyAuthenticationSecretKey(profileId, field),
+      );
+    });
+  }
+
+  private withFieldLock<T>(
+    profileId: string,
+    field: string,
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    const lockKey = `${profileId}\0${field}`;
+    const previous = this.fieldLocks.get(lockKey) ?? Promise.resolve();
+    const run = previous.then(operation, operation);
+    this.fieldLocks.set(
+      lockKey,
+      run.then(
+        () => undefined,
+        () => undefined,
+      ),
+    );
+    return run;
   }
 }
 

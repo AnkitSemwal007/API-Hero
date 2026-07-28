@@ -1,5 +1,9 @@
 import type { SecretStorage } from 'vscode';
 
+import {
+  AUTH_SECRET_KEY_PREFIX,
+  LEGACY_AUTH_SECRET_KEY_PREFIX,
+} from '../constants';
 import type { Disposable } from '../configuration';
 import type { SecretStore } from './stores';
 
@@ -24,7 +28,10 @@ export class SecretStorageService implements SecretStore {
 
   public onDidChange(listener: () => void): Disposable {
     return this.storage.onDidChange((event) => {
-      if (event.key.startsWith('apiRunner.auth.profile.')) {
+      if (
+        event.key.startsWith(AUTH_SECRET_KEY_PREFIX) ||
+        event.key.startsWith(LEGACY_AUTH_SECRET_KEY_PREFIX)
+      ) {
         listener();
       }
     });

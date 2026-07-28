@@ -13,7 +13,7 @@ import {
   type DestinationPickerDialogConfig,
 } from './destination-picker-dialog-html';
 
-const PANEL_VIEW_TYPE = 'apiRunner.destinationPicker';
+const PANEL_VIEW_TYPE = 'apiHero.destinationPicker';
 
 export type { DestinationPickerDestination, DestinationPickerDialogConfig };
 

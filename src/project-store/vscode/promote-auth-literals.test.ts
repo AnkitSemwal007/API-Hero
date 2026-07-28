@@ -170,7 +170,7 @@ test('promoteAuthLiteralsToSecretStorage throws when secretStore.set fails', asy
 test('promoteAuthLiteralsToSecretStorage is fill-only for existing secrets', async () => {
   const secrets = new MemorySecretStore();
   const key =
-    'apiRunner.auth.profile.bearer-1.token';
+    'apiHero.auth.profile.bearer-1.token';
   await secrets.set(key, 'already-there');
   await promoteAuthLiteralsToSecretStorage([bearerWithLiteral], secrets);
   assert.equal(secrets.values.get(key), 'already-there');

@@ -19,7 +19,7 @@ Do not paste tokens, passwords, or API keys into issues.
 
 ## Feature requests
 
-File a GitHub Issue with the `enhancement` label (or equivalent). Describe the workflow and why existing commands are insufficient. Stable IDs (`apiRunner.*`, language id `api`, etc.) must remain compatible unless a major version intentionally breaks them.
+File a GitHub Issue with the `enhancement` label (or equivalent). Describe the workflow and why existing commands are insufficient. Stable IDs (`apiHero.*`, language id `api`, etc.) must remain compatible unless a major version intentionally breaks them.
 
 ## Discussions
 

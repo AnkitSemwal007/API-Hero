@@ -3,12 +3,13 @@
  */
 
 import {
-  commands,
   window,
   workspace,
   type Disposable,
   type ExtensionContext,
 } from 'vscode';
+
+import { registerCommandWithLegacyAlias } from '../../commands';
 
 import { COMMAND_IDS } from '../../constants';
 import { fireAndForget, type Logger } from '../../shared';
@@ -62,7 +63,7 @@ export async function registerProjectStore(
     }
   });
 
-  const initializeCommand = commands.registerCommand(
+  const initializeCommand = registerCommandWithLegacyAlias(
     COMMAND_IDS.initializeProjectStore,
     async () => {
       const folder =

@@ -20,7 +20,7 @@ import {
   renderCollectionRunReportHtml,
 } from './run-report-html';
 
-const PANEL_VIEW_TYPE = 'apiRunner.collectionRunReport';
+const PANEL_VIEW_TYPE = 'apiHero.collectionRunReport';
 
 export interface CollectionRunReportPanelActions {
   readonly openRequest: (requestId: string) => Promise<void>;

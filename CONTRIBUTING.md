@@ -32,7 +32,7 @@ Press **F5** in VS Code to launch an Extension Development Host.
 
 ## Rules
 
-1. **Stable IDs** — do not rename `apiRunner.*` commands, settings, view IDs, language id `api`, or grammar `scopeName` without a major-version plan. See `docs/release/stable-identifiers.md`.
+1. **Stable IDs** — do not rename `apiHero.*` commands, settings, view IDs, language id `api`, or grammar `scopeName` without a major-version plan. See `docs/release/stable-identifiers.md`.
 2. **Layering** — core domain modules must not import `vscode`. Adapters live under `*/vscode`.
 3. **Secrets** — never log or persist credential values; use Secret Storage for auth secrets.
 4. **Webviews** — nonce CSP, validate inbound messages, prefer shared helpers in `src/ui/webview`.
