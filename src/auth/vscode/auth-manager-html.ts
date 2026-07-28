@@ -224,6 +224,7 @@ export function renderAuthManagerHtml(nonce: string): string {
       <label class="field">
         <span>Profile id</span>
         <input id="profileId" type="text" autocomplete="off" spellcheck="false" aria-label="Profile id" />
+        <span class="hint">@auth uses this id; the label is display-only.</span>
       </label>
       <label class="field">
         <span>Provider</span>

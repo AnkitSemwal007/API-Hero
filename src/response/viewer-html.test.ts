@@ -483,8 +483,9 @@ test('JSON tree exposes path metadata and Create Variable chrome when enabled', 
   assert.match(html, /data-json-type="string"/u);
   assert.match(html, /data-json-extractable="true"/u);
   assert.match(html, /data-json-path="body\.items\[0\]\.id"/u);
-  assert.match(html, /Save as variable/u);
+  assert.match(html, /Save as Variable/u);
   assert.match(html, /Extract Variable/u);
+  assert.match(html, /Save Extract Rule/u);
   assert.match(html, /jsonContextMenu/u);
   assert.match(html, /createVariableSheet/u);
   assert.match(html, /data-enable-create-variable="true"/u);

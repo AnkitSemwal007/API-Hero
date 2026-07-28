@@ -28,8 +28,15 @@ import {
 import { registerExtraction } from './extraction/vscode';
 import { normalizePathKey } from './collections';
 import { registerCollections } from './collections/vscode';
-import { createCollectionRunVariableContext } from './collection-runner';
-import { registerCollectionRunner } from './collection-runner/vscode';
+import {
+  CollectionRunManager,
+  createCollectionRunVariableContext,
+} from './collection-runner';
+import {
+  CollectionRunReportPanel,
+  registerCollectionRunner,
+  registerExecutionView,
+} from './collection-runner/vscode';
 import {
   createHistoryInfrastructure,
   registerHistory,
@@ -453,12 +460,23 @@ export async function activate(context: ExtensionContext): Promise<void> {
     infrastructure: historyInfrastructure,
   });
   getHistoryCaptureContext = historyRegistration.getCaptureContext;
+  const collectionRunManager = new CollectionRunManager();
+  const collectionRunReportPanel = new CollectionRunReportPanel();
+  registerExecutionView({
+    context,
+    manager: collectionRunManager,
+    reportPanel: collectionRunReportPanel,
+    discovery: collectionsRegistration.discovery,
+    collectionsTreeView: collectionsRegistration.treeView,
+  });
   registerCollectionRunner({
     context,
     logger,
     discovery: collectionsRegistration.discovery,
     orchestrator,
     collectionsTreeView: collectionsRegistration.treeView,
+    collectionRunManager,
+    reportPanel: collectionRunReportPanel,
     getHistoryCaptureContext: () => getHistoryCaptureContext(),
     setRequestStatusSuppressed: (suppressed) => {
       executionStatusPresenter.setSuppressed(suppressed);
@@ -479,6 +497,7 @@ export async function activate(context: ExtensionContext): Promise<void> {
     context,
     orchestrator,
     discovery: collectionsRegistration.discovery,
+    mutation: collectionsRegistration.mutation,
     getAuthProfiles: () =>
       authenticationProfiles.list().map((profile) => ({
         id: profile.id,

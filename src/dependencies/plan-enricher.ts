@@ -176,7 +176,7 @@ function countLabelOccurrences(
  * shared by multiple requests, appends a short request id so the path stays
  * unambiguous (implicit-edge cycles are not blocked by AMBIGUOUS_DEPENDS_ON).
  */
-function formatCyclePath(
+export function formatCyclePath(
   cycle: readonly string[],
   labelByRequestId: ReadonlyMap<string, string>,
   labelCounts: ReadonlyMap<string, number>,
@@ -190,5 +190,12 @@ function formatCyclePath(
       return label;
     })
     .join(' → ');
+}
+
+/** Counts how often each `@name` label appears (for cycle-path UX). */
+export function countLabelOccurrencesForCyclePath(
+  labelByRequestId: ReadonlyMap<string, string>,
+): ReadonlyMap<string, number> {
+  return countLabelOccurrences(labelByRequestId);
 }
 

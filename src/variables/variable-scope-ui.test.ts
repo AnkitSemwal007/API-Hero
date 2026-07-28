@@ -47,11 +47,11 @@ test('precedence legend is highest-to-lowest Run-first with Collection', () => {
   ]);
 });
 
-test('formatVariableScopeLabel includes icon and label for new scopes', () => {
-  assert.equal(formatVariableScopeLabel('document'), '📄 Request');
-  assert.equal(formatVariableScopeLabel('run'), '▶️ Run');
-  assert.equal(formatVariableScopeLabel('collection'), '📚 Collection');
-  assert.equal(getVariableScopeUi('environment').icon, '🌍');
-  assert.equal(getVariableScopeUi('run').icon, '▶️');
-  assert.equal(getVariableScopeUi('collection').icon, '📚');
+test('formatVariableScopeLabel returns the text-only source label', () => {
+  assert.equal(formatVariableScopeLabel('document'), 'Request');
+  assert.equal(formatVariableScopeLabel('run'), 'Run');
+  assert.equal(formatVariableScopeLabel('collection'), 'Collection');
+  assert.equal(getVariableScopeUi('environment').iconName, 'globe');
+  assert.equal(getVariableScopeUi('run').iconName, 'play');
+  assert.equal(getVariableScopeUi('collection').iconName, 'package');
 });

@@ -6,6 +6,10 @@
 .cursorrules
 .cursor-phase1-progress.json
 .cursor*.json
+.cursor-fix/**
+_write_tmp/**
+_fix*.py
+_keep*.py
 .gitignore
 
 # Source & build tooling (runtime is dist/)
@@ -47,3 +51,6 @@ release/**
 **/Thumbs.db
 tmp/**
 temp/**
+
+# NOTE: Do NOT ignore images/ — Marketplace README embeds under images/marketplace/
+# must ship in the VSIX (hero, screenshots, banner, social-preview).

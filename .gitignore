@@ -20,6 +20,12 @@ Thumbs.db
 .cursor-phase1-progress.json
 .cursor*.json
 
+# Agent scratch
+.cursor-fix/
+_write_tmp/
+_fix*.py
+_keep*.py
+
 # Internal phase implementation specs & task plans (not public ADRs)
 docs/architecture/adr/*-implementation-spec.md
 docs/architecture/adr/*-task-plan.md

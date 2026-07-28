@@ -225,7 +225,7 @@ export class RuntimeParserAdapter {
         const scopeUi = VARIABLE_SCOPE_UI[value.scope];
         return {
           key: variable.originalText,
-          documentation: `Effective source: ${scopeUi.icon} ${scopeUi.sourceLabel} · ${
+          documentation: `Effective source: ${scopeUi.sourceLabel} · ${
             value.sensitive ? MASKED_VARIABLE_VALUE : value.value
           }`,
           range: variable.range,
@@ -300,7 +300,9 @@ export class RuntimeParserAdapter {
           }
           const hover = this.completionService.getHoverInfo(item.name);
           return {
-            label: `${item.icon} ${item.name}`,
+            // Native VS Code completion list stays on Codicons/plain text —
+            // Lucide icon names are webview-only (see `sourceLabel` detail).
+            label: item.name,
             kind: 'variable' as const,
             detail: item.sensitive
               ? `${item.sourceLabel} · sensitive`

@@ -2,6 +2,8 @@
 export const VIEW_IDS = {
   /** Activity Bar collections explorer. */
   collections: 'apiRunner.collections',
+  /** Activity Bar collection-run execution dashboard. */
+  execution: 'apiRunner.execution',
   /** Activity Bar request history explorer. */
   history: 'apiRunner.history',
   /** Reserved for a future generic explorer surface. */

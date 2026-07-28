@@ -83,16 +83,43 @@ describe('request editor webview helpers', () => {
     assert.match(html, /id="dependenciesInfoBtn"/u);
     assert.match(html, /id="unknownVariablesSection"/u);
     assert.match(html, /id="ambiguousProducersSection"/u);
-    assert.match(html, /class="dependencies-block"/u);
-    assert.match(html, /Dependencies\s*<span id="dependenciesInfoBtn"/u);
+    assert.match(html, /id="executionStatus"/u);
+    assert.match(html, /id="executionStatusIcon"/u);
+    assert.match(html, /id="executionStatusHeadline"/u);
+    assert.match(html, /id="executionStatusDetail"/u);
+    assert.match(html, /id="autoDependenciesSection"/u);
+    assert.match(html, /id="manualDependenciesSection"/u);
+    assert.match(html, /id="dependenciesContent"/u);
+    assert.match(html, /id="issuesContent"/u);
+    assert.match(html, /id="pinnedLabel"/u);
+    assert.match(html, /class="execution-block dependencies-block"/u);
+    assert.match(html, /Execution\s*<span id="dependenciesInfoBtn"/u);
+    assert.match(html, /Runs independently/u);
+    assert.match(html, /Automatically detected/u);
+    assert.match(html, /Missing variables/u);
+    assert.match(html, /Multiple producers/u);
+    assert.match(html, />Pinned</u);
     assert.match(html, /\+ Add Dependency/u);
     assert.match(html, /data-testid="auto-dependencies"/u);
     assert.match(html, /data-testid="unknown-variables"/u);
     assert.match(html, /data-testid="ambiguous-producers"/u);
-    assert.match(html, />✓ Auto</u);
-    assert.match(html, />📌 Manual</u);
-    assert.match(html, />⚠ Unknown</u);
-    assert.match(html, />⚠ Ambiguous</u);
+    assert.doesNotMatch(html, />\s*Auto</u);
+    assert.doesNotMatch(html, />\s*Manual</u);
+    assert.doesNotMatch(html, />\s*Unknown</u);
+    assert.doesNotMatch(html, />\s*Ambiguous</u);
+    assert.doesNotMatch(html, /Method and URL stay in the top bar/u);
+    assert.doesNotMatch(html, /[✓📌⚠]/u);
+    assert.doesNotMatch(html, /textContent = '×'/u);
+    assert.match(html, /function ahIconSpan/u);
+    assert.match(html, /AH_ICON_SVG_MAP/u);
+    assert.match(html, /ahIconSpan\('pin'\)/u);
+    assert.match(html, /ahIconSpan\('x'\)/u);
+    assert.doesNotMatch(html, /AH_ICON_PIN/u);
+    assert.doesNotMatch(html, /AH_ICON_X/u);
+    assert.equal((html.match(/function ahIconSpan/gu) ?? []).length, 1);
+    assert.match(html, /id="run"[^>]*>[\s\S]*?<\/svg><\/span> Run</u);
+    assert.match(html, /id="dependenciesInfoBtn"[\s\S]*?aria-hidden="true"/u);
+    assert.doesNotMatch(html, /ⓘ/u);
     assert.match(html, /pinAutoDependency/u);
     assert.match(html, /dependencyProjectionError/u);
     assert.match(html, /renderDependencyProjections/u);
@@ -104,6 +131,11 @@ describe('request editor webview helpers', () => {
     assert.match(html, /dependencyCatalog/u);
     assert.match(html, /displayLabelForDependsToken/u);
     assert.match(html, /Unknown request/u);
+    assert.match(html, /textContent = 'Uses '/u);
+    assert.match(html, /Keep dependency '/u);
+    assert.match(html, /EXEC_ICON_READY/u);
+    assert.match(html, /EXEC_ICON_DEPS/u);
+    assert.match(html, /EXEC_ICON_ISSUE/u);
     assert.doesNotMatch(html, /Manual Depends on/u);
     assert.doesNotMatch(html, /No unknown variables\./u);
     assert.doesNotMatch(html, /No ambiguous producers\./u);
@@ -137,6 +169,27 @@ describe('request editor webview helpers', () => {
     assert.match(html, /--vscode-button-background/u);
     assert.doesNotMatch(html, /connect-src [^']*https/u);
     assert.doesNotMatch(html, /rgba\(255,\s*200,\s*0/u);
+  });
+
+  // Regression (Request Editor–global, not URL-specific): outside clicks while the
+  // Depends-on popover is already closed must not call dependsAddBtn.focus(). Affects
+  // any editable input (name, url, description, headers, params, body, etc.).
+  // Timeline: mousedown focuses the input → mouseup/click bubbles to document →
+  // listener calls closeDependsOnPopover() → dependsAddBtn.focus() steals focus.
+  // Introduced in 63b054f ("Simplify Request Editor Dependencies UI…"); toolbar
+  // changes in that commit are unrelated. Guards below prevent the steal.
+  test('document click does not steal focus from Request Editor inputs when Depends-on is closed', () => {
+    const html = renderRequestEditorHtml('nonce');
+    // Intentional close-while-open UX still focuses the add button after hiding.
+    assert.match(
+      html,
+      /function closeDependsOnPopover\(\)\s*\{\s*if \(dependsPopover\.hidden\) return;\s*dependsPopover\.hidden = true;\s*dependsAddBtn\.focus\(\);/u,
+    );
+    // Document click listener still exists, but early-returns when already hidden.
+    assert.match(
+      html,
+      /document\.addEventListener\('click',\s*\(event\)\s*=>\s*\{[\s\S]*?if \(!picker \|\| picker\.contains\(event\.target\)\) return;\s*if \(dependsPopover\.hidden\) return;\s*closeDependsOnPopover\(\);/u,
+    );
   });
 
   test('escapeAttribute neutralizes quote breakouts', () => {

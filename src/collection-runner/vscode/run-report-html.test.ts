@@ -9,7 +9,9 @@ import {
   type RunSummary,
 } from '../models';
 import {
+  applyCollectionRunReportHostMessage,
   buildCollectionRunReportModel,
+  buildLiveCollectionRunReportModel,
   escapeAttribute,
   escapeHtml,
   formatDuration,
@@ -28,6 +30,11 @@ describe('collection-run-report-html', () => {
     assert.match(html, /default-src 'none'/u);
     assert.match(html, /id="root"/u);
     assert.match(html, /Loading run report/u);
+    assert.match(html, /<title>Run Report<\/title>/u);
+    assert.match(
+      html,
+      /Collection Run Debugger \/ Details inspect the last in-memory run \(not History\)\./u,
+    );
     assert.match(html, /--vscode-editor-background/u);
     assert.match(html, /Failed only/u);
     assert.doesNotMatch(html, /connect-src [^']*https/u);
@@ -321,6 +328,161 @@ describe('collection-run-report-html', () => {
     assert.equal(formatDuration(undefined), '—');
     assert.equal(formatDuration(40), '40 ms');
     assert.equal(formatDuration(1500), '1.50 s');
+  });
+
+  test('buildLiveCollectionRunReportModel marks live rows and progress', () => {
+    const summary = sampleSummary();
+    const session = {
+      runId: summary.runId,
+      status: 'running' as const,
+      plan: summary.plan,
+      collectionId: summary.plan.collectionId,
+      collectionName: summary.plan.collectionName,
+      mode: summary.plan.mode,
+      failurePolicy: summary.plan.failurePolicy,
+      total: summary.plan.requests.length,
+      completed: 1,
+      remaining: summary.plan.requests.length - 1,
+      elapsedMs: 500,
+      startedAt: summary.plan.createdAt,
+      current: summary.plan.requests[1],
+      results: summary.results.slice(0, 1),
+    };
+    const model = buildLiveCollectionRunReportModel(session);
+    assert.equal(model.live, true);
+    assert.equal(model.status, 'running');
+    assert.equal(model.rows.length, 2);
+    assert.match(model.summaryLine, /running/u);
+    assert.equal(model.rows[0]?.outcome, RequestRunOutcomeKind.Passed);
+    assert.equal(model.rows[0]?.message, undefined);
+    assert.equal(model.rows[1]?.outcome, 'running');
+    assert.equal(model.rows[1]?.message, 'Executing request...');
+  });
+
+  test('renderCollectionRunReportHtml includes running-row shimmer CSS and class wiring', () => {
+    const html = renderCollectionRunReportHtml('reportNonce');
+    assert.match(html, /row\.outcome === 'running' \? 'row-running'/u);
+    assert.match(html, /tr\.row-running td:first-child/u);
+    assert.match(
+      html,
+      /@media \(prefers-reduced-motion: no-preference\) \{[\s\S]*?tr\.row-running td \{[\s\S]*?animation: ah-row-shimmer[\s\S]*?@keyframes ah-row-shimmer/u,
+    );
+  });
+
+  test('buildLiveCollectionRunReportModel progresses as results accumulate then finishes', () => {
+    const summary = sampleSummary();
+    const baseSession = {
+      runId: summary.runId,
+      status: 'running' as const,
+      plan: summary.plan,
+      collectionId: summary.plan.collectionId,
+      collectionName: summary.plan.collectionName,
+      mode: summary.plan.mode,
+      failurePolicy: summary.plan.failurePolicy,
+      total: summary.plan.requests.length,
+      startedAt: summary.plan.createdAt,
+    };
+
+    const started = buildLiveCollectionRunReportModel({
+      ...baseSession,
+      completed: 0,
+      remaining: 2,
+      elapsedMs: 10,
+      current: summary.plan.requests[0],
+      results: [],
+    });
+    assert.equal(started.rows[0]?.outcome, 'running');
+    assert.equal(started.rows[0]?.message, 'Executing request...');
+    assert.equal(started.rows[1]?.outcome, 'pending');
+    assert.equal(started.rows[1]?.message, undefined);
+
+    const mid = buildLiveCollectionRunReportModel({
+      ...baseSession,
+      completed: 1,
+      remaining: 1,
+      elapsedMs: 80,
+      current: summary.plan.requests[1],
+      results: summary.results.slice(0, 1),
+    });
+    assert.equal(mid.rows[0]?.outcome, RequestRunOutcomeKind.Passed);
+    assert.equal(mid.rows[0]?.message, undefined);
+    assert.equal(mid.rows[1]?.outcome, 'running');
+    assert.equal(mid.rows[1]?.message, 'Executing request...');
+    assert.equal(mid.passed, 1);
+    assert.equal(mid.failed, 0);
+
+    const finished = buildLiveCollectionRunReportModel({
+      ...baseSession,
+      status: 'completed',
+      completed: 2,
+      remaining: 0,
+      elapsedMs: 220,
+      results: summary.results,
+      summary,
+    });
+    assert.equal(finished.live, false);
+    assert.deepEqual(
+      finished.rows.map((row) => row.outcome),
+      buildCollectionRunReportModel(summary).rows.map((row) => row.outcome),
+    );
+    assert.ok(
+      finished.rows.every((row) => row.outcome !== 'running'),
+      'finished rows must not stay in running state (no row-running class)',
+    );
+    assert.ok(
+      finished.rows.every((row) => row.message !== 'Executing request...'),
+      'finished rows must not keep the running placeholder message',
+    );
+  });
+
+  test('applyCollectionRunReportHostMessage accepts init, live, and update', () => {
+    const summary = sampleSummary();
+    const initModel = buildCollectionRunReportModel(summary);
+    const liveModel = buildLiveCollectionRunReportModel({
+      runId: summary.runId,
+      status: 'running',
+      plan: summary.plan,
+      collectionId: summary.plan.collectionId,
+      collectionName: summary.plan.collectionName,
+      mode: summary.plan.mode,
+      failurePolicy: summary.plan.failurePolicy,
+      total: summary.plan.requests.length,
+      completed: 0,
+      remaining: summary.plan.requests.length,
+      elapsedMs: 1,
+      startedAt: summary.plan.createdAt,
+      current: summary.plan.requests[0],
+      results: [],
+    });
+
+    assert.deepEqual(
+      applyCollectionRunReportHostMessage(undefined, { type: 'init', model: initModel }),
+      { model: initModel, resetExpanded: true },
+    );
+    assert.deepEqual(
+      applyCollectionRunReportHostMessage(initModel, { type: 'live', model: liveModel }),
+      { model: liveModel, resetExpanded: false },
+    );
+    assert.deepEqual(
+      applyCollectionRunReportHostMessage(initModel, { type: 'update', model: liveModel }),
+      { model: liveModel, resetExpanded: false },
+    );
+    assert.equal(
+      applyCollectionRunReportHostMessage(initModel, {
+        type: 'error',
+        model: initModel,
+      }),
+      undefined,
+    );
+    assert.equal(
+      applyCollectionRunReportHostMessage(initModel, { type: 'unknown' }),
+      undefined,
+    );
+  });
+
+  test('renderCollectionRunReportHtml script handles live and update progress messages', () => {
+    const html = renderCollectionRunReportHtml('reportNonce');
+    assert.match(html, /data\.type === 'live' \|\| data\.type === 'update'/u);
   });
 
   test('normalizeFailurePolicySetting defaults unknown to ask', () => {

@@ -47,6 +47,8 @@ export { detectCycles, type CycleDetectionResult } from './cycle-detector';
 export { topoSort, type TopoSortOptions, type TopoSortResult } from './topo-sort';
 export {
   enrichRunPlanWithDependencies,
+  formatCyclePath,
+  countLabelOccurrencesForCyclePath,
   type EnrichRunPlanOptions,
 } from './plan-enricher';
 export {

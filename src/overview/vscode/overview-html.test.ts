@@ -26,6 +26,11 @@ describe('overview-html', () => {
     assert.match(html, /--vscode-button-background/u);
     assert.doesNotMatch(html, /connect-src [^']*https/u);
     assert.match(html, /New Request/u);
+    assert.match(html, /New Collection/u);
+    const collectionBtn = html.indexOf("actionButton('New Collection'");
+    const requestBtn = html.indexOf("actionButton('New Request'");
+    assert.ok(collectionBtn >= 0, 'expected New Collection quick action');
+    assert.ok(requestBtn > collectionBtn, 'New Collection should precede New Request');
     assert.match(html, /Focus Collections/u);
     assert.match(html, /Recent Requests/u);
     assert.match(html, /Tips/u);

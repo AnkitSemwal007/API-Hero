@@ -610,8 +610,8 @@ const OVERVIEW_SCRIPT = `
           ),
       el('h2', { text: 'Quick Actions', style: 'margin-top:16px' }),
       el('div', { className: 'actions' }, [
-        actionButton('New Request', 'createRequest', false),
         actionButton('New Collection', 'createCollection', false),
+        actionButton('New Request', 'createRequest', false),
         actionButton('Import OpenAPI', 'importOpenApi', true),
         actionButton('Manage Environments', 'manageEnvironments', true),
         actionButton('Manage Authentication', 'manageAuthProfiles', true),

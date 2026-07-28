@@ -1,16 +1,29 @@
 import type { VariableScope } from '../models';
+import type { AhIconName } from '../ui/webview';
 
 /** Shared scope icons and UI labels (document → "Request" in product copy). */
 export const VARIABLE_SCOPE_UI = Object.freeze({
-  run: Object.freeze({ icon: '▶️', sourceLabel: 'Run' }),
-  document: Object.freeze({ icon: '📄', sourceLabel: 'Request' }),
-  environment: Object.freeze({ icon: '🌍', sourceLabel: 'Environment' }),
-  collection: Object.freeze({ icon: '📚', sourceLabel: 'Collection' }),
-  workspace: Object.freeze({ icon: '🏢', sourceLabel: 'Workspace' }),
-  global: Object.freeze({ icon: '🌐', sourceLabel: 'Global' }),
+  run: Object.freeze({ iconName: 'play' as const, sourceLabel: 'Run' }),
+  document: Object.freeze({
+    iconName: 'file-text' as const,
+    sourceLabel: 'Request',
+  }),
+  environment: Object.freeze({
+    iconName: 'globe' as const,
+    sourceLabel: 'Environment',
+  }),
+  collection: Object.freeze({
+    iconName: 'package' as const,
+    sourceLabel: 'Collection',
+  }),
+  workspace: Object.freeze({
+    iconName: 'folder' as const,
+    sourceLabel: 'Workspace',
+  }),
+  global: Object.freeze({ iconName: 'network' as const, sourceLabel: 'Global' }),
 } satisfies Record<
   VariableScope,
-  { readonly icon: string; readonly sourceLabel: string }
+  { readonly iconName: AhIconName; readonly sourceLabel: string }
 >);
 
 /**
@@ -31,16 +44,15 @@ export const VARIABLE_PRECEDENCE_ORDER_LABELS = Object.freeze([
   VARIABLE_SCOPE_UI.global.sourceLabel,
 ] as const);
 
-/** Returns icon + source label for a scope. */
+/** Returns icon name + source label for a scope. */
 export function getVariableScopeUi(scope: VariableScope): {
-  readonly icon: string;
+  readonly iconName: AhIconName;
   readonly sourceLabel: string;
 } {
   return VARIABLE_SCOPE_UI[scope];
 }
 
-/** Formats "📄 Request" for legends and list labels. */
+/** Text-only source label for a scope (e.g. "Request") — no icon markup. */
 export function formatVariableScopeLabel(scope: VariableScope): string {
-  const ui = VARIABLE_SCOPE_UI[scope];
-  return `${ui.icon} ${ui.sourceLabel}`;
+  return VARIABLE_SCOPE_UI[scope].sourceLabel;
 }

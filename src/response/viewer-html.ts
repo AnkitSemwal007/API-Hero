@@ -2,6 +2,7 @@ import {
   buildNonceOnlyCsp,
   escapeAttribute,
   escapeHtml,
+  iconHtml,
   isWebviewMessageRecord,
   methodBadgeClass,
   WEBVIEW_SHARED_CSS,
@@ -105,7 +106,7 @@ export function parseResponseViewerMessage(
 
 /** Optional Create Variable From Response chrome for the Response Viewer. */
 export interface ResponseViewerRenderOptions {
-  /** When true, show Save as variable / Extract Variable entry points. */
+  /** When true, show Save as Variable / Extract Variable entry points. */
   readonly enableCreateVariable?: boolean;
   /** Names already known (any scope) for overwrite warnings in the sheet. */
   readonly knownVariableNames?: readonly string[];
@@ -284,7 +285,7 @@ function renderFailure(model: ResponsePresentation): string {
 function renderHeaders(model: ResponsePresentation): string {
   return `<div class="panel-toolbar">
     <span class="panel-title">Response headers</span>
-    <button type="button" data-action="copyHeaders" title="Copy headers">Copy</button>
+    <button type="button" data-action="copyHeaders" title="Copy headers">${iconHtml('copy', { decorative: true })} Copy</button>
   </div>
   <div class="table-wrap"><table><thead><tr><th scope="col">Name</th><th scope="col">Value</th></tr></thead><tbody>
     ${model.headers.length === 0
@@ -328,7 +329,7 @@ function renderAssertions(assertions: PresentedAssertions): string {
               ${item.failure.actual === undefined ? '' : `<div><dt>Actual</dt><dd><code>${escapeHtml(item.failure.actual)}</code></dd></div>`}
               ${item.failure.context === undefined ? '' : `<div><dt>Context</dt><dd>${escapeHtml(item.failure.context)}</dd></div>`}
             </dl></details>`;
-      return `<li class="assert-item assert-${icon}"><span class="assert-outcome">${escapeHtml(item.outcome)}</span><code>${escapeHtml(item.text)}</code>${failure}</li>`;
+      return `<li class="assert-item assert-${icon}"><span class="assert-outcome-row">${outcomeIconHtml(icon)}<span class="assert-outcome">${escapeHtml(item.outcome)}</span></span><code>${escapeHtml(item.text)}</code>${failure}</li>`;
     })
     .join('');
   return `<div class="panel-toolbar">
@@ -365,7 +366,7 @@ function renderExtraction(extraction: PresentedExtraction): string {
         item.reason === undefined
           ? ''
           : `<span class="muted">${escapeHtml(item.reason)}</span>`;
-      return `<li class="assert-item assert-${icon}"><span class="assert-outcome">${escapeHtml(item.outcome)}</span><strong>${escapeHtml(item.variableName)}</strong><span class="muted">${escapeHtml(item.sourceLabel)}</span>${value}${reason}</li>`;
+      return `<li class="assert-item assert-${icon}"><span class="assert-outcome-row">${outcomeIconHtml(icon)}<span class="assert-outcome">${escapeHtml(item.outcome)}</span></span><strong>${escapeHtml(item.variableName)}</strong><span class="muted">${escapeHtml(item.sourceLabel)}</span>${value}${reason}</li>`;
     })
     .join('');
   return `<div class="panel-toolbar">
@@ -398,7 +399,7 @@ function renderBody(
     options.enableCreateVariable === true
     && body.language === 'json'
     && body.prettyAvailable
-      ? '<button type="button" data-action="saveAsVariable" id="saveAsVariableBtn" title="Save selected JSON leaf as a variable" disabled>Save as variable</button>'
+      ? '<button type="button" data-action="saveAsVariable" id="saveAsVariableBtn" title="Save selected JSON leaf as a variable" disabled>Save as Variable</button>'
       : '';
   return `<div class="panel-toolbar body-toolbar">
     <div class="toolbar" role="group" aria-label="Body view">
@@ -411,11 +412,12 @@ function renderBody(
     <div class="toolbar body-actions" role="group" aria-label="Body actions">
       <label class="search-field">
         <span class="sr-only">Search body</span>
+        ${iconHtml('search', { decorative: true, className: 'search-field-icon' })}
         <input type="search" id="bodySearch" placeholder="Search" autocomplete="off" spellcheck="false" />
       </label>
       <span id="searchStatus" class="search-status muted" aria-live="polite"></span>
       ${saveAsVariable}
-      <button type="button" data-action="copyBody" title="Copy body">Copy</button>
+      <button type="button" data-action="copyBody" title="Copy body">${iconHtml('copy', { decorative: true })} Copy</button>
       <button type="button" data-action="saveBody" title="${body.truncated ? 'Save unavailable for truncated preview' : 'Save body'}"${body.truncated ? ' disabled' : ''}>Save</button>
     </div>
   </div>
@@ -553,7 +555,7 @@ function renderCreateVariableChrome(): string {
     <p id="createVarError" class="error" hidden></p>
     <div class="create-var-actions">
       <button type="button" id="createVarCancel" class="secondary">Cancel</button>
-      <button type="button" id="createVarConfirm">Save extract rule</button>
+      <button type="button" id="createVarConfirm">Save Extract Rule</button>
     </div>
   </div>
 </div>`;
@@ -632,6 +634,17 @@ function stat(label: string, value: string): string {
 
 function statChip(label: string, value: string): string {
   return `<div class="stat-chip"><span>${escapeHtml(label)}</span><strong title="${escapeAttribute(value)}">${escapeHtml(value)}</strong></div>`;
+}
+
+/** Icon for an assertion/extraction outcome row (`pass` / `skip` / `fail`). */
+function outcomeIconHtml(outcome: 'pass' | 'skip' | 'fail'): string {
+  if (outcome === 'pass') {
+    return iconHtml('check-circle', { decorative: true, className: 'ah-icon--success' });
+  }
+  if (outcome === 'skip') {
+    return iconHtml('minus-circle', { decorative: true, className: 'ah-icon--muted' });
+  }
+  return iconHtml('x-circle', { decorative: true, className: 'ah-icon--error' });
 }
 
 function statusClass(code: number): string {
@@ -719,6 +732,10 @@ main { display: flex; flex-direction: column; gap: 0; min-height: 100vh; }
   background: var(--vscode-button-background);
   font-weight: 600;
 }
+.search-field {
+  display: inline-flex; align-items: center; gap: 4px;
+}
+.search-field-icon { color: var(--vscode-descriptionForeground); }
 .search-field input {
   width: min(200px, 36vw); padding: 3px 8px;
   color: var(--vscode-input-foreground);
@@ -768,6 +785,7 @@ tbody tr:hover { background: var(--vscode-list-hoverBackground); }
 }
 .assert-list { list-style: none; margin: 0; padding: 0; }
 .assert-item { display: grid; gap: 6px; padding: var(--ah-space-2) 0; border-top: 1px solid var(--vscode-panel-border); }
+.assert-outcome-row { display: inline-flex; align-items: center; gap: 4px; }
 .assert-outcome { text-transform: uppercase; font-size: .75em; font-weight: 700; letter-spacing: .04em; }
 .assert-item.assert-pass .assert-outcome { color: var(--vscode-testing-iconPassed, var(--vscode-charts-green)); }
 .assert-item.assert-fail .assert-outcome { color: var(--vscode-testing-iconFailed, var(--vscode-editorError-foreground)); }

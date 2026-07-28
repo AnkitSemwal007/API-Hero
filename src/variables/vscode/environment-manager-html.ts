@@ -295,12 +295,8 @@ export function restoreEnvironmentManagerState(
 /** Builds the Environment Manager document. */
 export function renderEnvironmentManagerHtml(nonce: string): string {
   const safeNonce = escapeAttribute(nonce);
-  const workspaceLabel = escapeAttribute(
-    `${VARIABLE_SCOPE_UI.workspace.icon} ${VARIABLE_SCOPE_UI.workspace.sourceLabel}`,
-  );
-  const globalLabel = escapeAttribute(
-    `${VARIABLE_SCOPE_UI.global.icon} ${VARIABLE_SCOPE_UI.global.sourceLabel}`,
-  );
+  const workspaceLabel = escapeAttribute(VARIABLE_SCOPE_UI.workspace.sourceLabel);
+  const globalLabel = escapeAttribute(VARIABLE_SCOPE_UI.global.sourceLabel);
   const precedenceLegend = escapeAttribute(VARIABLE_PRECEDENCE_LEGEND);
   return `<!doctype html>
 <html lang="en">
@@ -341,6 +337,7 @@ export function renderEnvironmentManagerHtml(nonce: string): string {
       </ul>
       <p id="precedenceLegend" class="precedence-legend">${precedenceLegend}</p>
       <p class="nav-empty scope-request-note">Request variables live in the .api file / Request Editor (highest precedence).</p>
+      <p class="nav-empty scope-request-note">Collection variables live in api-hero.variables.json or via Extract Variable with collection scope — no Variable Manager UI.</p>
     </section>
   </aside>
   <main>
@@ -845,8 +842,8 @@ const MANAGER_SCRIPT = `
 const vscode = acquireVsCodeApi();
 const MASK = ${JSON.stringify(MASKED_VARIABLE_VALUE)};
 const SCOPE_UI = ${JSON.stringify({
-  global: VARIABLE_SCOPE_UI.global,
-  workspace: VARIABLE_SCOPE_UI.workspace,
+  global: { sourceLabel: VARIABLE_SCOPE_UI.global.sourceLabel },
+  workspace: { sourceLabel: VARIABLE_SCOPE_UI.workspace.sourceLabel },
 })};
 
 /** @type {any} */
@@ -1108,7 +1105,7 @@ function renderMain() {
   if (scope === 'global' || scope === 'workspace') {
     nameInput.disabled = true;
     const scopeUi = scope === 'global' ? SCOPE_UI.global : SCOPE_UI.workspace;
-    nameInput.value = scopeUi.icon + ' ' + scopeUi.sourceLabel + ' Variables';
+    nameInput.value = scopeUi.sourceLabel + ' Variables';
     setActive.disabled = true;
     setActive.textContent = 'Set Active';
     deleteEnv.disabled = true;

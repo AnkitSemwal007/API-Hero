@@ -53,3 +53,23 @@ export type {
   CollectionRunVariableContextBeginOptions,
 } from './run-variable-context';
 export { createCollectionRunVariableContext } from './run-variable-context';
+
+export type {
+  BeginCollectionRunSessionOptions,
+  BeginCollectionRunSessionResult,
+  CollectionRunSessionSnapshot,
+  RunSessionStatus,
+} from './run-session-models';
+export {
+  RunSessionStatus as RunSessionStatuses,
+  sessionStatusFromRunStatus,
+} from './run-session-models';
+
+export type {
+  CollectionRunManagerDisposable,
+  CollectionRunManagerOptions,
+} from './collection-run-manager';
+export {
+  CollectionRunAlreadyActiveError,
+  CollectionRunManager,
+} from './collection-run-manager';

@@ -1,7 +1,8 @@
 /**
  * Shared webview chrome for API Hero surfaces.
  * Token-first (`--vscode-*`), 4px spacing scale, 2px radius.
- * Webviews cannot load Codicon fonts — text + CSS only.
+ * Webviews cannot load Codicon fonts — icons are inline Lucide SVG via
+ * `iconHtml` (see `./icons`), rendered with the `.ah-icon` classes below.
  */
 
 /**
@@ -112,6 +113,23 @@ textarea:focus-visible,
   outline: 1px solid var(--vscode-focusBorder);
   outline-offset: 1px;
 }
+.ah-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+  vertical-align: -2px;
+}
+.ah-icon svg { display: block; }
+.ah-icon--button { vertical-align: -2px; }
+.ah-icon--status { vertical-align: -1px; }
+.ah-icon--muted { color: var(--vscode-descriptionForeground); }
+.ah-icon--success { color: var(--vscode-testing-iconPassed); }
+.ah-icon--warning { color: var(--vscode-editorWarning-foreground); }
+.ah-icon--error { color: var(--vscode-editorError-foreground); }
+.ah-icon--info { color: var(--vscode-charts-blue, var(--vscode-descriptionForeground)); }
+button .ah-icon { margin-right: 4px; }
 .muted { color: var(--vscode-descriptionForeground); }
 .sr-only {
   position: absolute;

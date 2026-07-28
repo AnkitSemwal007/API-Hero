@@ -17,6 +17,7 @@ import {
   normalizePathKey,
   type Collection,
   type CollectionDiscoveryService,
+  type CollectionMutationService,
   type Folder,
   type RequestReference,
   type WorkspaceCollections,
@@ -37,6 +38,7 @@ import {
   type DefaultVariableResolver,
 } from '../../variables';
 import { formatVariablePreviewError } from '../format-variable-preview-error';
+import { alignCollectionOrderOnDepends } from './align-collection-order-on-depends';
 import { REQUEST_EDITOR_VIEW_TYPE } from './constants';
 import { cascadeDependRefRenameOnNameChange } from './cascade-depend-ref-rename';
 import { buildRequestEditorDependencyCatalog } from './dependency-catalog';
@@ -68,6 +70,8 @@ export interface RegisterRequestEditorOptions {
   readonly getActiveEnvironmentLabel?: () => string | undefined;
   /** Collections discovery for same-collection Depends-on picker. */
   readonly discovery?: CollectionDiscoveryService;
+  /** Mutation service for same-folder requestOrder alignment after depends-on. */
+  readonly mutation?: CollectionMutationService;
 }
 
 export interface RequestEditorRegistration {
@@ -131,6 +135,31 @@ export function registerRequestEditor(
         oldName,
         newName,
       }),
+    alignCollectionOrderAfterDependsOn: (() => {
+      const mutation = options.mutation;
+      if (mutation === undefined) {
+        return undefined;
+      }
+      return async ({
+        documentPath,
+        previousDependsOn,
+        nextDependsOn,
+      }: {
+        readonly documentPath: string;
+        readonly previousDependsOn: readonly string[];
+        readonly nextDependsOn: readonly string[];
+      }) => {
+        await alignCollectionOrderOnDepends({
+          aggregate: options.discovery?.snapshot,
+          documentPath,
+          previousDependsOn,
+          nextDependsOn,
+          mutation,
+          readText: (filePath) => readApiTextPreferOpen(filePath),
+          analysisCache,
+        });
+      };
+    })(),
     runDocument: (document) => runRequestDocument(orchestrator, document),
   });
 
