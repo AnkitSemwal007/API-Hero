@@ -274,11 +274,23 @@ test('secret repository has stable get/store/delete lifecycle without enumeratio
   const repository = new DefaultAuthenticationSecretRepository(store);
   await repository.store('team/profile', 'token', 'private');
   const key = authenticationSecretKey('team/profile', 'token');
-  assert.equal(key, 'apiRunner.auth.profile.team%2Fprofile.token');
+  assert.equal(key, 'apiHero.auth.profile.team%2Fprofile.token');
   assert.equal(await repository.get('team/profile', 'token'), 'private');
   await repository.delete('team/profile', 'token');
   assert.equal(await repository.get('team/profile', 'token'), undefined);
   assert.equal('list' in repository, false);
+});
+
+test('secret repository lazily migrates legacy apiRunner keys to apiHero', async () => {
+  const store = new MemorySecrets();
+  const repository = new DefaultAuthenticationSecretRepository(store);
+  const legacyKey = 'apiRunner.auth.profile.demo.token';
+  const canonicalKey = authenticationSecretKey('demo', 'token');
+  await store.set(legacyKey, 'legacy-secret');
+
+  assert.equal(await repository.get('demo', 'token'), 'legacy-secret');
+  assert.equal(await store.get(canonicalKey), 'legacy-secret');
+  assert.equal(await store.get(legacyKey), undefined);
 });
 
 test('validation isolates malformed, duplicate, and prototype-sensitive ids', () => {

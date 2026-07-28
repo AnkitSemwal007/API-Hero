@@ -12,6 +12,8 @@ import {
   type QuickPickItem,
 } from 'vscode';
 
+import { registerCommandWithLegacyAlias } from '../../commands';
+
 import { COMMAND_IDS, VIEW_IDS } from '../../constants';
 import type { ExecutionOrchestrator } from '../../orchestration';
 import type { Logger } from '../../shared';
@@ -178,17 +180,17 @@ export function registerHistory(
     {
       dispose: () => infrastructure.setOnRecorded(undefined),
     },
-    commands.registerCommand(COMMAND_IDS.focusHistory, async () => {
+    registerCommandWithLegacyAlias(COMMAND_IDS.focusHistory, async () => {
       await commands.executeCommand(`${VIEW_IDS.history}.focus`);
     }),
     /**
      * Intentional IA alias for menus/Overview Quick Actions.
      * Same behavior as focusHistory — not a separate Activity Bar view.
      */
-    commands.registerCommand(COMMAND_IDS.recentRequests, async () => {
+    registerCommandWithLegacyAlias(COMMAND_IDS.recentRequests, async () => {
       await commands.executeCommand(COMMAND_IDS.focusHistory);
     }),
-    commands.registerCommand(
+    registerCommandWithLegacyAlias(
       COMMAND_IDS.openHistoryEntry,
       async (target?: unknown) => {
         const entry = await resolveEntry(repository, target);
@@ -201,7 +203,7 @@ export function registerHistory(
         detailPanel.show(entry);
       },
     ),
-    commands.registerCommand(
+    registerCommandWithLegacyAlias(
       COMMAND_IDS.rerunHistoryEntry,
       async (target?: unknown) => {
         const entry = await resolveEntry(repository, target);
@@ -214,7 +216,7 @@ export function registerHistory(
         await rerunEntry(orchestrator, entry);
       },
     ),
-    commands.registerCommand(
+    registerCommandWithLegacyAlias(
       COMMAND_IDS.revealHistoryRequest,
       async (target?: unknown) => {
         const entry = await resolveEntry(repository, target);
@@ -227,7 +229,7 @@ export function registerHistory(
         await revealOriginalRequest(entry);
       },
     ),
-    commands.registerCommand(
+    registerCommandWithLegacyAlias(
       COMMAND_IDS.copyHistorySummary,
       async (target?: unknown) => {
         const entry = await resolveEntry(repository, target);
@@ -241,7 +243,7 @@ export function registerHistory(
         window.setStatusBarMessage('History summary copied to clipboard', 2_000);
       },
     ),
-    commands.registerCommand(
+    registerCommandWithLegacyAlias(
       COMMAND_IDS.deleteHistoryEntry,
       async (target?: unknown) => {
         const entry = await resolveEntry(repository, target);
@@ -266,7 +268,7 @@ export function registerHistory(
         }
       },
     ),
-    commands.registerCommand(COMMAND_IDS.clearHistory, async () => {
+    registerCommandWithLegacyAlias(COMMAND_IDS.clearHistory, async () => {
       const confirm = await window.showWarningMessage(
         'Clear all API Hero request history?',
         { modal: true },
@@ -280,7 +282,7 @@ export function registerHistory(
       await refresh();
       logger.info('Request history cleared');
     }),
-    commands.registerCommand(COMMAND_IDS.searchHistory, async () => {
+    registerCommandWithLegacyAlias(COMMAND_IDS.searchHistory, async () => {
       const next = await promptHistoryFilter(
         treeProvider.getFilter(),
         cachedEntries,
@@ -291,7 +293,7 @@ export function registerHistory(
       treeProvider.setFilter(next);
       applyFilterBanner();
     }),
-    commands.registerCommand(COMMAND_IDS.refreshHistory, async () => {
+    registerCommandWithLegacyAlias(COMMAND_IDS.refreshHistory, async () => {
       await refresh();
     }),
   ];

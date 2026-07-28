@@ -1,7 +1,7 @@
 # Native API Request Editor
 
 Custom Text Editor for single-request `.api` files (`viewType`:
-`apiRunner.requestEditor`). Form tabs stay in sync with the document buffer;
+`apiHero.requestEditor`). Form tabs stay in sync with the document buffer;
 the parser and `.api` syntax are unchanged.
 
 ## Layout
@@ -66,16 +66,16 @@ does **not** rewrite the file from the form. Users can **Open With Text Editor**
 ## Run
 
 The Run button calls `ExecutionOrchestrator.runAtPosition` for the document
-(same pipeline as `apiRunner.runRequest`). Custom editors do not rely on
+(same pipeline as `apiHero.runRequest`). Custom editors do not rely on
 `window.activeTextEditor`.
 
 ## Tree Open
 
 `CollectionNavigationService.openRequest` uses `vscode.openWith` +
-`apiRunner.requestEditor` when the file has exactly one discovered request;
+`apiHero.requestEditor` when the file has exactly one discovered request;
 multi-request files still open in the default text editor.
 
-Command palette: `apiRunner.openRequestEditor`.
+Command palette: `apiHero.openRequestEditor`.
 
 ## Security
 

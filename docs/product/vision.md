@@ -7,7 +7,7 @@
 1. **Text is canonical** — UI writes into the `.api` grammar; no parallel opaque schema.
 2. **Small shell** — Activity Bar shows Collections, Execution, and History; managers open as panels (Environments are not an Activity Bar view).
 3. **Secure by default** — secrets in Secret Storage; History and UI mask credentials.
-4. **Stable IDs** — `apiRunner.*` for compatibility while the brand is API Hero.
+4. **Stable IDs** — Canonical contribution IDs use `apiHero.*`; legacy `apiRunner.*` aliases remain during the compatibility window (see [stable-identifiers.md](../release/stable-identifiers.md)).
 
 ## Audience
 

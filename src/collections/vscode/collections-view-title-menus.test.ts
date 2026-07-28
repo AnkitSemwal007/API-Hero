@@ -20,7 +20,7 @@ test('Collections view/title keeps navigation + overflow only', () => {
   };
 
   const collectionsEntries = manifest.contributes.menus['view/title'].filter(
-    (entry) => entry.when === 'view == apiRunner.collections',
+    (entry) => entry.when === 'view == apiHero.collections',
   );
 
   const navigation = collectionsEntries

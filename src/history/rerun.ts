@@ -1,7 +1,7 @@
 import type { HistoryEntry, HistorySourceLocation } from './models';
 
 /**
- * Serializable argument compatible with `apiRunner.runRequest`.
+ * Serializable argument compatible with `apiHero.runRequest`.
  * Pure domain type — no VS Code imports.
  */
 export interface HistoryRerunArgument {

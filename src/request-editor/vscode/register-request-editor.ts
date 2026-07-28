@@ -3,7 +3,6 @@
  */
 
 import {
-  commands,
   Uri,
   window,
   workspace,
@@ -12,7 +11,11 @@ import {
   type TextDocument,
 } from 'vscode';
 
-import { COMMAND_IDS } from '../../constants';
+import { registerCommandWithLegacyAlias } from '../../commands/register-command-with-legacy-alias';
+import {
+  COMMAND_IDS,
+  LEGACY_REQUEST_EDITOR_VIEW_TYPE,
+} from '../../constants';
 import {
   normalizePathKey,
   type Collection,
@@ -163,14 +166,26 @@ export function registerRequestEditor(
     runDocument: (document) => runRequestDocument(orchestrator, document),
   });
 
+  const editorOptions = {
+    webviewOptions: {
+      retainContextWhenHidden: true,
+    },
+    supportsMultipleEditorsPerDocument: false,
+  } as const;
+
   const disposables: Disposable[] = [
-    window.registerCustomEditorProvider(REQUEST_EDITOR_VIEW_TYPE, provider, {
-      webviewOptions: {
-        retainContextWhenHidden: true,
-      },
-      supportsMultipleEditorsPerDocument: false,
-    }),
-    commands.registerCommand(COMMAND_IDS.openRequestEditor, async () => {
+    window.registerCustomEditorProvider(
+      REQUEST_EDITOR_VIEW_TYPE,
+      provider,
+      editorOptions,
+    ),
+    // Legacy alias: priority "option" in package.json; same provider instance.
+    window.registerCustomEditorProvider(
+      LEGACY_REQUEST_EDITOR_VIEW_TYPE,
+      provider,
+      editorOptions,
+    ),
+    registerCommandWithLegacyAlias(COMMAND_IDS.openRequestEditor, async () => {
       const active = window.activeTextEditor?.document;
       const document =
         active?.languageId === 'api'

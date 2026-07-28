@@ -148,7 +148,7 @@ export type CollectionRunReportOutboundMessage =
   | { readonly type: 'update'; readonly model: CollectionRunReportModel }
   | { readonly type: 'error'; readonly message: string };
 
-/** Setting values for `apiRunner.collectionRunner.failurePolicy`. */
+/** Setting values for `apiHero.collectionRunner.failurePolicy`. */
 export const FailurePolicySettingValue = {
   Ask: 'ask',
   StopOnFirstError: FailurePolicyKind.StopOnFirstError,

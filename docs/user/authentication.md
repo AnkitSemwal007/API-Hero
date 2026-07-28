@@ -39,4 +39,4 @@ Precedence: request `@auth` → document `@auth` → session default → `none`.
 
 - [Environments](./environments.md)
 - [Creating requests](./creating-requests.md)
-- [Configuration](../reference/configuration.md) (`apiRunner.authentication.profiles`)
+- [Configuration](../reference/configuration.md) (`apiHero.authentication.profiles`)

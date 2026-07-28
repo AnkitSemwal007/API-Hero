@@ -43,7 +43,7 @@ import {
   type OpenApiImportWizardSummaryView,
 } from './openapi-import-wizard-html';
 
-const PANEL_VIEW_TYPE = 'apiRunner.openapiImportWizard';
+const PANEL_VIEW_TYPE = 'apiHero.openapiImportWizard';
 const PANEL_TITLE = 'Import OpenAPI';
 
 export interface OpenOpenApiImportWizardOptions {

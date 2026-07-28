@@ -1,5 +1,11 @@
 /** Root namespace for all API Hero settings. */
-export const CONFIGURATION_SECTION = 'apiRunner';
+export const CONFIGURATION_SECTION = 'apiHero';
+
+/**
+ * Legacy settings namespace. Migrated to {@link CONFIGURATION_SECTION} on
+ * activate; kept as a constant so migration and docs stay centralized.
+ */
+export const LEGACY_CONFIGURATION_SECTION = 'apiRunner';
 
 /** Stable keys for settings below the API Hero namespace. */
 export const CONFIGURATION_KEYS = {
@@ -100,3 +106,26 @@ export type ConfigurationKey =
   | typeof CONFIGURATION_KEYS.activeEnvironment
   | typeof CONFIGURATION_KEYS.authenticationProfiles
   | (typeof CONFIGURATION_KEYS.languageFeatures)[keyof typeof CONFIGURATION_KEYS.languageFeatures];
+
+/**
+ * Flat list of relative setting keys under {@link CONFIGURATION_SECTION} /
+ * {@link LEGACY_CONFIGURATION_SECTION} for namespace migration.
+ */
+export function flattenConfigurationKeys(): readonly string[] {
+  return [
+    CONFIGURATION_KEYS.logLevel,
+    CONFIGURATION_KEYS.requestTimeout,
+    CONFIGURATION_KEYS.maxResponseBytes,
+    CONFIGURATION_KEYS.globalVariables,
+    CONFIGURATION_KEYS.workspaceVariables,
+    CONFIGURATION_KEYS.environments,
+    CONFIGURATION_KEYS.activeEnvironment,
+    CONFIGURATION_KEYS.authenticationProfiles,
+    CONFIGURATION_KEYS.historyMaxEntries,
+    CONFIGURATION_KEYS.importMaxFileBytes,
+    CONFIGURATION_KEYS.collectionRunnerFailurePolicy,
+    CONFIGURATION_KEYS.languageFeatures.hover,
+    CONFIGURATION_KEYS.languageFeatures.outline,
+    CONFIGURATION_KEYS.languageFeatures.diagnostics,
+  ];
+}

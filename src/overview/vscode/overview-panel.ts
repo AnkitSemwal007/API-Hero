@@ -22,7 +22,7 @@ import {
   type OverviewQuickAction as OverviewQuickActionId,
 } from './overview-html';
 
-const PANEL_VIEW_TYPE = 'apiRunner.overview';
+const PANEL_VIEW_TYPE = 'apiHero.overview';
 const PANEL_TITLE = 'API Hero Overview';
 
 const QUICK_ACTION_COMMANDS: Readonly<

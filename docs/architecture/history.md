@@ -90,7 +90,7 @@ flowchart LR
 
 - **Location:** `{globalStorageUri}/request-history.json`
 - **Envelope:** `{ schemaVersion: 1, entries: HistoryEntry[] }`
-- **Retention:** `apiRunner.history.maxEntries` (default **1000**); newest kept
+- **Retention:** `apiHero.history.maxEntries` (default **1000**); newest kept
 - **Migration:** unknown `schemaVersion` values reset to an empty v1 document
   rather than risking secret leakage from an unknown shape
 - Hot path keeps an in-memory cache of lightweight summaries only; bodies are
@@ -98,7 +98,7 @@ flowchart LR
 
 ## Explorer UI
 
-Activity Bar view `apiRunner.history` groups entries:
+Activity Bar view `apiHero.history` groups entries:
 
 `Today` / `Yesterday` / `Last 7 Days` / `Older`
 

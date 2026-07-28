@@ -2,7 +2,7 @@
 
 ## What is the extension ID?
 
-`ankitsemwal.api-hero`. Command IDs still use the `apiRunner.*` prefix.
+`ankitsemwal.api-hero`. Command IDs still use the `apiHero.*` prefix.
 
 ## Why Collections, Execution, and History in the Activity Bar?
 

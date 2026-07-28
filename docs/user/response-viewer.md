@@ -10,7 +10,7 @@ After a successful single-request run (or a completed execution result), API Her
 - Assertion results when assertions ran
 - **Extracted** tab when `@extract` / `@sensitive-extract` rules ran (masked values for sensitive extracts)
 
-Sensitive headers (`Authorization`, `Cookie`, `Set-Cookie`, etc.) are always masked. Large bodies are truncated for display; transport also enforces `apiRunner.maxResponseBytes`.
+Sensitive headers (`Authorization`, `Cookie`, `Set-Cookie`, etc.) are always masked. Large bodies are truncated for display; transport also enforces `apiHero.maxResponseBytes`.
 
 ## JSON body tree
 

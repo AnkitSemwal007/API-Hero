@@ -16,7 +16,7 @@ interface EnvironmentQuickPickItem {
 /**
  * Creates the active-environment command. Selection updates the session and
  * persists the active id to `.apihero/workspace.json` when project mode is on,
- * otherwise to `apiRunner.activeEnvironment` settings.
+ * otherwise to `apiHero.activeEnvironment` settings.
  */
 export function createSwitchEnvironmentCommand(
   manager: EnvironmentManager,

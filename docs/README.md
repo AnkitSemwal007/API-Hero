@@ -2,7 +2,7 @@
 
 **API Hero** (`ankitsemwal.api-hero`) is a REST/HTTP client for VS Code. Author `.api` requests, organize collections, manage environments and authentication, assert responses, import OpenAPI, monitor collection runs in **Execution**, and review run history.
 
-Command IDs remain under the `apiRunner.*` namespace for compatibility. See [release/stable-identifiers.md](./release/stable-identifiers.md).
+Command IDs remain under the `apiHero.*` namespace for compatibility. See [release/stable-identifiers.md](./release/stable-identifiers.md).
 
 | Area | Description |
 | --- | --- |

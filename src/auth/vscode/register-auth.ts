@@ -5,7 +5,6 @@
 import {
   CodeAction,
   CodeActionKind,
-  commands,
   languages,
   type CodeActionProvider,
   type Diagnostic,
@@ -16,6 +15,7 @@ import {
   type CodeActionContext,
 } from 'vscode';
 
+import { registerCommandWithLegacyAlias } from '../../commands';
 import { COMMAND_IDS } from '../../constants';
 import type { AuthenticationProfileManager } from '../authentication-profile-manager';
 import type { AuthenticationSecretRepository } from '../authentication-resolver';
@@ -37,14 +37,12 @@ export interface AuthRegistration {
   readonly panel: AuthManagerPanel;
 }
 
-const SET_AUTH_SECRET_COMMAND = 'apiRunner.setAuthSecret';
-
 /** Wires Manage Authentication UI into the extension host. */
 export function registerAuth(options: RegisterAuthOptions): AuthRegistration {
   const { context, profileManager, secrets } = options;
   const panel = new AuthManagerPanel({ profileManager, secrets });
 
-  const manageCommand = commands.registerCommand(
+  const manageCommand = registerCommandWithLegacyAlias(
     COMMAND_IDS.manageAuthProfiles,
     (selectedId?: unknown) => {
       panel.show(
@@ -55,8 +53,8 @@ export function registerAuth(options: RegisterAuthOptions): AuthRegistration {
     },
   );
 
-  const setSecretCommand = commands.registerCommand(
-    SET_AUTH_SECRET_COMMAND,
+  const setSecretCommand = registerCommandWithLegacyAlias(
+    COMMAND_IDS.setAuthSecret,
     async (profileId?: unknown, field?: unknown) => {
       if (typeof profileId !== 'string' || typeof field !== 'string') {
         return;
@@ -103,7 +101,7 @@ class AuthMissingSecretCodeActionProvider implements CodeActionProvider {
       action.isPreferred = true;
       action.command = {
         title: action.title,
-        command: SET_AUTH_SECRET_COMMAND,
+        command: COMMAND_IDS.setAuthSecret,
         arguments: [target.profileId, target.field],
       };
       actions.push(action);

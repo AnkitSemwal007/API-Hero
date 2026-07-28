@@ -146,7 +146,7 @@ Add `expect` lines after a request. Run with assertions via CodeLens or **Run Re
 
 ### Collection Runner & Execution
 
-Run many requests sequentially with progress in the **Execution** Activity Bar view. Configure `apiRunner.collectionRunner.failurePolicy` (`ask`, `stop-on-first-error`, `continue-on-error`, `skip-invalid-requests`). When a run finishes, review the **Run Report** and expand per-request **Details** (Collection Run Debugger — last run, in-memory, not History).
+Run many requests sequentially with progress in the **Execution** Activity Bar view. Configure `apiHero.collectionRunner.failurePolicy` (`ask`, `stop-on-first-error`, `continue-on-error`, `skip-invalid-requests`). When a run finishes, review the **Run Report** and expand per-request **Details** (Collection Run Debugger — last run, in-memory, not History).
 
 <img src="https://res.cloudinary.com/iaojzqjd/image/upload/screenshot-execution_il1wy7.png" alt="Execution Center" width="800" />
 
@@ -190,7 +190,7 @@ More actions are available from the Command Palette (`API Hero: …`) and view t
 
 Open **API Hero: Open Settings** or filter Settings with `@ext:ankitsemwal.api-hero`.
 
-Notable keys: `apiRunner.requestTimeout`, `maxResponseBytes`, `history.maxEntries`, `environments`, `activeEnvironment`, `authentication.profiles`, `collectionRunner.failurePolicy`, `languageFeatures.*`.
+Notable keys: `apiHero.requestTimeout`, `maxResponseBytes`, `history.maxEntries`, `environments`, `activeEnvironment`, `authentication.profiles`, `collectionRunner.failurePolicy`, `languageFeatures.*`.
 
 → [Configuration reference](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/reference/configuration.md)
 

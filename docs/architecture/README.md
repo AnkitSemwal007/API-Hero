@@ -2,7 +2,7 @@
 
 API Hero is a VS Code extension with a layered design: domain modules stay free of `vscode` imports; adapters under `*/vscode/` register commands, views, and webviews. Composition happens in `src/extension.ts`.
 
-Brand: **API Hero**. Machine IDs remain `apiRunner.*` — see [stable identifiers](../release/stable-identifiers.md).
+Brand: **API Hero**. Machine IDs remain `apiHero.*` — see [stable identifiers](../release/stable-identifiers.md).
 
 ## Extension composition
 

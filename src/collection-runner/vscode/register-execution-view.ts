@@ -9,6 +9,8 @@ import {
   type ExtensionContext,
   type TreeView,
 } from 'vscode';
+
+import { registerCommandWithLegacyAlias } from '../../commands';
 import type { CollectionDiscoveryService } from '../../collections';
 import {
   findTreeNodeByCollectionId,
@@ -112,10 +114,10 @@ export function registerExecutionView(
     treeView,
     provider,
     manager.onDidChange(refreshTree),
-    commands.registerCommand(COMMAND_IDS.focusExecution, async () => {
+    registerCommandWithLegacyAlias(COMMAND_IDS.focusExecution, async () => {
       await commands.executeCommand(`${VIEW_IDS.execution}.focus`);
     }),
-    commands.registerCommand(COMMAND_IDS.cancelCollectionRun, async (arg?: string | ExecutionTreeNode) => {
+    registerCommandWithLegacyAlias(COMMAND_IDS.cancelCollectionRun, async (arg?: string | ExecutionTreeNode) => {
       const runId = resolveRunId(arg) ?? manager.listActive()[0]?.runId;
       if (runId === undefined) {
         await window.showInformationMessage('No collection run is currently active.');
@@ -125,7 +127,7 @@ export function registerExecutionView(
         await window.showInformationMessage('That collection run is no longer active.');
       }
     }),
-    commands.registerCommand(COMMAND_IDS.openLiveRunReport, async (arg?: string | ExecutionTreeNode) => {
+    registerCommandWithLegacyAlias(COMMAND_IDS.openLiveRunReport, async (arg?: string | ExecutionTreeNode) => {
       const runId = resolveRunId(arg) ?? manager.listActive()[0]?.runId;
       if (runId === undefined) {
         await window.showInformationMessage('No collection run is currently active.');
@@ -133,7 +135,7 @@ export function registerExecutionView(
       }
       await openLive(runId);
     }),
-    commands.registerCommand(COMMAND_IDS.openRecentRunReport, async (arg?: string | ExecutionTreeNode) => {
+    registerCommandWithLegacyAlias(COMMAND_IDS.openRecentRunReport, async (arg?: string | ExecutionTreeNode) => {
       const runId = resolveRunId(arg);
       if (runId !== undefined) {
         await openRecent(runId);
@@ -146,7 +148,7 @@ export function registerExecutionView(
       }
       await openRecent(recent[0]!.runId);
     }),
-    commands.registerCommand(COMMAND_IDS.revealExecutionCollection, async (arg?: string | ExecutionTreeNode) => {
+    registerCommandWithLegacyAlias(COMMAND_IDS.revealExecutionCollection, async (arg?: string | ExecutionTreeNode) => {
       const runId = resolveRunId(arg);
       if (runId !== undefined) {
         if (manager.get(runId) !== undefined) {
@@ -171,7 +173,7 @@ export function registerExecutionView(
       }
       await revealByCollectionId(session.collectionId);
     }),
-    commands.registerCommand(COMMAND_IDS.copyCollectionRunId, async (arg?: string | ExecutionTreeNode) => {
+    registerCommandWithLegacyAlias(COMMAND_IDS.copyCollectionRunId, async (arg?: string | ExecutionTreeNode) => {
       const id = resolveRunId(arg) ?? manager.listActive()[0]?.runId ?? manager.listRecent()[0]?.runId;
       if (id === undefined) {
         await window.showInformationMessage('No collection run ID is available to copy.');

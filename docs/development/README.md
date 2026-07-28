@@ -24,7 +24,7 @@ Domain folders keep core logic free of `vscode`. Put host wiring in `*/vscode/`.
 
 ## Conventions
 
-- Brand strings: **API Hero**. Stable IDs: `apiRunner.*` ([stable identifiers](../release/stable-identifiers.md)).
+- Brand strings: **API Hero**. Stable IDs: `apiHero.*` ([stable identifiers](../release/stable-identifiers.md)).
 - Prefer immutable domain models; adapters own side effects.
 - No direct `fetch()` outside the Request Engine / execution transport.
 - Secret Storage only through the dedicated SecretStorage service.
@@ -63,7 +63,7 @@ Details: [testing.md](./testing.md).
 1. Open the repo in VS Code / Cursor.
 2. Launch the Extension Development Host (F5) using the workspace launch config if present.
 3. Set breakpoints in TypeScript sources mapped via `sourceMap`.
-4. Use the **API Hero** output channel (`apiRunner.logLevel`) for runtime logs.
+4. Use the **API Hero** output channel (`apiHero.logLevel`) for runtime logs.
 
 ## Related
 

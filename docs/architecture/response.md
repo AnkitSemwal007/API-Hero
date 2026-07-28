@@ -102,7 +102,7 @@ displayed and canonical sizes and clearly marks truncation. Pretty parsing is
 not repeated for truncated JSON. The canonical `RuntimeResponse` remains
 unchanged and available to non-viewer consumers.
 
-Execution enforces `apiRunner.maxResponseBytes` (default 10 MiB) while
+Execution enforces `apiHero.maxResponseBytes` (default 10 MiB) while
 buffering; `0` means unlimited. Oversized downloads fail with
 `RESPONSE_TOO_LARGE` before a viewer model is built. Viewer truncation remains
 a display concern for responses that fit under that cap.

@@ -3,11 +3,11 @@
  */
 
 import {
-  commands,
   type Disposable,
   type ExtensionContext,
 } from 'vscode';
 
+import { registerCommandWithLegacyAlias } from '../../commands';
 import { COMMAND_IDS } from '../../constants';
 import type { EnvironmentManager } from '../environment-manager';
 import { EnvironmentManagerPanel } from './environment-manager-panel';
@@ -30,7 +30,7 @@ export function registerEnvironments(
   const panel = new EnvironmentManagerPanel(environmentManager);
   const statusBar = new EnvironmentStatusBar(environmentManager);
 
-  const command = commands.registerCommand(
+  const command = registerCommandWithLegacyAlias(
     COMMAND_IDS.manageEnvironments,
     () => {
       panel.show();

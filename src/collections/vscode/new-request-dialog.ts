@@ -14,7 +14,7 @@ import {
   type NewRequestDialogState,
 } from './new-request-dialog-html';
 
-const PANEL_VIEW_TYPE = 'apiRunner.newRequest';
+const PANEL_VIEW_TYPE = 'apiHero.newRequest';
 
 export interface NewRequestDialogResult {
   readonly collectionId: string;

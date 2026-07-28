@@ -145,7 +145,7 @@ Summary toast / status bar include assertion stats when `assertionsTotal > 0`.
 ### VS Code
 
 - CodeLens **Run Tests** when the request has associated expects (maps to
-  `apiRunner.runRequestWithAssertions`, same path as Run Request)
+  `apiHero.runRequestWithAssertions`, same path as Run Request)
 - Commands: `runRequestWithAssertions`, `runCollectionTests` (aliases)
 - Problems: `AssertionProblemsService` updates diagnostics **after runs only**
 
