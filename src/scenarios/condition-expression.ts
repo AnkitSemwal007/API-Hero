@@ -313,10 +313,11 @@ function lookupVariable(
   variables: ConditionEvaluationContext['variables'],
 ): string | undefined {
   const bare = name.startsWith('scenario.') ? name.slice('scenario.'.length) : name;
-  if (variables instanceof Map) {
-    return variables.get(bare) ?? variables.get(name);
+  if (!(variables instanceof Map)) {
+    const record = variables as Readonly<Record<string, string>>;
+    return record[bare] ?? record[name];
   }
-  return variables[bare] ?? variables[name];
+  return variables.get(bare) ?? variables.get(name);
 }
 
 function lookupHeader(

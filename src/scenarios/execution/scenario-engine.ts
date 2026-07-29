@@ -348,6 +348,11 @@ export class ScenarioEngine {
 
     emitScenarioStarted();
 
+    const entryStepId = controlFlow.entryStepId;
+    if (entryStepId === undefined) {
+      throw new Error('Scenario must have a unique entry step after validation.');
+    }
+
     const active = new Set<StepId>();
     active.add(entryStepId);
     const executed = new Set<StepId>();

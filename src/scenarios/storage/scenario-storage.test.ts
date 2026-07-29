@@ -36,6 +36,28 @@ describe('scenarios/storage/scenario-storage', () => {
     assert.equal(loaded.scenario.id, 'sid');
   });
 
+  test('save rejects documents that fail schema round-trip validation', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'api-hero-scenarios-invalid-save-'));
+    const filePath = join(root, 'bad.scenario.json');
+    const service = new ScenarioStorageService();
+    const invalid = {
+      id: 'sid',
+      schemaVersion: ScenarioSchemaVersion,
+      name: 'Broken',
+      variables: [],
+      steps: [],
+      connections: [],
+      executionSettings: { failurePolicy: 'stop-on-first-error' },
+      metadata: { createdAt: 't1', updatedAt: 't2' },
+    } as unknown as Scenario;
+
+    const saved = await service.save(invalid, filePath);
+    assert.equal(saved.ok, false);
+    if (!saved.ok) {
+      assert.equal(saved.error.code, 'INVALID_DOCUMENT');
+    }
+  });
+
   test('rejects invalid schemaVersion on load', async () => {
     const root = await mkdtemp(join(tmpdir(), 'api-hero-scenarios-b-'));
     const filePath = join(root, 'bad.scenario.json');

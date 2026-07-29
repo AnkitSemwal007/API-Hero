@@ -56,6 +56,11 @@ export const COMMAND_IDS = {
   openSettings: 'apiHero.openSettings',
   /** Stable IA alias: focuses History (same as focusHistory), not a separate view. */
   recentRequests: 'apiHero.recentRequests',
+  refreshScenarios: 'apiHero.refreshScenarios',
+  openScenarioEditor: 'apiHero.openScenarioEditor',
+  runScenario: 'apiHero.runScenario',
+  createScenario: 'apiHero.createScenario',
+  focusScenarios: 'apiHero.focusScenarios',
   /**
    * Internal command (not contributed in package.json) used by auth missing-secret
    * code actions to prompt and store a secret field.
@@ -126,6 +131,11 @@ export const LEGACY_COMMAND_IDS = {
   openOverview: 'apiRunner.openOverview',
   openSettings: 'apiRunner.openSettings',
   recentRequests: 'apiRunner.recentRequests',
+  refreshScenarios: 'apiRunner.refreshScenarios',
+  openScenarioEditor: 'apiRunner.openScenarioEditor',
+  runScenario: 'apiRunner.runScenario',
+  createScenario: 'apiRunner.createScenario',
+  focusScenarios: 'apiRunner.focusScenarios',
   setAuthSecret: 'apiRunner.setAuthSecret',
 } as const;
 

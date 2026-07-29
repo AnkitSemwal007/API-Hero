@@ -4,7 +4,7 @@
 
 Author `.api` requests beside your code, run them with assertions, and keep collections in Git — without leaving the editor.
 
-> Extension ID: **`ankitsemwal.api-hero`** · Version: **2.3.6** · License: [MIT](LICENSE)
+> Extension ID: **`ankitsemwal.api-hero`** · Version: **2.4.0** · License: [MIT](LICENSE)
 
 [Documentation](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/README.md) · [Changelog](CHANGELOG.md) · [Support](SUPPORT.md)
 
@@ -12,9 +12,9 @@ Author `.api` requests beside your code, run them with assertions, and keep coll
 
 **Why developers use API Hero**
 
-- **Stay in VS Code** — Request Editor, Response Viewer, Collections, Execution, and History live in the editor
+- **Stay in VS Code** — Request Editor, Response Viewer, Collections, Scenarios, Execution, and History live in the editor
 - **Git-native collections** — folders and human-readable `.api` files you can diff and review in PRs
-- **Run with confidence** — assertions, environments, auth profiles, and a Live Run Report for collection runs
+- **Run with confidence** — assertions, environments, auth profiles, Scenarios for multi-step flows, and a Live Run Report for collection runs
 - **Safe by default** — secrets use VS Code Secret Storage; presentation URLs mask sensitive values
 - **Import and grow** — OpenAPI 3.x import into the same `.api` + collection layout
 
@@ -44,7 +44,7 @@ No context switching. No binary collections. Same workflow as the rest of your c
 ```bash
 npm install
 npm run package
-code --install-extension release/api-hero-2.3.6.vsix
+code --install-extension release/api-hero-2.4.0.vsix
 ```
 
 Requires VS Code **1.90+**.
@@ -59,7 +59,7 @@ Open a **folder** workspace in VS Code (required for Collections).
 2. **New Request** — set name / method / URL, then edit in the **Request Editor** (default for `*.api`).
 3. **Run** — click **Run**, press **Ctrl+Alt+R** / **Cmd+Alt+R**, or use CodeLens **Run Request**.
 
-Inspect the **Response Viewer**. Successful runs appear under **History**. Collection runs show live progress under **Execution**.
+Inspect the **Response Viewer**. Successful runs appear under **History**. Collection runs show live progress under **Execution**. Multi-step flows live under **Scenarios**.
 
 Environments and auth are optional for a first public GET. Open **API Hero: Open Overview** anytime for quick actions.
 
@@ -115,6 +115,12 @@ History stores metadata-safe summaries of past **runs** (masked presentation URL
 <img src="https://res.cloudinary.com/iaojzqjd/image/upload/screenshot-history_k4zaq3.png" alt="History" width="800" />
 
 → [History](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/history.md)
+
+### Scenarios
+
+Multi-step orchestration with `.api-hero/scenarios/*.scenario.json`. Use the **Scenarios** Activity Bar view to create, edit, and run scenarios; review results in a **Scenario Run Report**.
+
+→ [Scenarios](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/scenarios.md)
 
 ---
 
@@ -174,7 +180,7 @@ Manual `@depends-on` picker plus Auto / Unknown / Ambiguous projections from the
 
 **Overview** is a command-opened home for recent runs, collections, and quick actions. The `.api` language adds highlighting, snippets, hover, outline, diagnostics, and CodeLens.
 
-**Not in this release:** Run File (all requests in one editor), Login/Logout OAuth, cookie jar, GraphQL/gRPC/WebSocket, Variable Manager UI, persistent Run Report.
+**Not in this release:** Run File (all requests in one editor), Login/Logout OAuth, cookie jar, GraphQL/gRPC/WebSocket, Variable Manager UI, persistent Collection Run Report storage, Scenarios Phase 2+ (advanced step types beyond Phase 1).
 
 ---
 
@@ -215,7 +221,7 @@ Also used for listing / social: [banner](https://res.cloudinary.com/iaojzqjd/ima
 
 ```text
 .api source → Parser → Request builder → Variables → Auth → Executor → Response / Assertions / History
-                                      ↘ Collections tree / Runner / Execution / OpenAPI / Overview (VS Code adapters)
+                                      ↘ Collections / Scenarios / Runner / Execution / OpenAPI / Overview (VS Code adapters)
 ```
 
 → [Architecture](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/architecture/README.md) · [Development](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/development/README.md)
@@ -224,7 +230,7 @@ Also used for listing / social: [banner](https://res.cloudinary.com/iaojzqjd/ima
 
 ## Roadmap
 
-Near term: sample collections, Walkthrough contribution, Run File, richer auth (OAuth) when ready.
+Near term: Scenarios Phase 2+ polish, sample collections, Walkthrough contribution, Run File, richer auth (OAuth) when ready.
 
 → [Roadmap](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/product/roadmap.md)
 

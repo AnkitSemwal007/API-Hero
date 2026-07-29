@@ -6,7 +6,7 @@ export const VIEW_IDS = {
   execution: 'apiHero.execution',
   /** Activity Bar request history explorer. */
   history: 'apiHero.history',
-  /** Reserved for a future generic explorer surface. */
+  /** Activity Bar scenario explorer. */
   explorer: 'apiHero.explorer',
 } as const;
 

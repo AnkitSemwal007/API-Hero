@@ -29,6 +29,7 @@ export const UNIT_TEST_GLOBS = Object.freeze([
   'dist/scenarios/storage/*.test.js',
   'dist/scenarios/serialization/*.test.js',
   'dist/scenarios/report/*.test.js',
+  'dist/scenarios/vscode/*.test.js',
   'dist/dependencies/*.test.js',
   'dist/regression/*.test.js',
   'dist/history/*.test.js',

@@ -1,6 +1,6 @@
-# Marketplace assets — 2.3.4
+# Marketplace assets — 2.4.0
 
-Guidance for listing media for **API Hero 2.3.4**.
+Guidance for listing media for **API Hero 2.4.0**.
 
 **Strategy:** README screenshots, banner, social preview, and workflow GIF are hosted on **Cloudinary** (absolute HTTPS URLs). That keeps the VSIX small. Only in-extension chrome icons ship inside the package (`images/icon.png`, `images/api-*.svg`, `images/execution-*.svg`).
 
@@ -20,7 +20,7 @@ Prefer teal/slate product chrome consistent with gallery banner `#0f766e`. Avoid
 
 Cloud: `iaojzqjd` · Folder: `api-hero` · Base: `https://res.cloudinary.com/iaojzqjd/image/upload/`
 
-All **11/11** delivery URLs verified (public IDs; no folder prefix in the delivery path):
+All **11/11** delivery URLs verified (public IDs; no folder prefix in the delivery path) — same set as **2.3.4** (no dedicated Scenarios screenshot yet):
 
 | Role | Cloudinary public ID | CDN URL |
 | --- | --- | --- |
@@ -44,6 +44,8 @@ All **11/11** delivery URLs verified (public IDs; no folder prefix in the delive
 
 Root `README.md` embeds these CDN URLs beside the sections they describe (hero first; screenshots not stacked in one gallery). Use the same links for Marketplace portal media / GitHub social cards.
 
+**Follow-up for 2.4.0:** capture and host a Scenarios / Scenario Editor screenshot when ready; until then README describes Scenarios in text only.
+
 ## Banner
 
 See [banner-placeholder.md](../marketplace/banner-placeholder.md). Gallery banner color remains `#0f766e` in `package.json`. Wide promo / social art: Cloudinary `banner_psgrx2` / `social-preview_jspifx` above.
@@ -51,11 +53,12 @@ See [banner-placeholder.md](../marketplace/banner-placeholder.md). Gallery banne
 ## Checklist
 
 - [x] Screenshots reflect **2.3.3+** product UI (Execution view, Dependencies, Run Report Debugger, Env Manager)
+- [ ] Scenarios screenshot (optional for 2.4.0 listing; text coverage in README)
 - [x] No GraphQL / OAuth screenshots implying support
 - [x] Icon and banner contrast well in Marketplace dark/light cards
 - [x] README uses Cloudinary HTTPS URLs (VSIX stays lean)
 - [x] `images/marketplace/**` excluded via `.vscodeignore` and `.gitignore`
-- [x] Cloudinary `api-hero` folder hosts listing media (**11/11** delivery URLs verified for **2.3.4**)
+- [x] Cloudinary `api-hero` folder hosts listing media (**11/11** delivery URLs verified for **2.3.4** set)
 
 ## Related
 
@@ -63,3 +66,4 @@ See [banner-placeholder.md](../marketplace/banner-placeholder.md). Gallery banne
 - [Marketplace readiness](./marketplace-readiness.md)
 - [Product README](../product/README.md)
 - [Release notes — 2.3.4](./v2.3.4-release-notes.md)
+- [Changelog — 2.4.0](../../CHANGELOG.md)

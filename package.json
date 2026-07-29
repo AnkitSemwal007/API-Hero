@@ -1,8 +1,8 @@
 {
   "name": "api-hero",
   "displayName": "API Hero",
-  "description": "Git-first REST/HTTP client for VS Code. Edit .api requests in a UI Request Editor, run with assertions, manage collections, environments, and auth, import OpenAPI, and inspect Execution, History, and Run Reports.",
-  "version": "2.3.6",
+  "description": "Git-first REST/HTTP client for VS Code. Edit .api requests in a UI Request Editor, run with assertions, orchestrate Scenarios, manage collections, environments, and auth, import OpenAPI, and inspect Execution, History, and Run Reports.",
+  "version": "2.4.0",
   "publisher": "ankitsemwal",
   "license": "MIT",
   "homepage": "https://github.com/AnkitSemwal007/API-Hero",
@@ -270,6 +270,35 @@
         "command": "apiHero.refreshHistory",
         "title": "Refresh History",
         "icon": "$(refresh)",
+        "category": "API Hero"
+      },
+      {
+        "command": "apiHero.refreshScenarios",
+        "title": "Refresh Scenarios",
+        "icon": "$(refresh)",
+        "category": "API Hero"
+      },
+      {
+        "command": "apiHero.openScenarioEditor",
+        "title": "Open Scenario Editor",
+        "icon": "$(edit)",
+        "category": "API Hero"
+      },
+      {
+        "command": "apiHero.runScenario",
+        "title": "Run Scenario",
+        "icon": "$(play)",
+        "category": "API Hero"
+      },
+      {
+        "command": "apiHero.createScenario",
+        "title": "New Scenario",
+        "icon": "$(new-file)",
+        "category": "API Hero"
+      },
+      {
+        "command": "apiHero.focusScenarios",
+        "title": "Focus Scenarios",
         "category": "API Hero"
       },
       {
@@ -678,6 +707,31 @@
         "command": "apiRunner.recentRequests",
         "title": "Open History (legacy)",
         "category": "API Hero"
+      },
+      {
+        "command": "apiRunner.refreshScenarios",
+        "title": "Refresh Scenarios (legacy)",
+        "category": "API Hero"
+      },
+      {
+        "command": "apiRunner.openScenarioEditor",
+        "title": "Open Scenario Editor (legacy)",
+        "category": "API Hero"
+      },
+      {
+        "command": "apiRunner.runScenario",
+        "title": "Run Scenario (legacy)",
+        "category": "API Hero"
+      },
+      {
+        "command": "apiRunner.createScenario",
+        "title": "New Scenario (legacy)",
+        "category": "API Hero"
+      },
+      {
+        "command": "apiRunner.focusScenarios",
+        "title": "Focus Scenarios (legacy)",
+        "category": "API Hero"
       }
     ],
     "customEditors": [
@@ -939,6 +993,26 @@
         {
           "command": "apiRunner.recentRequests",
           "when": "false"
+        },
+        {
+          "command": "apiRunner.refreshScenarios",
+          "when": "false"
+        },
+        {
+          "command": "apiRunner.openScenarioEditor",
+          "when": "false"
+        },
+        {
+          "command": "apiRunner.runScenario",
+          "when": "false"
+        },
+        {
+          "command": "apiRunner.createScenario",
+          "when": "false"
+        },
+        {
+          "command": "apiRunner.focusScenarios",
+          "when": "false"
         }
       ],
       "editor/title": [
@@ -1065,9 +1139,39 @@
           "command": "apiHero.openOverview",
           "when": "view == apiHero.execution",
           "group": "1_more@2"
+        },
+        {
+          "command": "apiHero.createScenario",
+          "when": "view == apiHero.explorer",
+          "group": "navigation@1"
+        },
+        {
+          "command": "apiHero.refreshScenarios",
+          "when": "view == apiHero.explorer",
+          "group": "navigation@2"
         }
       ],
       "view/item/context": [
+        {
+          "command": "apiHero.runScenario",
+          "when": "view == apiHero.explorer && viewItem == scenario",
+          "group": "inline@1"
+        },
+        {
+          "command": "apiHero.openScenarioEditor",
+          "when": "view == apiHero.explorer && viewItem == scenario",
+          "group": "inline@2"
+        },
+        {
+          "command": "apiHero.runScenario",
+          "when": "view == apiHero.explorer && viewItem == scenario",
+          "group": "1_run"
+        },
+        {
+          "command": "apiHero.openScenarioEditor",
+          "when": "view == apiHero.explorer && viewItem == scenario",
+          "group": "2_open"
+        },
         {
           "command": "apiHero.runCollection",
           "when": "view == apiHero.collections && viewItem =~ /^collection/",
@@ -1281,6 +1385,10 @@
           "name": "Collections"
         },
         {
+          "id": "apiHero.explorer",
+          "name": "Scenarios"
+        },
+        {
           "id": "apiHero.execution",
           "name": "Execution",
           "icon": "images/execution-dark.svg"
@@ -1295,6 +1403,10 @@
       {
         "view": "apiHero.collections",
         "contents": "No collections yet.\nOpen a folder workspace, create a collection, then add a request — or import OpenAPI.\n\n[New Collection](command:apiHero.createCollection)\n[New Request](command:apiHero.createRequest)\n[Import OpenAPI](command:apiHero.importOpenApi)\n\n[Open Overview](command:apiHero.openOverview)"
+      },
+      {
+        "view": "apiHero.explorer",
+        "contents": "No scenarios yet.\nCreate a scenario under `.api-hero/scenarios/` to orchestrate multi-step API flows.\n\n[New Scenario](command:apiHero.createScenario)\n[Open Overview](command:apiHero.openOverview)"
       },
       {
         "view": "apiHero.execution",
