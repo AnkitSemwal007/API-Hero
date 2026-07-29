@@ -117,11 +117,25 @@ export class ScenarioStorageService {
 
   public async save(scenario: Scenario, filePath: string): Promise<ScenarioSaveResult> {
     void this.options;
+    // Round-trip through schema validation before writing so unloadable
+    // sidecars cannot be persisted from untrusted / partial payloads.
     const content = serializeScenario(scenario);
+    const reparsed = parseScenarioDocument(content);
+    if (!reparsed.ok) {
+      return {
+        ok: false,
+        error: error(
+          filePath,
+          'INVALID_DOCUMENT',
+          reparsed.errors.join(' ') || 'Scenario failed schema validation.',
+        ),
+      };
+    }
+    const validatedContent = serializeScenario(reparsed.scenario);
     const dir = path.dirname(filePath);
     try {
       await fs.mkdir(dir, { recursive: true });
-      await fs.writeFile(filePath, content, 'utf8');
+      await fs.writeFile(filePath, validatedContent, 'utf8');
       return { ok: true };
     } catch (cause) {
       const message =

@@ -5,7 +5,18 @@ All notable changes to API Hero are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.4.0] - 2026-07-29
+
+### New
+
+- **Scenario Engine (Phase 1)** — multi-step orchestration via `.api-hero/scenarios/*.scenario.json` (request steps, conditions, variables)
+- **Scenario Editor** — webview editor to create and edit scenarios
+- **Scenario Run Reports** — review results after a scenario run
+- **Scenarios** Activity Bar view (`apiHero.explorer`) — browse, create, open, and run scenarios alongside Collections, Execution, and History
+
+### Improved
+
+- Contribution IDs for Scenarios use the `apiHero.*` namespace, with matching `apiRunner.*` legacy command aliases for compatibility
 
 ## [2.3.6] - 2026-07-28
 

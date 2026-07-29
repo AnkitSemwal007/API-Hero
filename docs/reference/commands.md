@@ -62,6 +62,16 @@ Hidden from the Command Palette (`when: false`). Invoking shows an information m
 | `apiHero.runFolder` | Run Folder |
 | `apiHero.runSelectedRequests` | Run Selected Requests |
 
+## Scenarios
+
+| ID | Title |
+| --- | --- |
+| `apiHero.focusScenarios` | Focus Scenarios |
+| `apiHero.refreshScenarios` | Refresh Scenarios |
+| `apiHero.createScenario` | New Scenario |
+| `apiHero.openScenarioEditor` | Open Scenario Editor |
+| `apiHero.runScenario` | Run Scenario |
+
 ## History
 
 | ID | Title |

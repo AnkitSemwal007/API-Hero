@@ -85,6 +85,14 @@ All contributed command IDs use the `apiHero.*` prefix. At runtime every public 
 - `apiHero.searchHistory`
 - `apiHero.refreshHistory`
 
+### Scenarios
+
+- `apiHero.refreshScenarios`
+- `apiHero.openScenarioEditor`
+- `apiHero.runScenario`
+- `apiHero.createScenario`
+- `apiHero.focusScenarios`
+
 ### Import and navigation
 
 - `apiHero.importOpenApi`
@@ -106,6 +114,7 @@ On activate, `migrateConfigurationNamespace` copies inspected `apiRunner.*` valu
 | --- | --- |
 | Activity Bar container | `apiHero` |
 | Collections view | `apiHero.collections` |
+| Scenarios view (UX label **Scenarios**; stable id `explorer`) | `apiHero.explorer` |
 | Execution view | `apiHero.execution` |
 | History view | `apiHero.history` |
 | Collections DnD mime | `application/vnd.code.tree.apiHero.collections` |
@@ -147,6 +156,8 @@ Session-scoped panel types (hard rename; no alias):
 | New request | `apiHero.newRequest` |
 | History detail | `apiHero.historyDetail` |
 | Assertions | `apiHero.assertions` |
+| Scenario editor | `apiHero.scenarioEditor` |
+| Scenario run report | `apiHero.scenarioRunReport` |
 
 ## Diagnostics
 

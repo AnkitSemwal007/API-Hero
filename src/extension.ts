@@ -43,6 +43,7 @@ import {
 } from './history/vscode';
 import { registerOpenApiImport } from './openapi-import/vscode';
 import { registerRequestEditor } from './request-editor/vscode';
+import { registerScenarios } from './scenarios/vscode';
 import { EXTENSION_NAME, normalizeHistoryMaxEntries } from './constants';
 import {
   API_LANGUAGE_ID,
@@ -501,6 +502,16 @@ export async function activate(context: ExtensionContext): Promise<void> {
       activeCollectionRunVariables = variables;
     },
     getStaticVariableNames: staticVariableNamesForRun,
+  });
+  registerScenarios({
+    context,
+    logger,
+    orchestrator,
+    discovery: collectionsRegistration.discovery,
+    variableResolver,
+    getExternalVariableDefinitions: () =>
+      externalVariableContext().definitions,
+    collectionRunContext: collectionRunVariableContext,
   });
   registerOpenApiImport({
     context,

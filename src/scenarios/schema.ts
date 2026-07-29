@@ -11,8 +11,10 @@ import {
   type ConditionExpression,
   type ConditionOperator,
   type Connection,
+  type RetryPolicy,
   type Scenario,
   type ScenarioVariable,
+  type StepOutput,
   type StepUnion,
 } from './models';
 
@@ -22,8 +24,173 @@ export type ParseScenarioDocumentResult =
 
 const VARIABLE_NAME_RE = /^[A-Za-z_][A-Za-z0-9_.-]*$/u;
 
+const CONDITION_OPERATORS = new Set<ConditionOperator>([
+  '==',
+  '!=',
+  '>',
+  '<',
+  '>=',
+  '<=',
+  'contains',
+  'not-contains',
+]);
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isSafeIntegerNonNegative(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+}
+
+/**
+ * Parses an optional structured condition. Absent → undefined.
+ * Present but invalid → fail closed.
+ */
+function parseOptionalConditionExpression(
+  value: unknown,
+  context: string,
+):
+  | { readonly ok: true; readonly condition?: ConditionExpression }
+  | { readonly ok: false; readonly errors: readonly string[] } {
+  if (value === undefined) return { ok: true };
+  if (!isRecord(value)) {
+    return { ok: false, errors: [`${context} condition must be an object.`] };
+  }
+  const left = typeof value.left === 'string' ? value.left : '';
+  const right = typeof value.right === 'string' ? value.right : '';
+  const operator =
+    typeof value.operator === 'string' ? value.operator : '';
+  if (left.trim().length === 0 || right.trim().length === 0) {
+    return {
+      ok: false,
+      errors: [`${context} condition operands must be non-empty strings.`],
+    };
+  }
+  if (!CONDITION_OPERATORS.has(operator as ConditionOperator)) {
+    return {
+      ok: false,
+      errors: [`${context} condition has invalid operator "${operator}".`],
+    };
+  }
+  return {
+    ok: true,
+    condition: {
+      left,
+      right,
+      operator: operator as ConditionOperator,
+    },
+  };
+}
+
+/**
+ * Parses optional step retryPolicy. Absent → undefined.
+ * Present but invalid → fail closed.
+ */
+function parseOptionalRetryPolicy(
+  value: unknown,
+  stepId: string,
+):
+  | { readonly ok: true; readonly retryPolicy?: RetryPolicy }
+  | { readonly ok: false; readonly errors: readonly string[] } {
+  if (value === undefined) return { ok: true };
+  if (!isRecord(value)) {
+    return {
+      ok: false,
+      errors: [`Step "${stepId}" retryPolicy must be an object.`],
+    };
+  }
+  if (!isSafeIntegerNonNegative(value.maxRetries)) {
+    return {
+      ok: false,
+      errors: [
+        `Step "${stepId}" retryPolicy.maxRetries must be a non-negative safe integer.`,
+      ],
+    };
+  }
+  if (!isSafeIntegerNonNegative(value.delayMs)) {
+    return {
+      ok: false,
+      errors: [
+        `Step "${stepId}" retryPolicy.delayMs must be a non-negative safe integer.`,
+      ],
+    };
+  }
+  if (
+    typeof value.continueOnFailure !== 'boolean' ||
+    typeof value.stopOnFailure !== 'boolean'
+  ) {
+    return {
+      ok: false,
+      errors: [`Step "${stepId}" retryPolicy flags must be booleans.`],
+    };
+  }
+  if (value.continueOnFailure === value.stopOnFailure) {
+    return {
+      ok: false,
+      errors: [
+        `Step "${stepId}" retryPolicy must set exactly one of continueOnFailure/stopOnFailure.`,
+      ],
+    };
+  }
+  return {
+    ok: true,
+    retryPolicy: {
+      maxRetries: value.maxRetries,
+      delayMs: value.delayMs,
+      continueOnFailure: value.continueOnFailure,
+      stopOnFailure: value.stopOnFailure,
+    },
+  };
+}
+
+/**
+ * Parses optional step outputs. Absent → undefined.
+ * Present but invalid → fail closed.
+ */
+function parseOptionalOutputs(
+  value: unknown,
+  stepId: string,
+):
+  | { readonly ok: true; readonly outputs?: readonly StepOutput[] }
+  | { readonly ok: false; readonly errors: readonly string[] } {
+  if (value === undefined) return { ok: true };
+  if (!Array.isArray(value)) {
+    return {
+      ok: false,
+      errors: [`Step "${stepId}" outputs must be an array.`],
+    };
+  }
+  const outputs: StepOutput[] = [];
+  for (let i = 0; i < value.length; i++) {
+    const item = value[i];
+    if (!isRecord(item)) {
+      return {
+        ok: false,
+        errors: [`Step "${stepId}" outputs[${i}] must be an object.`],
+      };
+    }
+    const name = typeof item.name === 'string' ? item.name.trim() : '';
+    const source = typeof item.source === 'string' ? item.source.trim() : '';
+    if (name.length === 0 || source.length === 0) {
+      return {
+        ok: false,
+        errors: [
+          `Step "${stepId}" outputs[${i}] requires non-empty name and source.`,
+        ],
+      };
+    }
+    const targetVariable =
+      typeof item.targetVariable === 'string' && item.targetVariable.trim().length > 0
+        ? item.targetVariable.trim()
+        : undefined;
+    outputs.push({
+      name,
+      source,
+      ...(targetVariable === undefined ? {} : { targetVariable }),
+    });
+  }
+  return { ok: true, outputs };
 }
 
 function parsePosition(
@@ -101,6 +268,10 @@ function parseSteps(value: unknown):
     const description =
       typeof item.description === 'string' ? item.description : undefined;
     const position = parsePosition(item.position);
+    const retryPolicyResult = parseOptionalRetryPolicy(item.retryPolicy, id);
+    if (!retryPolicyResult.ok) return retryPolicyResult;
+    const outputsResult = parseOptionalOutputs(item.outputs, id);
+    if (!outputsResult.ok) return outputsResult;
     const base = {
       id,
       name,
@@ -108,6 +279,12 @@ function parseSteps(value: unknown):
         ? {}
         : { description }),
       ...(position === undefined ? {} : { position }),
+      ...(retryPolicyResult.retryPolicy === undefined
+        ? {}
+        : { retryPolicy: retryPolicyResult.retryPolicy }),
+      ...(outputsResult.outputs === undefined
+        ? {}
+        : { outputs: outputsResult.outputs }),
     };
 
     if (type === StepType.Request) {
@@ -186,23 +363,12 @@ function parseSteps(value: unknown):
           errors: [`Condition step "${id}" requires trueBranch and falseBranch.`],
         };
       }
-      let condition: ConditionExpression | undefined;
-      if (isRecord(item.condition)) {
-        const left = typeof item.condition.left === 'string' ? item.condition.left : '';
-        const right =
-          typeof item.condition.right === 'string' ? item.condition.right : '';
-        const operator =
-          typeof item.condition.operator === 'string'
-            ? item.condition.operator
-            : '';
-        if (left && right && operator) {
-          condition = {
-            left,
-            right,
-            operator: operator as ConditionOperator,
-          };
-        }
-      }
+      const conditionResult = parseOptionalConditionExpression(
+        item.condition,
+        `Condition step "${id}"`,
+      );
+      if (!conditionResult.ok) return conditionResult;
+      const condition = conditionResult.condition;
       if ((expression === undefined || expression.trim().length === 0) && condition === undefined) {
         return {
           ok: false,
@@ -308,7 +474,19 @@ function parseConnections(
         errors: ['MVP does not support execution edges touching group nodes.'],
       };
     }
-    connections.push({ id, fromStepId, toStepId });
+    const conditionResult = parseOptionalConditionExpression(
+      item.condition,
+      `Connection "${id}"`,
+    );
+    if (!conditionResult.ok) return conditionResult;
+    connections.push({
+      id,
+      fromStepId,
+      toStepId,
+      ...(conditionResult.condition === undefined
+        ? {}
+        : { condition: conditionResult.condition }),
+    });
   }
   return { ok: true, connections };
 }
