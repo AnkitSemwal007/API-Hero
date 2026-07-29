@@ -12,7 +12,7 @@ import { resolveProjectStoreFolderPath } from '../project-store/vscode/resolve-p
 /**
  * Reads non-secret authentication metadata.
  * Prefers `.apihero/auth/profiles.json` when the project store is active;
- * otherwise falls back to `apiRunner.authentication.profiles` settings.
+ * otherwise falls back to `apiHero.authentication.profiles` settings.
  * Secrets stay in SecretStorage — never read here.
  */
 export class VsCodeAuthenticationProfileRepository

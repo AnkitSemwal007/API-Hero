@@ -26,10 +26,10 @@ supported.
 
 The settings schema is:
 
-- `apiRunner.variables.global`: `{ name, value, sensitive? }[]`
-- `apiRunner.variables.workspace`: `{ name, value, sensitive? }[]`
-- `apiRunner.environments`: `{ id, name, variables }[]`
-- `apiRunner.activeEnvironment`: an optional environment ID
+- `apiHero.variables.global`: `{ name, value, sensitive? }[]`
+- `apiHero.variables.workspace`: `{ name, value, sensitive? }[]`
+- `apiHero.environments`: `{ id, name, variables }[]`
+- `apiHero.activeEnvironment`: an optional environment ID
 
 Settings own persistence. The switch command changes the active environment
 for the extension session; it does not write settings. No SecretStorage schema
@@ -153,7 +153,7 @@ existing masking behavior. The resolver does not log values.
 
 **API Hero: Manage Environments** opens the Environment Manager webview
 (`src/variables/vscode/environment-manager-panel.ts`) for CRUD on
-`apiRunner.environments` and related variable lists. The sidebar is split into
+`apiHero.environments` and related variable lists. The sidebar is split into
 two sections: **Environments** (named environment records) and **Scopes**
 (Workspace Variables and Global Variables). Scopes are not environments; they
 are fixed variable stores edited in the same panel. The active environment is

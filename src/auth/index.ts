@@ -23,6 +23,7 @@ export {
   AuthenticationAbortError,
   DefaultAuthenticationResolver,
   DefaultAuthenticationSecretRepository,
+  legacyAuthenticationSecretKey,
 } from './authentication-resolver';
 export type {
   AuthenticationProfileRepository,

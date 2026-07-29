@@ -11,14 +11,14 @@ Environments are named sets of variables. Exactly one environment may be active 
 3. Create, rename, or edit variables in the detail pane. The active environment
    shows an **Active** badge in the list and header.
 4. Mark variables **sensitive** when values should be masked in UI.
-5. **Save** to persist into settings (`apiRunner.environments`).
+5. **Save** to persist into settings (`apiHero.environments`).
 
 ## Switch environment
 
 - **API Hero: Switch Environment** (QuickPick)
 - Click the environment **status bar** item (left)
 
-Switching updates the session active environment. Persistence of the environment list and optional `apiRunner.activeEnvironment` ID is through VS Code settings.
+Switching updates the session active environment. Persistence of the environment list and optional `apiHero.activeEnvironment` ID is through VS Code settings.
 
 ## Variable scopes
 
@@ -28,8 +28,8 @@ Effective definitions (highest wins):
 2. **Request** (`@variable` / `@sensitive-variable` in the `.api` file — document scope)
 3. Active **Environment**
 4. **Collection** (`Collections/<Name>/api-hero.variables.json`, with sensitive values in a local overlay)
-5. **Workspace** (`apiRunner.variables.workspace`)
-6. **Global** (`apiRunner.variables.global`)
+5. **Workspace** (`apiHero.variables.workspace`)
+6. **Global** (`apiHero.variables.global`)
 
 One-line reminder: Run overrides Request overrides Environment overrides Collection overrides Workspace overrides Global.
 

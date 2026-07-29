@@ -10,7 +10,7 @@ import { collectAuthLiteralSecrets } from '../serialize';
 
 /**
  * Writes literal credential values into SecretStorage using the canonical
- * `apiRunner.auth.profile.*` key pattern. Existing secret values are left
+ * `apiHero.auth.profile.*` key pattern. Existing secret values are left
  * unchanged (fill-only).
  *
  * @throws when any SecretStorage write fails — callers must abort tracked

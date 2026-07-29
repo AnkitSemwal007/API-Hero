@@ -21,7 +21,7 @@ export class AssertionProblemsService implements Disposable {
 
   public constructor(
     collection: DiagnosticCollection = languages.createDiagnosticCollection(
-      'apiRunner.assertions',
+      'apiHero.assertions',
     ),
   ) {
     this.collection = collection;

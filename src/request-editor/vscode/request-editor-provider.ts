@@ -99,7 +99,7 @@ export interface RequestEditorProviderOptions {
     readonly nextDependsOn: readonly string[];
   }) => Promise<void>;
   /**
-   * Runs the document request (same pipeline as `apiRunner.runRequest`).
+   * Runs the document request (same pipeline as `apiHero.runRequest`).
    * Preferred over executeCommand so Custom Text Editors work without an
    * active TextEditor.
    */

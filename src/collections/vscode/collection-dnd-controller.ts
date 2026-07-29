@@ -10,6 +10,7 @@ import {
   type TreeView,
 } from 'vscode';
 
+import { COLLECTIONS_TREE_MIME_TYPE } from '../../constants';
 import type { Logger } from '../../shared';
 import type { CollectionDiscoveryService } from '../discovery';
 import {
@@ -24,8 +25,7 @@ import {
   type CollectionTreeNode,
 } from '../tree-projection';
 
-export const COLLECTIONS_DND_MIME =
-  'application/vnd.code.tree.apiRunner.collections';
+export const COLLECTIONS_DND_MIME = COLLECTIONS_TREE_MIME_TYPE;
 
 const LEGACY_DND_WARNING =
   'Legacy collections do not support drag-and-drop. Move requests into a Collections/ folder first.';

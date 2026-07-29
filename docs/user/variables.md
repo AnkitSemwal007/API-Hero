@@ -12,8 +12,8 @@ Every `{{name}}` resolves from the highest scope that defines it. UI labels matc
 | **Request** | document | `@variable` / `@sensitive-variable` in the `.api` file (Request Editor Variables tab) |
 | **Environment** | environment | Environment Manager → named environment (only the **active** environment applies) |
 | **Collection** | collection | `Collections/<Name>/api-hero.variables.json` (sensitive values in the local overlay); scoped to the request's owning collection |
-| **Workspace** | workspace | Environment Manager → Workspace, or setting `apiRunner.variables.workspace` |
-| **Global** | global | Environment Manager → Global, or setting `apiRunner.variables.global` |
+| **Workspace** | workspace | Environment Manager → Workspace, or setting `apiHero.variables.workspace` |
+| **Global** | global | Environment Manager → Global, or setting `apiHero.variables.global` |
 
 **Precedence (highest wins):** Run overrides Request overrides Environment overrides Collection overrides Workspace overrides Global.
 
@@ -27,8 +27,8 @@ When the same name exists in more than one scope, hover and completion show the 
 | Request (document) | `@variable host=https://api.example.test` or `@sensitive-variable token=…` |
 | Environment | Environment Manager → environment variables |
 | Collection | `Collections/<Name>/api-hero.variables.json`; sensitive values move to a local overlay, keyed by collection |
-| Workspace | Setting `apiRunner.variables.workspace` |
-| Global | Setting `apiRunner.variables.global` |
+| Workspace | Setting `apiHero.variables.workspace` |
+| Global | Setting `apiHero.variables.global` |
 
 Optional `sensitive: true` masks values in language UI and previews.
 

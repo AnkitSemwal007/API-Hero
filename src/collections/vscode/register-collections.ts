@@ -7,6 +7,8 @@ import {
   type TreeView,
 } from 'vscode';
 
+import { registerCommandWithLegacyAlias } from '../../commands';
+
 import { COMMAND_IDS, VIEW_IDS } from '../../constants';
 import { fireAndForget, type Logger } from '../../shared';
 import { COLLECTION_MARKER_FILENAME } from '../constants';
@@ -81,11 +83,11 @@ export function registerCollections(
       treeView,
       logger,
     }),
-    commands.registerCommand(COMMAND_IDS.refreshCollections, async () => {
+    registerCommandWithLegacyAlias(COMMAND_IDS.refreshCollections, async () => {
       logger.debug('Refreshing collections');
       await discovery.refresh();
     }),
-    commands.registerCommand(COMMAND_IDS.filterCollections, async () => {
+    registerCommandWithLegacyAlias(COMMAND_IDS.filterCollections, async () => {
       const value = await window.showInputBox({
         title: 'Filter Collections',
         prompt: 'Filter by name, method, or path. Clear the box to show all.',
@@ -97,10 +99,10 @@ export function registerCollections(
       }
       treeProvider.setFilterQuery(value.length === 0 ? undefined : value);
     }),
-    commands.registerCommand(COMMAND_IDS.revealActiveRequest, async () => {
+    registerCommandWithLegacyAlias(COMMAND_IDS.revealActiveRequest, async () => {
       await navigation.revealActiveRequest();
     }),
-    commands.registerCommand(
+    registerCommandWithLegacyAlias(
       COMMAND_IDS.openCollectionRequest,
       async (target: unknown) => {
         if (target === undefined || target === null) {
@@ -112,7 +114,7 @@ export function registerCollections(
         );
       },
     ),
-    commands.registerCommand(COMMAND_IDS.focusCollections, async () => {
+    registerCommandWithLegacyAlias(COMMAND_IDS.focusCollections, async () => {
       await commands.executeCommand(`${VIEW_IDS.collections}.focus`);
     }),
     workspace.onDidChangeWorkspaceFolders(() => {

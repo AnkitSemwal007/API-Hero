@@ -29,7 +29,7 @@ import {
 } from './auth-secret-prompt';
 import { writeAuthManagerState } from './auth-settings-writer';
 
-const PANEL_VIEW_TYPE = 'apiRunner.authManager';
+const PANEL_VIEW_TYPE = 'apiHero.authManager';
 const PANEL_TITLE = 'Manage Authentication';
 
 export interface AuthManagerPanelOptions {

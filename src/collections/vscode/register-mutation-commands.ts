@@ -15,6 +15,8 @@ import {
   type TreeView,
 } from 'vscode';
 
+import { registerCommandWithLegacyAlias } from '../../commands';
+
 import { COMMAND_IDS, REQUEST_EDITOR_VIEW_TYPE } from '../../constants';
 import { describeFilesystemFailure, type Logger } from '../../shared';
 import type { CollectionDiscoveryService } from '../discovery';
@@ -81,7 +83,7 @@ export function registerMutationCommands(
   };
 
   return [
-    commands.registerCommand(COMMAND_IDS.createCollection, async () => {
+    registerCommandWithLegacyAlias(COMMAND_IDS.createCollection, async () => {
       await run('createCollection', async () => {
         const workspaceRoot = await pickWorkspaceRootPath();
         if (workspaceRoot === undefined) {
@@ -136,7 +138,7 @@ export function registerMutationCommands(
         notifyCrudSuccess('API Hero: Collection created');
       });
     }),
-    commands.registerCommand(
+    registerCommandWithLegacyAlias(
       COMMAND_IDS.renameCollection,
       async (target: unknown) => {
         await run('renameCollection', async () => {
@@ -176,7 +178,7 @@ export function registerMutationCommands(
         });
       },
     ),
-    commands.registerCommand(
+    registerCommandWithLegacyAlias(
       COMMAND_IDS.deleteCollection,
       async (target: unknown) => {
         await run('deleteCollection', async () => {
@@ -201,7 +203,7 @@ export function registerMutationCommands(
         });
       },
     ),
-    commands.registerCommand(
+    registerCommandWithLegacyAlias(
       COMMAND_IDS.duplicateCollection,
       async (target: unknown) => {
         await run('duplicateCollection', async () => {
@@ -219,7 +221,7 @@ export function registerMutationCommands(
         });
       },
     ),
-    commands.registerCommand(
+    registerCommandWithLegacyAlias(
       COMMAND_IDS.exportCollection,
       async (target: unknown) => {
         await run('exportCollection', async () => {
@@ -264,7 +266,7 @@ export function registerMutationCommands(
         });
       },
     ),
-    commands.registerCommand(COMMAND_IDS.importCollection, async () => {
+    registerCommandWithLegacyAlias(COMMAND_IDS.importCollection, async () => {
       await run('importCollection', async () => {
         const workspaceRoot = await pickWorkspaceRootPath();
         if (workspaceRoot === undefined) {
@@ -296,7 +298,7 @@ export function registerMutationCommands(
         );
       });
     }),
-    commands.registerCommand(
+    registerCommandWithLegacyAlias(
       COMMAND_IDS.createFolder,
       async (target: unknown) => {
         await run('createFolder', async () => {
@@ -374,7 +376,7 @@ export function registerMutationCommands(
         });
       },
     ),
-    commands.registerCommand(
+    registerCommandWithLegacyAlias(
       COMMAND_IDS.renameFolder,
       async (target: unknown) => {
         await run('renameFolder', async () => {
@@ -425,7 +427,7 @@ export function registerMutationCommands(
         });
       },
     ),
-    commands.registerCommand(
+    registerCommandWithLegacyAlias(
       COMMAND_IDS.deleteFolder,
       async (target: unknown) => {
         await run('deleteFolder', async () => {
@@ -453,7 +455,7 @@ export function registerMutationCommands(
         });
       },
     ),
-    commands.registerCommand(
+    registerCommandWithLegacyAlias(
       COMMAND_IDS.duplicateFolder,
       async (target: unknown) => {
         await run('duplicateFolder', async () => {
@@ -479,7 +481,7 @@ export function registerMutationCommands(
         });
       },
     ),
-    commands.registerCommand(
+    registerCommandWithLegacyAlias(
       COMMAND_IDS.createRequest,
       async (target: unknown) => {
         await run('createRequest', async () => {
@@ -530,7 +532,7 @@ export function registerMutationCommands(
         });
       },
     ),
-    commands.registerCommand(
+    registerCommandWithLegacyAlias(
       COMMAND_IDS.renameRequest,
       async (target: unknown) => {
         await run('renameRequest', async () => {
@@ -577,7 +579,7 @@ export function registerMutationCommands(
         });
       },
     ),
-    commands.registerCommand(
+    registerCommandWithLegacyAlias(
       COMMAND_IDS.duplicateRequest,
       async (target: unknown) => {
         await run('duplicateRequest', async () => {
@@ -605,7 +607,7 @@ export function registerMutationCommands(
         });
       },
     ),
-    commands.registerCommand(
+    registerCommandWithLegacyAlias(
       COMMAND_IDS.deleteRequest,
       async (target: unknown) => {
         await run('deleteRequest', async () => {
@@ -633,7 +635,7 @@ export function registerMutationCommands(
         });
       },
     ),
-    commands.registerCommand(
+    registerCommandWithLegacyAlias(
       COMMAND_IDS.moveRequest,
       async (target: unknown) => {
         await run('moveRequest', async () => {

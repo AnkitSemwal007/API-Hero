@@ -13,9 +13,9 @@ See [collections.md](./collections.md) for discovery/navigation and
 
 | Mode | Command | Plan source |
 | --- | --- | --- |
-| Run Collection | `apiRunner.runCollection` | All requests under a collection (DFS) |
-| Run Folder | `apiRunner.runFolder` | All requests under a folder (DFS, nested) |
-| Run Selected Requests | `apiRunner.runSelectedRequests` | Selected tree request nodes (caller order) |
+| Run Collection | `apiHero.runCollection` | All requests under a collection (DFS) |
+| Run Folder | `apiHero.runFolder` | All requests under a folder (DFS, nested) |
+| Run Selected Requests | `apiHero.runSelectedRequests` | Selected tree request nodes (caller order) |
 
 ## Plan ordering
 
@@ -98,7 +98,7 @@ completes, and blocks the run before it starts (with a cycle-path error
 notification) when `enrichRunPlanWithDependencies` reports a cycle.
 
 Default failure policy is configurable via
-`apiRunner.collectionRunner.failurePolicy` (`ask` prompts; otherwise
+`apiHero.collectionRunner.failurePolicy` (`ask` prompts; otherwise
 stop / continue / skip-invalid without a QuickPick).
 
 **Residual UX debt:** the orchestrator may still update the single-request

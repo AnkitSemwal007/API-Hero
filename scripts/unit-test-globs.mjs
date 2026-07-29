@@ -12,6 +12,8 @@ export const UNIT_TEST_GLOBS = Object.freeze([
   'dist/extraction/vscode/*.test.js',
 
   'dist/commands/*.test.js',
+  'dist/constants/*.test.js',
+  'dist/migration/*.test.js',
   'dist/collections/*.test.js',
   'dist/collections/mutation/*.test.js',
   'dist/collections/transfer/*.test.js',

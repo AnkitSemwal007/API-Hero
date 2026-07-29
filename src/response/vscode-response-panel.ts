@@ -19,7 +19,7 @@ import type {
   ResponseViewerPanelFactory,
 } from './response-viewer-service';
 
-const RESPONSE_PANEL_VIEW_TYPE = 'apiRunner.response';
+const RESPONSE_PANEL_VIEW_TYPE = 'apiHero.response';
 
 /** VS Code webview adapter for the framework-neutral response viewer service. */
 export class VsCodeResponsePanelFactory implements ResponseViewerPanelFactory {

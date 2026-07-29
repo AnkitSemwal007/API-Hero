@@ -33,7 +33,7 @@ Only one collection run can be active at a time. Starting another shows a warnin
 
 ## Failure policy
 
-Setting `apiRunner.collectionRunner.failurePolicy` (default `ask`):
+Setting `apiHero.collectionRunner.failurePolicy` (default `ask`):
 
 | Value | Behavior |
 | --- | --- |
