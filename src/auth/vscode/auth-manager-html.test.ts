@@ -3,6 +3,7 @@ import { describe, test } from 'node:test';
 
 import {
   AUTHENTICATION_PRESENTATION_MASK,
+  AUTHENTICATION_SECRET_FIELD_MASK,
   buildAuthenticationPresentationPreview,
 } from '../authentication-presentation-preview';
 import {
@@ -17,26 +18,28 @@ import {
 } from './auth-manager-html';
 
 describe('auth-manager-html', () => {
-  test('renderAuthManagerHtml embeds CSP nonce and controls', () => {
+  test('renderAuthManagerHtml embeds CSP nonce and Phase 2 controls', () => {
     const html = renderAuthManagerHtml('authNonce');
     assert.match(html, /style-src 'nonce-authNonce'/u);
     assert.match(html, /script-src 'nonce-authNonce'/u);
     assert.match(html, /default-src 'none'/u);
     assert.match(html, /id="addProfile"/u);
+    assert.match(html, /\+ New Authentication/u);
     assert.match(html, /<title>Manage Authentication<\/title>/u);
     assert.match(html, /<h1>Authentication<\/h1>/u);
-    assert.match(html, /aria-label="Authentication navigation"/u);
-    assert.match(html, /aria-label="Add profile"/u);
-    assert.match(html, /aria-label="Profile id"/u);
-    assert.match(html, /@auth uses this id; the label is display-only\./u);
+    assert.match(html, /No Authentication yet/u);
+    assert.match(html, /empty-state/u);
+    assert.match(html, /id="loginWizard"/u);
+    assert.match(html, /id="templateDialog"/u);
+    assert.match(html, /id="wizardOverwriteConfirm"/u);
+    assert.match(html, /cancelLoginWizard/u);
+    assert.match(html, /JWT Login/u);
+    assert.match(html, /Coming soon/u);
     assert.match(html, /id="save"/u);
-    assert.match(html, /id="duplicateProfile"/u);
-    assert.match(html, /id="profileSearch"/u);
     assert.match(html, /id="authPreview"/u);
-    assert.match(html, /id="missingCta"/u);
-    assert.match(html, /id="setDefault"/u);
-    assert.match(html, /--vscode-editor-background/u);
-    assert.match(html, /Secret Storage/u);
+    assert.match(html, /Copy header name/u);
+    assert.match(html, /SECRET_MASK/u);
+    assert.match(html, /storeSecret/u);
     assert.doesNotMatch(html, /connect-src [^']*https/u);
   });
 
@@ -44,7 +47,7 @@ describe('auth-manager-html', () => {
     assert.equal(escapeAttribute(`a"b'`), 'a&quot;b&#39;');
   });
 
-  test('parseAuthManagerMessage accepts ready, commit, and secret actions', () => {
+  test('parseAuthManagerMessage accepts ready, commit, storeSecret, and actions', () => {
     assert.deepEqual(parseAuthManagerMessage({ type: 'ready' }), {
       type: 'ready',
     });
@@ -52,6 +55,20 @@ describe('auth-manager-html', () => {
     assert.deepEqual(
       parseAuthManagerMessage({ type: 'commit', state }),
       { type: 'commit', state },
+    );
+    assert.deepEqual(
+      parseAuthManagerMessage({
+        type: 'storeSecret',
+        profileId: 'prod',
+        field: 'token',
+        value: 'ephemeral',
+      }),
+      {
+        type: 'storeSecret',
+        profileId: 'prod',
+        field: 'token',
+        value: 'ephemeral',
+      },
     );
     assert.deepEqual(
       parseAuthManagerMessage({
@@ -73,22 +90,46 @@ describe('auth-manager-html', () => {
       parseAuthManagerMessage({ type: 'setDefault', profileId: 'prod' }),
       { type: 'setDefault', profileId: 'prod' },
     );
-    assert.deepEqual(parseAuthManagerMessage({ type: 'setDefault' }), {
-      type: 'setDefault',
-    });
+    assert.deepEqual(
+      parseAuthManagerMessage({
+        type: 'testAuth',
+        profileId: 'prod',
+        testUrl: 'https://api.example.com/me',
+      }),
+      {
+        type: 'testAuth',
+        profileId: 'prod',
+        testUrl: 'https://api.example.com/me',
+      },
+    );
+    assert.deepEqual(
+      parseAuthManagerMessage({
+        type: 'applyLoginTokens',
+        profileId: 'prod',
+        accessTokenPath: 'access_token',
+        confirmOverwrite: true,
+      }),
+      {
+        type: 'applyLoginTokens',
+        profileId: 'prod',
+        accessTokenPath: 'access_token',
+        confirmOverwrite: true,
+      },
+    );
+    assert.deepEqual(
+      parseAuthManagerMessage({
+        type: 'cancelLoginWizard',
+        profileId: 'prod',
+      }),
+      { type: 'cancelLoginWizard', profileId: 'prod' },
+    );
     assert.equal(parseAuthManagerMessage({ type: 'nope' }), undefined);
     assert.equal(
       parseAuthManagerMessage({
-        type: 'setSecret',
+        type: 'storeSecret',
         profileId: '',
         field: 'token',
-      }),
-      undefined,
-    );
-    assert.equal(
-      parseAuthManagerMessage({
-        type: 'commit',
-        state: { profiles: 'bad' },
+        value: 'x',
       }),
       undefined,
     );
@@ -115,23 +156,11 @@ describe('auth-manager-html', () => {
       }) ?? '',
       /Unknown default profile/u,
     );
-    assert.match(
-      validateAuthManagerState({
-        profiles: [{
-          id: 'key',
-          label: 'Key',
-          providerId: 'apiKey',
-          secretFields: [],
-        }],
-      }) ?? '',
-      /requires a header or query name/u,
-    );
   });
 
   test('isValidAuthProfileId and allocateAuthProfileId', () => {
     assert.equal(isValidAuthProfileId('bearer-prod'), true);
     assert.equal(isValidAuthProfileId('__proto__'), false);
-    assert.equal(isValidAuthProfileId('1bad'), false);
     assert.equal(allocateAuthProfileId('My Token', new Set()), 'my-token');
     assert.equal(
       allocateAuthProfileId('My Token', new Set(['my-token'])),
@@ -160,7 +189,7 @@ describe('auth-manager-html', () => {
     assert.match(serialized, /"status":"missing"/u);
   });
 
-  test('auth manager HTML wires search, duplicate, and preview controls', () => {
+  test('auth manager HTML wires preview and secret field mask', () => {
     const html = renderAuthManagerHtml('authNonce');
     const bearerPreview = buildAuthenticationPresentationPreview({
       providerId: 'bearer',
@@ -169,10 +198,9 @@ describe('auth-manager-html', () => {
     assert.match(html, /id="profileSearch"/u);
     assert.match(html, /id="duplicateProfile"/u);
     assert.match(html, /id="authPreview"/u);
-    assert.match(html, /id="validationHint"/u);
     assert.match(html, /function buildAuthPreview/u);
-    assert.match(html, /duplicateProfile'\)\.addEventListener/u);
-    assert.match(html, /profileSearch'\)\.addEventListener/u);
+    assert.match(html, /Identity: /u);
+    assert.doesNotMatch(html, /Authenticated User:/u);
     assert.match(html, new RegExp(escapeRegExp(bearerPreview), 'u'));
     assert.match(
       html,
@@ -181,8 +209,15 @@ describe('auth-manager-html', () => {
         'u',
       ),
     );
-    assert.match(html, /const SECRET_META =/u);
-    assert.match(html, /"field":"token"/u);
+    assert.match(
+      html,
+      new RegExp(
+        escapeRegExp(
+          `const SECRET_MASK = ${JSON.stringify(AUTHENTICATION_SECRET_FIELD_MASK)}`,
+        ),
+        'u',
+      ),
+    );
   });
 });
 

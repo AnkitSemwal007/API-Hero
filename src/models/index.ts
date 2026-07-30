@@ -16,6 +16,8 @@ export type {
 
   NoneAuthenticationProfile,
 
+  RequestAuthenticationMode,
+
 } from './authentication';
 
 export type { Diagnostic, DiagnosticSeverity } from './diagnostics';

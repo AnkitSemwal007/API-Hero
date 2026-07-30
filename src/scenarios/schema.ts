@@ -542,6 +542,13 @@ export function parseScenarioDocument(text: string): ParseScenarioDocumentResult
       }
     : { failurePolicy: 'stop-on-first-error' };
 
+  const parsedTags =
+    isRecord(raw.metadata) && Array.isArray(raw.metadata.tags)
+      ? raw.metadata.tags
+          .filter((t): t is string => typeof t === 'string')
+          .map((t) => t.trim())
+          .filter((t) => t.length > 0)
+      : undefined;
   const metadata = isRecord(raw.metadata)
     ? {
         createdAt:
@@ -552,6 +559,9 @@ export function parseScenarioDocument(text: string): ParseScenarioDocumentResult
           typeof raw.metadata.updatedAt === 'string'
             ? raw.metadata.updatedAt
             : new Date(0).toISOString(),
+        ...(parsedTags !== undefined && parsedTags.length > 0
+          ? { tags: parsedTags }
+          : {}),
       }
     : {
         createdAt: new Date(0).toISOString(),

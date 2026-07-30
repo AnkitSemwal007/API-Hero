@@ -114,6 +114,7 @@ export type VariableResolutionContextProvider = (
 ) => VariableResolutionContext;
 export type AuthenticationResolutionContextProvider = (
   variables: ReadonlyMap<string, import('../models').VariableValue>,
+  meta?: { readonly sourceId?: string },
 ) => Omit<AuthenticationResolutionContext, 'variables'>;
 
 /**
@@ -452,7 +453,9 @@ export class ExecutionOrchestrator {
             authenticated = await this.authenticationResolver.resolve(
               resolution.request,
               {
-                ...this.getAuthenticationContext(resolution.values),
+                ...this.getAuthenticationContext(resolution.values, {
+                  sourceId: source.sourceId,
+                }),
                 variables: resolution.values,
               },
               run.controller.signal,

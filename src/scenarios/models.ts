@@ -254,6 +254,8 @@ export interface Scenario {
   readonly metadata: {
     readonly createdAt: string;
     readonly updatedAt: string;
+    /** Optional gallery/filter tags; preserved on parse + serialize. */
+    readonly tags?: readonly string[];
   };
 }
 

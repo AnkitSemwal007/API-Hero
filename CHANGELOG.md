@@ -5,6 +5,56 @@ All notable changes to API Hero are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0] - 2026-07-30
+
+Authentication Premium UX and Scenario Experience — flagship workflows for secure auth and multi-step API automation. Backward compatible with **2.4.0** (`.api` files, collections, scenarios, and settings continue to work).
+
+### Highlights
+
+#### Authentication Premium UX
+
+- **Auth Manager redesign** — templates (Bearer, API Key, Basic, JWT Login, …), inline secrets (masked after save), **Test** and **Run Login** from one place
+- **Login API / Session** — run a login request, pick detected tokens, store access/refresh in Secret Storage with health and identity presentation
+- **One-shot Bearer** — paste a token in the Request Editor for a single Send; optional **Save as Authentication**
+- **Collection default Authentication** — set a collection-level default from the tree or command palette
+- **Response → Use as Authentication** — create a session or auth profile from detected response tokens (with confirm)
+- **Health, Identity, Preview** — derived health states, optional identity display, masked send preview (header names only for copy)
+
+#### Scenario Experience
+
+- **Starter templates** — login + token reuse, health-check branch, CRUD, and more when creating a scenario
+- **Scenario Editor polish** — step palette, guided properties, request binding (**Choose Request…**), edge insert, keyboard add (**Ctrl/Cmd+K**)
+- **Last-run status** in the Scenarios tree (workspace state; not written into `.scenario.json`)
+- **Live step status** in the open editor while a scenario runs; clearer Scenario Report handoff
+
+#### UX Improvements
+
+- Request Editor Auth tab modes: None, One-shot Bearer, Saved Authentication
+- Clearer separation of **Account Login (Not Available)** stubs vs **Authentication Login API**
+- Scenarios welcome and Overview messaging aligned with Collections vs Scenarios roles
+
+#### Performance
+
+- Leaner Auth Manager and Scenario Editor webview updates where coalescing already applies
+- Scenario tree last-run reads from workspace state without re-scanning scenario files
+
+#### Accessibility
+
+- Auth Manager and Scenario Editor keyboard flows (palette, property focus, Test / Run actions)
+- Clearer labels and status text for health, identity, and last-run outcomes
+
+#### Bug Fixes
+
+- Auth resolution and presentation edge cases covered by expanded unit tests
+- Scenario schema / binding helpers for template and unbound request steps
+- Collection default authentication marker discovery and tree projection
+
+### Docs & Marketplace
+
+- README positions **Authentication** and **Scenarios** as flagship capabilities
+- User docs for Authentication and Scenarios updated for Premium UX / Experience
+- Release readiness pinned to **2.5.0**
+
 ## [2.4.0] - 2026-07-29
 
 ### New

@@ -110,7 +110,7 @@ Only push when you intend to publish the tag remotely.
 
 ### 11. Publish GitHub Release
 
-On GitHub: create a Release for tag `v<version>`, paste the CHANGELOG section (or [docs/release/v2.3.4-release-notes.md](docs/release/v2.3.4-release-notes.md) when shipping 2.3.4), and attach `release/api-hero-<version>.vsix` if desired.
+On GitHub: create a Release for tag `v<version>`, paste the CHANGELOG section (or [docs/release/v2.5.0-release-notes.md](docs/release/v2.5.0-release-notes.md) when shipping 2.5.0), and attach `release/api-hero-<version>.vsix` if desired.
 
 ---
 

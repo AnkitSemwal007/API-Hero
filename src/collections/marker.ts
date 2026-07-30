@@ -20,6 +20,11 @@ export interface CollectionMarkerDocument {
   /** Collection sibling order among `Collections/*` (lower first). */
   readonly order?: number;
   /**
+   * Optional collection-default Authentication profile id (shallow inheritance).
+   * Applied when a request has no `@auth` directive.
+   */
+  readonly defaultAuthenticationId?: string;
+  /**
    * Folder sibling order. Array form applies to the collection root only;
    * record form keys are parent relative paths (`.` = root).
    */
@@ -33,6 +38,7 @@ export interface MutableCollectionMarker {
   name?: string;
   description?: string;
   order?: number;
+  defaultAuthenticationId?: string;
   folderOrder?: string[] | Record<string, string[]>;
   requestOrder?: Record<string, string[]>;
 }
@@ -61,12 +67,20 @@ export function parseCollectionMarker(
     typeof record.order === 'number' && Number.isFinite(record.order)
       ? record.order
       : undefined;
+  const defaultAuthenticationId =
+    typeof record.defaultAuthenticationId === 'string' &&
+    record.defaultAuthenticationId.trim().length > 0
+      ? record.defaultAuthenticationId.trim()
+      : undefined;
   const folderOrder = parseFolderOrder(record.folderOrder);
   const requestOrder = parseRequestOrder(record.requestOrder);
   return {
     ...(name !== undefined ? { name } : {}),
     ...(description !== undefined ? { description } : {}),
     ...(order !== undefined ? { order } : {}),
+    ...(defaultAuthenticationId !== undefined
+      ? { defaultAuthenticationId }
+      : {}),
     ...(folderOrder !== undefined ? { folderOrder } : {}),
     ...(requestOrder !== undefined ? { requestOrder } : {}),
   };
@@ -85,6 +99,12 @@ export function serializeCollectionMarker(
   }
   if (typeof document.order === 'number' && Number.isFinite(document.order)) {
     payload.order = document.order;
+  }
+  if (
+    typeof document.defaultAuthenticationId === 'string' &&
+    document.defaultAuthenticationId.trim().length > 0
+  ) {
+    payload.defaultAuthenticationId = document.defaultAuthenticationId.trim();
   }
   if (document.folderOrder !== undefined) {
     payload.folderOrder = compactFolderOrder(document.folderOrder);

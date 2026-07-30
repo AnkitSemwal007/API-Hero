@@ -289,4 +289,30 @@ describe('scenarios/schema', () => {
     );
     assert.equal(result.ok, false);
   });
+
+  test('preserves optional metadata.tags on parse and serialize', () => {
+    const text = JSON.stringify({
+      schemaVersion: ScenarioSchemaVersion,
+      id: 'sc-tags',
+      name: 'Tagged',
+      variables: [],
+      steps: [{ id: 'd1', type: StepType.Delay, name: 'Start', durationMs: 0 }],
+      connections: [],
+      executionSettings: { failurePolicy: 'stop-on-first-error' },
+      metadata: {
+        createdAt: 't1',
+        updatedAt: 't2',
+        tags: ['auth', ' token ', ''],
+      },
+    });
+    const parsed = parseScenarioDocument(text);
+    assert.equal(parsed.ok, true);
+    if (!parsed.ok) return;
+    assert.deepEqual(parsed.scenario.metadata.tags, ['auth', 'token']);
+    const again = parseScenarioDocument(serializeScenario(parsed.scenario));
+    assert.equal(again.ok, true);
+    if (again.ok) {
+      assert.deepEqual(again.scenario.metadata.tags, ['auth', 'token']);
+    }
+  });
 });

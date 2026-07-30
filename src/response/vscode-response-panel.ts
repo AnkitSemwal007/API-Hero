@@ -40,6 +40,8 @@ export class VsCodeResponsePanelFactory implements ResponseViewerPanelFactory {
 
 export interface CreateVariableHostOptions {
   readonly writer: VariableWriter;
+  /** Optional host handler for Use as Authentication (body never re-sent to webview). */
+  readonly useResponseAsAuthentication?: (body: unknown) => void | Promise<void>;
 }
 
 /** Clipboard, save-dialog, and Create Variable actions for the response viewer. */
@@ -69,7 +71,13 @@ export function createVsCodeResponseViewerHostActions(
     notifyCreateVariableError(message: string): void {
       void window.showErrorMessage(message);
     },
-    ...(createVariable === undefined
+    ...(createVariable?.useResponseAsAuthentication === undefined
+      ? {}
+      : {
+          useResponseAsAuthentication:
+            createVariable.useResponseAsAuthentication,
+        }),
+    ...(createVariable?.writer === undefined
       ? {}
       : {
           createVariableFromResponse: async (input: {

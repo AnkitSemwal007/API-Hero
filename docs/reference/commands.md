@@ -2,15 +2,16 @@
 
 Extension ID: `ankitsemwal.api-hero`. All command IDs use the `apiHero.*` prefix. Commands use `category: "API Hero"` with short titles; the Command Palette still displays them as **API Hero: Title**.
 
-## Stubs (Coming Soon)
+## Stubs (not available)
 
 Hidden from the Command Palette (`when: false`). Invoking shows an information message.
+These are **account / file stubs**, not Authentication Login API.
 
 | ID | Title |
 | --- | --- |
 | `apiHero.runFile` | Run File (Coming Soon) |
-| `apiHero.login` | Login (Coming Soon) |
-| `apiHero.logout` | Logout (Coming Soon) |
+| `apiHero.login` | Account Login (Not Available) |
+| `apiHero.logout` | Account Logout (Not Available) |
 
 ## Execution
 
@@ -27,6 +28,11 @@ Hidden from the Command Palette (`when: false`). Invoking shows an information m
 | `apiHero.manageEnvironments` | Manage Environments |
 | `apiHero.manageAuthProfiles` | Manage Authentication |
 | `apiHero.selectAuthentication` | Select Authentication |
+| `apiHero.testAuthentication` | Test Authentication |
+| `apiHero.runAuthenticationLogin` | Run Authentication Login |
+| `apiHero.saveAsAuthentication` | Save as Authentication |
+| `apiHero.useResponseAsAuthentication` | Use Response Token as Authentication |
+| `apiHero.setCollectionDefaultAuthentication` | Set Collection Default Authentication |
 
 ## Collections
 

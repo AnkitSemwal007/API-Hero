@@ -205,6 +205,11 @@ function tooltipFor(
     if (element.description !== undefined && element.description.length > 0) {
       lines.push(element.description);
     }
+    if (collection?.metadata.defaultAuthenticationId) {
+      lines.push(
+        `Default Authentication: ${collection.metadata.defaultAuthenticationId}`,
+      );
+    }
     if (collection?.metadata.workspacePath) {
       lines.push(collection.metadata.workspacePath);
     }

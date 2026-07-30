@@ -34,6 +34,11 @@ export interface CollectionMetadata {
   readonly workspacePath: string;
   /** Optional sibling order among `Collections/*` from the marker. */
   readonly order?: number;
+  /**
+   * Optional collection-default Authentication profile id from the marker.
+   * Shallow inheritance only — request/document `@auth` still wins.
+   */
+  readonly defaultAuthenticationId?: string;
   readonly lastModified?: number;
   readonly requestCount: number;
   readonly folderCount: number;

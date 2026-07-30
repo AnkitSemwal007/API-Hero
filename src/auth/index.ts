@@ -24,6 +24,7 @@ export {
   DefaultAuthenticationResolver,
   DefaultAuthenticationSecretRepository,
   legacyAuthenticationSecretKey,
+  selectAuthenticationReference,
 } from './authentication-resolver';
 export type {
   AuthenticationProfileRepository,
@@ -52,15 +53,63 @@ export {
   validateAuthenticationProfiles,
   validateAuthenticationProfilesForCommit,
 } from './authentication-profile-validation';
+export {
+  AUTHENTICATION_PRESENTATION_MASK,
+  AUTHENTICATION_SECRET_FIELD_MASK,
+  BASIC_MISSING_VALIDATION_PREFIX,
+  BASIC_MISSING_VALIDATION_SUFFIX,
+  buildAuthenticationPresentationPreview,
+  formatBasicMissingValidation,
+} from './authentication-presentation-preview';
 export type {
   AuthenticationPresentationPreview,
   AuthenticationPresentationPreviewInput,
   AuthenticationPresentationSecretField,
 } from './authentication-presentation-preview';
 export {
-  AUTHENTICATION_PRESENTATION_MASK,
-  BASIC_MISSING_VALIDATION_PREFIX,
-  BASIC_MISSING_VALIDATION_SUFFIX,
-  buildAuthenticationPresentationPreview,
-  formatBasicMissingValidation,
-} from './authentication-presentation-preview';
+  AuthenticationSessionStore,
+  deriveAuthenticationHealth,
+  formatAuthTestSummary,
+  SESSION_SECRET_FIELDS,
+  sessionStatusFromTestStatusCode,
+} from './authentication-session';
+export type {
+  AuthenticationHealthPresentation,
+  AuthenticationSession,
+  AuthenticationSessionPatch,
+  AuthenticationSessionSendAs,
+  AuthenticationSessionStatus,
+  DeriveAuthenticationHealthOptions,
+  FormatAuthTestSummaryOptions,
+  LoginApiConfig,
+} from './authentication-session';
+export type {
+  DetectedAuthTokenCandidate,
+  DetectedAuthTokenKind,
+} from './detect-auth-tokens';
+export {
+  detectAuthTokensInJson,
+  readJsonPathValue,
+} from './detect-auth-tokens';
+export { detectAuthIdentityFromJson } from './detect-auth-identity';
+export type {
+  AuthenticationResolutionSource,
+  AuthenticationResolutionStep,
+  ExplainAuthenticationResolutionInput,
+  ExplainAuthenticationResolutionResult,
+} from './explain-authentication-resolution';
+export { explainAuthenticationResolution } from './explain-authentication-resolution';
+export type { EphemeralAuthenticationBinding } from './ephemeral-authentication';
+export { EphemeralAuthenticationSlot } from './ephemeral-authentication';
+export type {
+  ApplySessionTokensInput,
+  ApplySessionTokensResult,
+} from './apply-session-tokens';
+export { applySessionTokensFromJson } from './apply-session-tokens';
+export type {
+  SaveAsAuthenticationInput,
+  SaveAsAuthenticationResult,
+} from './save-as-authentication';
+export { saveAsAuthenticationProfile } from './save-as-authentication';
+export type { ProbeRequestInput } from './probe-request';
+export { buildProbeAuthenticatedRequest } from './probe-request';

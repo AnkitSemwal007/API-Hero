@@ -52,7 +52,7 @@ export function renderRequestEditorHtml(nonce: string): string {
       <p id="urlVarHint" class="var-hint" hidden></p>
     </label>
     <button type="button" id="envShortcut" class="chip" title="Switch Environment" aria-label="Switch Environment">Env: None</button>
-    <button type="button" id="authShortcut" class="chip" title="Select Authentication" aria-label="Select Authentication">Auth</button>
+    <button type="button" id="authShortcut" class="chip" title="Session default Authentication" aria-label="Session default Authentication">Authentication</button>
     <button type="button" id="run" class="primary run-btn">${iconHtml('play', { decorative: true })} Run</button>
   </div>
 </header>
@@ -199,13 +199,43 @@ export function renderRequestEditorHtml(nonce: string): string {
   </section>
   <section id="tab-auth" class="panel" role="tabpanel" hidden>
     <div class="form-compact">
+      <p id="authEmptyGuidance" class="empty-state compact" hidden>
+        <strong>No Authentication selected</strong> — choose Saved Authentication, paste a one-shot Bearer token, or open Manage Authentication.
+      </p>
       <label class="field">
-        <span>Authentication profile</span>
-        <select id="authProfile">
-          <option value="">none</option>
+        <span>Authentication mode</span>
+        <select id="authMode">
+          <option value="none">None</option>
+          <option value="oneshot">One-shot</option>
+          <option value="saved">Saved Authentication</option>
         </select>
       </label>
-      <p class="hint">Writes <code>@auth &lt;id&gt;</code>. Secrets stay in Secret Storage — never in the webview.</p>
+      <div id="authSavedBlock">
+        <label class="field">
+          <span>Authentication</span>
+          <select id="authProfile">
+            <option value="">none</option>
+          </select>
+        </label>
+        <p class="hint">Writes <code>@auth &lt;id&gt;</code>. Secrets stay in Secret Storage — never in the webview.</p>
+      </div>
+      <div id="authOneshotBlock" hidden>
+        <label class="field">
+          <span>Bearer token (one-shot)</span>
+          <input id="oneshotToken" type="password" autocomplete="off" placeholder="Paste token — not saved to .api" />
+        </label>
+        <p class="hint">Token stays in editor memory until Send, then is cleared unless you Save as Authentication.</p>
+      </div>
+      <h3 class="ah-section-title">Preview</h3>
+      <pre id="authPreview" class="preview-box" aria-live="polite">No authentication headers will be added.</pre>
+      <button type="button" id="copyAuthHeaderName" class="ghost" hidden>Copy header name</button>
+      <h3 class="ah-section-title">Why This Authentication?</h3>
+      <ol id="authResolutionChain" class="auth-resolution" aria-label="Authentication resolution chain"></ol>
+      <div id="saveAsAuthBanner" class="cta" hidden role="status">
+        <span>Reuse this Authentication?</span>
+        <button type="button" id="saveAsAuthConfirm" class="primary">Save</button>
+        <button type="button" id="saveAsAuthDismiss" class="ghost">Dismiss</button>
+      </div>
       <div class="table-toolbar">
         <button type="button" id="manageAuthProfiles" class="secondary">Manage Authentication</button>
         <button type="button" id="selectAuthentication" class="ghost">Session default…</button>
@@ -793,6 +823,28 @@ table.kv input[type="checkbox"] {
   max-height: 60vh;
   overflow: auto;
 }
+.auth-resolution {
+  margin: 0 0 var(--ah-space-3);
+  padding-left: 1.25rem;
+  color: var(--vscode-descriptionForeground);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.auth-resolution .selected {
+  color: var(--vscode-foreground);
+  font-weight: 600;
+}
+.cta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: var(--ah-space-2) 0;
+  padding: 10px 12px;
+  border-radius: var(--ah-radius);
+  background: var(--vscode-inputValidation-infoBackground, var(--vscode-editorWidget-background));
+  border: 1px solid var(--vscode-focusBorder, var(--vscode-panel-border));
+}
 .tests-builder h3 { margin-top: 0; }
 .tests-list { list-style: none; padding: 0; margin: var(--ah-space-3) 0 0; display: grid; gap: var(--ah-space-1); }
 .tests-list li {
@@ -865,6 +917,8 @@ const EDITOR_SCRIPT = `
   let unknownVariables = [];
   let ambiguousProducers = [];
   let dependencyProjectionError = null;
+  /** Host Authentication list for Saved mode preview (metadata only; no secrets). */
+  let authProfileOptions = [];
 
   const el = (id) => document.getElementById(id);
 
@@ -957,9 +1011,16 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
     } else {
       delete model.timeoutMs;
     }
-    const auth = el('authProfile').value.trim();
-    if (auth) model.authProfileId = auth;
-    else delete model.authProfileId;
+    const authMode = el('authMode').value;
+    if (authMode === 'saved') {
+      const auth = el('authProfile').value.trim();
+      if (auth) model.authProfileId = auth;
+      else delete model.authProfileId;
+    } else if (authMode === 'none') {
+      // Explicit None clears @auth from the document.
+      delete model.authProfileId;
+    }
+    // oneshot: leave authProfileId unchanged — never strip @auth or write token.
     model.body = readBody();
     return model;
   }
@@ -1745,16 +1806,29 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
   }
 
   function applyAuthProfiles(profiles, selected) {
+    authProfileOptions = profiles || [];
     const select = el('authProfile');
     const focused = isFocused(select);
     const nextSelected = selected || '';
     const profileKey = JSON.stringify(
-      (profiles || []).map((profile) => [profile.id, profile.label || profile.id])
+      (profiles || []).map((profile) => [
+        profile.id,
+        profile.label || profile.id,
+        profile.providerId || '',
+        profile.name || '',
+        profile.location || '',
+      ])
     );
     const currentKey = JSON.stringify(
       Array.from(select.options)
         .filter((option) => option.value)
-        .map((option) => [option.value, option.textContent || option.value])
+        .map((option) => [
+          option.value,
+          option.textContent || option.value,
+          option.getAttribute('data-provider-id') || '',
+          option.getAttribute('data-api-key-name') || '',
+          option.getAttribute('data-api-key-location') || '',
+        ])
     );
     if (profileKey !== currentKey) {
       const keepValue = focused ? select.value : nextSelected;
@@ -1763,16 +1837,128 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
         const option = document.createElement('option');
         option.value = profile.id;
         option.textContent = profile.label || profile.id;
+        if (profile.providerId) option.setAttribute('data-provider-id', profile.providerId);
+        if (profile.name) option.setAttribute('data-api-key-name', profile.name);
+        if (profile.location) option.setAttribute('data-api-key-location', profile.location);
         select.appendChild(option);
       });
-      select.value = keepValue;
-      if (!focused && select.value !== nextSelected) {
-        select.value = nextSelected;
+      if (!focused) select.value = nextSelected;
+      else if ([...select.options].some((option) => option.value === keepValue)) {
+        select.value = keepValue;
       }
+    } else if (!focused) {
+      select.value = nextSelected;
+    }
+    const mode = el('authMode');
+    if (!isFocused(mode)) {
+      if (nextSelected) mode.value = 'saved';
+      else if (mode.value !== 'oneshot') mode.value = 'none';
+    }
+    updateAuthModeVisibility();
+    updateAuthPreview();
+  }
+
+  function updateAuthModeVisibility() {
+    const mode = el('authMode').value;
+    el('authSavedBlock').hidden = mode !== 'saved';
+    el('authOneshotBlock').hidden = mode !== 'oneshot';
+    const guidance = el('authEmptyGuidance');
+    const selected = el('authProfile').value.trim();
+    const oneshot = el('oneshotToken').value.length > 0;
+    guidance.hidden = !(mode === 'none' || (mode === 'saved' && !selected) || (mode === 'oneshot' && !oneshot));
+  }
+
+  /** Scheme-aware masked preview matching Auth Manager (never shows secrets). */
+  function buildSavedAuthPreview(profile) {
+    const mask = '••••••••';
+    if (!profile || !profile.providerId || profile.providerId === 'none') {
+      return {
+        preview: 'No authentication headers will be added.',
+        headerNames: [],
+      };
+    }
+    if (profile.providerId === 'bearer') {
+      return {
+        preview: 'Authorization: Bearer ' + mask,
+        headerNames: ['Authorization'],
+      };
+    }
+    if (profile.providerId === 'basic') {
+      return {
+        preview: 'Authorization: Basic ' + mask,
+        headerNames: ['Authorization'],
+      };
+    }
+    if (profile.providerId === 'apiKey') {
+      const name = ((profile.name || 'X-API-Key') + '').trim() || 'X-API-Key';
+      const location = profile.location === 'query' ? 'query' : 'header';
+      return {
+        preview: location === 'query'
+          ? ('Query: ' + name + '=' + mask)
+          : (name + ': ' + mask),
+        headerNames: location === 'header' ? [name] : [],
+      };
+    }
+    return { preview: 'Unknown provider.', headerNames: [] };
+  }
+
+  function updateAuthPreview() {
+    const mode = el('authMode').value;
+    const mask = '••••••••';
+    const preview = el('authPreview');
+    const copyBtn = el('copyAuthHeaderName');
+    if (mode === 'none') {
+      preview.textContent = 'No authentication headers will be added.';
+      copyBtn.hidden = true;
       return;
     }
-    if (!focused && select.value !== nextSelected) {
-      select.value = nextSelected;
+    if (mode === 'oneshot') {
+      const hasToken = el('oneshotToken').value.length > 0;
+      preview.textContent = 'Authorization: Bearer ' + mask;
+      preview.title = hasToken
+        ? 'One-shot Bearer ready for this Send.'
+        : 'Paste a Bearer token for one-shot authentication.';
+      copyBtn.hidden = false;
+      copyBtn.onclick = async () => {
+        try { await navigator.clipboard.writeText('Authorization'); } catch (err) {}
+      };
+      return;
+    }
+    const selected = el('authProfile').value.trim();
+    if (!selected) {
+      preview.textContent = 'No authentication headers will be added.';
+      copyBtn.hidden = true;
+      return;
+    }
+    const profile = authProfileOptions.find((entry) => entry.id === selected);
+    const built = buildSavedAuthPreview(profile);
+    const label = (profile && profile.label) || selected;
+    preview.textContent = built.preview + ' (Authentication: ' + label + ')';
+    preview.title = '';
+    const headerName = built.headerNames && built.headerNames[0];
+    copyBtn.hidden = !headerName;
+    if (headerName) {
+      copyBtn.onclick = async () => {
+        try { await navigator.clipboard.writeText(headerName); } catch (err) {}
+      };
+    }
+  }
+
+  function renderAuthResolution() {
+    const list = el('authResolutionChain');
+    list.innerHTML = '';
+    const resolution = state && state.authResolution;
+    const steps = resolution && resolution.steps ? resolution.steps : [
+      { label: 'Request Override', selected: false },
+      { label: 'Collection Default', selected: false },
+      { label: 'Workspace/Session Default', selected: false },
+    ];
+    for (const step of steps) {
+      const item = document.createElement('li');
+      item.className = step.selected ? 'selected' : '';
+      const idPart = step.authenticationId ? ' → ' + step.authenticationId : ' — none';
+      item.textContent = step.label + idPart + (step.selected ? ' (selected)' : '');
+      list.appendChild(item);
     }
   }
 
@@ -1913,6 +2099,9 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
         : String(model.timeoutMs)
     );
     applyAuthProfiles(next.authProfiles || [], model.authProfileId || '');
+    renderAuthResolution();
+    updateAuthModeVisibility();
+    updateAuthPreview();
     replaceKvRowsIfChanged('paramsTable', model.queryParams || [], true);
     replaceKvRowsIfChanged('headersTable', model.headers || [], true);
     replaceVariablesIfChanged(model.variables || []);
@@ -2069,6 +2258,27 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
   });
 
   function runRequest() {
+    const mode = el('authMode').value;
+    if (mode === 'oneshot') {
+      const token = el('oneshotToken').value;
+      if (!token || token.length === 0) {
+        window.alert('Paste a Bearer token for one-shot authentication before Send.');
+        return;
+      }
+      // Flush other form fields; oneshot path preserves authProfileId (see currentModel).
+      flushPendingUpdate();
+      post({
+        type: 'run',
+        ephemeralAuth: {
+          providerId: 'bearer',
+          material: { token },
+        },
+      });
+      // Clear one-shot token from UI memory after Send (save prompt uses host copy).
+      el('oneshotToken').value = '';
+      updateAuthPreview();
+      return;
+    }
     // Flush pending form edits before run so execution sees the latest model.
     flushPendingUpdate();
     post({ type: 'run' });
@@ -2089,6 +2299,27 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
   el('authShortcut').addEventListener('click', () => post({ type: 'selectAuthentication' }));
   el('manageAuthProfiles').addEventListener('click', () => post({ type: 'manageAuthProfiles' }));
   el('selectAuthentication').addEventListener('click', () => post({ type: 'selectAuthentication' }));
+  el('saveAsAuthConfirm').addEventListener('click', () => {
+    el('saveAsAuthBanner').hidden = true;
+    post({ type: 'saveAsAuthentication' });
+  });
+  el('saveAsAuthDismiss').addEventListener('click', () => {
+    el('saveAsAuthBanner').hidden = true;
+    post({ type: 'dismissSaveAsAuthentication' });
+  });
+  el('authMode').addEventListener('change', () => {
+    updateAuthModeVisibility();
+    updateAuthPreview();
+    scheduleUpdate();
+  });
+  el('authProfile').addEventListener('change', () => {
+    updateAuthPreview();
+    scheduleUpdate();
+  });
+  el('oneshotToken').addEventListener('input', () => {
+    updateAuthModeVisibility();
+    updateAuthPreview();
+  });
   el('manageEnvironments').addEventListener('click', () => post({ type: 'manageEnvironments' }));
 
   window.addEventListener('message', (event) => {
@@ -2126,6 +2357,11 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
     }
     if (message.type === 'error') {
       showError(message.message || 'Something went wrong.');
+      return;
+    }
+    if (message.type === 'offerSaveAsAuthentication') {
+      el('saveAsAuthBanner').hidden = false;
+      return;
     }
   });
 

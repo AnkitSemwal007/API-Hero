@@ -33,6 +33,24 @@ export interface RequestEditorVariableCompletion {
 export interface RequestEditorAuthProfileOption {
   readonly id: string;
   readonly label: string;
+  /** Provider scheme for masked Auth preview (no secrets). */
+  readonly providerId: string;
+  /** API key header/query name when `providerId` is `apiKey`. */
+  readonly name?: string;
+  /** API key location when `providerId` is `apiKey`. */
+  readonly location?: 'header' | 'query';
+}
+
+/** Secret-free resolution step for the Auth tab inspector. */
+export interface RequestEditorAuthResolutionStep {
+  readonly label: string;
+  readonly authenticationId?: string;
+  readonly selected: boolean;
+}
+
+export interface RequestEditorAuthResolution {
+  readonly steps: readonly RequestEditorAuthResolutionStep[];
+  readonly selectedId?: string;
 }
 
 /**
@@ -81,6 +99,12 @@ export interface RequestEditorState {
   readonly sourceText: string;
   readonly requestCount: number;
   readonly authProfiles: readonly RequestEditorAuthProfileOption[];
+  /** Explanatory resolution chain (does not change resolver behavior). */
+  readonly authResolution?: RequestEditorAuthResolution;
+  /** Workspace / session default Authentication id. */
+  readonly workspaceDefaultAuthenticationId?: string;
+  /** Collection default Authentication id for the open document, when known. */
+  readonly collectionDefaultAuthenticationId?: string;
   readonly model?: RequestSourceDocument;
   readonly variablePreview?: Readonly<Record<string, string>>;
   readonly variableCompletions?: readonly RequestEditorVariableCompletion[];
@@ -114,12 +138,23 @@ export type RequestEditorInboundMessage =
       readonly documentVersion: number;
       readonly model: RequestSourceDocument;
     }
-  | { readonly type: 'run' }
+  | {
+      readonly type: 'run';
+      /** One-shot credentials for this Send only — never written to `.api`. */
+      readonly ephemeralAuth?: {
+        readonly providerId: 'bearer' | 'basic' | 'apiKey';
+        readonly material: Readonly<Record<string, string>>;
+        readonly apiKeyName?: string;
+        readonly apiKeyLocation?: 'header' | 'query';
+      };
+    }
   | { readonly type: 'openTextEditor' }
   | { readonly type: 'switchEnvironment' }
   | { readonly type: 'selectAuthentication' }
   | { readonly type: 'manageAuthProfiles' }
   | { readonly type: 'manageEnvironments' }
+  | { readonly type: 'saveAsAuthentication' }
+  | { readonly type: 'dismissSaveAsAuthentication' }
   | {
       readonly type: 'ignoreUnknownVariable';
       readonly name: string;
@@ -134,7 +169,8 @@ export type RequestEditorOutboundMessage =
       readonly sourceText?: string;
     }
   | { readonly type: 'resubmit'; readonly documentVersion: number }
-  | { readonly type: 'error'; readonly message: string };
+  | { readonly type: 'error'; readonly message: string }
+  | { readonly type: 'offerSaveAsAuthentication' };
 
 /** Host → webview: version bump after a successful form→text apply (no DOM wipe). */
 export function createRequestEditorAck(
@@ -167,14 +203,22 @@ export function parseRequestEditorMessage(
   const record = value as Record<string, unknown>;
   if (
     record.type === 'ready' ||
-    record.type === 'run' ||
     record.type === 'openTextEditor' ||
     record.type === 'switchEnvironment' ||
     record.type === 'selectAuthentication' ||
     record.type === 'manageAuthProfiles' ||
-    record.type === 'manageEnvironments'
+    record.type === 'manageEnvironments' ||
+    record.type === 'saveAsAuthentication' ||
+    record.type === 'dismissSaveAsAuthentication'
   ) {
     return { type: record.type };
+  }
+  if (record.type === 'run') {
+    const ephemeralAuth = parseEphemeralAuth(record.ephemeralAuth);
+    return {
+      type: 'run',
+      ...(ephemeralAuth === undefined ? {} : { ephemeralAuth }),
+    };
   }
   if (record.type === 'ignoreUnknownVariable') {
     if (typeof record.name !== 'string' || record.name.trim().length === 0) {
@@ -698,4 +742,53 @@ function parseNameValueFields(
 
 function isStringArray(value: unknown): value is readonly string[] {
   return Array.isArray(value) && value.every((entry) => typeof entry === 'string');
+}
+
+function parseEphemeralAuth(
+  value: unknown,
+):
+  | {
+      readonly providerId: 'bearer' | 'basic' | 'apiKey';
+      readonly material: Readonly<Record<string, string>>;
+      readonly apiKeyName?: string;
+      readonly apiKeyLocation?: 'header' | 'query';
+    }
+  | undefined {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined;
+  }
+  const record = value as Record<string, unknown>;
+  if (
+    record.providerId !== 'bearer' &&
+    record.providerId !== 'basic' &&
+    record.providerId !== 'apiKey'
+  ) {
+    return undefined;
+  }
+  if (
+    record.material === null ||
+    typeof record.material !== 'object' ||
+    Array.isArray(record.material)
+  ) {
+    return undefined;
+  }
+  const material: Record<string, string> = {};
+  for (const [key, entry] of Object.entries(
+    record.material as Record<string, unknown>,
+  )) {
+    if (typeof entry !== 'string') {
+      return undefined;
+    }
+    material[key] = entry;
+  }
+  return {
+    providerId: record.providerId,
+    material,
+    ...(typeof record.apiKeyName === 'string'
+      ? { apiKeyName: record.apiKeyName }
+      : {}),
+    ...(record.apiKeyLocation === 'header' || record.apiKeyLocation === 'query'
+      ? { apiKeyLocation: record.apiKeyLocation }
+      : {}),
+  };
 }

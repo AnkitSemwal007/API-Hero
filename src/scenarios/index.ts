@@ -19,3 +19,7 @@ export * from './report';
 export * from './serialization';
 
 export * from './execution';
+
+export * from './templates';
+
+export * from './ui-model';

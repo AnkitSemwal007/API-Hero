@@ -1,4 +1,5 @@
 import type { TestReport } from '../assertions';
+import { detectAuthTokensInJson } from '../auth/detect-auth-tokens';
 import type { ExecutionResult } from '../execution';
 import type {
   ExtractionReport,
@@ -79,6 +80,8 @@ export interface ResponseViewerHostActions {
   }): void | Promise<void>;
   /** Surface Create Variable validation / host failures to the user. */
   notifyCreateVariableError?(message: string): void | Promise<void>;
+  /** Apply JSON body tokens to Authentication Session (host-side; no webview secrets). */
+  useResponseAsAuthentication?(body: unknown): void | Promise<void>;
 }
 
 export interface ResponseViewerServiceOptions {
@@ -187,9 +190,11 @@ export class ResponseViewerService implements ResponseViewerDisposable {
       // Known-name lookup must never block opening the response panel.
       knownVariableNames = [];
     }
+    const detectedAuthTokenCount = countDetectedAuthTokens(this.lastResult);
     return {
       enableCreateVariable: this.lastContext !== undefined,
       knownVariableNames,
+      ...(detectedAuthTokenCount > 0 ? { detectedAuthTokenCount } : {}),
     };
   }
 
@@ -245,6 +250,10 @@ export class ResponseViewerService implements ResponseViewerDisposable {
         }
         case 'createVariable': {
           await this.handleCreateVariable(message);
+          return;
+        }
+        case 'useAsAuthentication': {
+          await this.handleUseAsAuthentication();
           return;
         }
       }
@@ -358,6 +367,40 @@ export class ResponseViewerService implements ResponseViewerDisposable {
     }
   }
 
+  private async handleUseAsAuthentication(): Promise<void> {
+    const result = this.lastResult;
+    if (result === undefined || !result.success) {
+      await this.notifyCreateVariableError(
+        'Cannot use as Authentication: no successful response body.',
+      );
+      return;
+    }
+    const body =
+      result.response.body.json ??
+      (result.response.body.text !== undefined
+        ? (() => {
+            try {
+              return JSON.parse(result.response.body.text) as unknown;
+            } catch {
+              return undefined;
+            }
+          })()
+        : undefined);
+    if (body === undefined) {
+      await this.notifyCreateVariableError(
+        'Cannot use as Authentication: response body is not JSON.',
+      );
+      return;
+    }
+    if (this.hostActions.useResponseAsAuthentication === undefined) {
+      await this.notifyCreateVariableError(
+        'Use as Authentication is not available.',
+      );
+      return;
+    }
+    await this.hostActions.useResponseAsAuthentication(body);
+  }
+
   private releasePanel(disposePanel: boolean): void {
     const panel = this.panel;
     this.panel = undefined;
@@ -415,6 +458,33 @@ function bodyTextForMode(
     return undefined;
   }
   return mode === 'raw' ? body.raw : body.pretty;
+}
+
+function countDetectedAuthTokens(result: ExecutionResult | undefined): number {
+  if (result === undefined || !result.success) {
+    return 0;
+  }
+  const body =
+    result.response.body.json ??
+    (result.response.body.text !== undefined
+      ? (() => {
+          try {
+            return JSON.parse(result.response.body.text) as unknown;
+          } catch {
+            return undefined;
+          }
+        })()
+      : undefined);
+  if (body === undefined) {
+    return 0;
+  }
+  return detectAuthTokensInJson(body).filter(
+    (candidate) =>
+      candidate.kind === 'access_token' ||
+      candidate.kind === 'id_token' ||
+      candidate.kind === 'generic_token' ||
+      candidate.kind === 'refresh_token',
+  ).length;
 }
 
 function suggestedBodyFileName(

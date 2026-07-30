@@ -1,6 +1,6 @@
 # Marketplace banner & listing media
 
-Listing media for **API Hero 2.3.4** is hosted on **Cloudinary** (see [marketplace-assets.md](../release/marketplace-assets.md)). README uses absolute CDN URLs so the VSIX does not need to ship large screenshots.
+Listing media for **API Hero 2.5.0** is hosted on **Cloudinary** (see [marketplace-assets.md](../release/marketplace-assets.md)). README uses absolute CDN URLs so the VSIX does not need to ship large screenshots.
 
 ## Gallery banner color
 

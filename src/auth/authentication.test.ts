@@ -12,6 +12,8 @@ import {
   ApiKeyAuthenticationProvider,
   AuthenticationError,
   AuthenticationProviderRegistry,
+  applySessionTokensFromJson,
+  AuthenticationSessionStore,
   BasicAuthenticationProvider,
   BearerAuthenticationProvider,
   DefaultAuthenticationResolver,
@@ -22,9 +24,16 @@ import {
   AuthenticationProfileManager,
   AUTHENTICATION_PRESENTATION_MASK,
   buildAuthenticationPresentationPreview,
+  deriveAuthenticationHealth,
+  detectAuthTokensInJson,
+  formatAuthTestSummary,
   isValidAuthenticationProfileId,
+  readJsonPathValue,
+  saveAsAuthenticationProfile,
   secretFieldNamesForProvider,
   secretFieldsForProvider,
+  selectAuthenticationReference,
+  SESSION_SECRET_FIELDS,
   validateAuthenticationProfiles,
   validateAuthenticationProfilesForCommit,
 } from '.';
@@ -436,6 +445,7 @@ test('buildAuthenticationPresentationPreview covers all Auth Manager providers',
     {
       preview: 'No authentication headers will be added.',
       validation: '',
+      headerNames: [],
     },
   );
   assert.deepEqual(
@@ -446,6 +456,7 @@ test('buildAuthenticationPresentationPreview covers all Auth Manager providers',
     {
       preview: `Authorization: Bearer ${mask}`,
       validation: 'Token secret is missing.',
+      headerNames: ['Authorization'],
     },
   );
   assert.deepEqual(
@@ -456,6 +467,7 @@ test('buildAuthenticationPresentationPreview covers all Auth Manager providers',
     {
       preview: `Authorization: Bearer ${mask}`,
       validation: 'Ready — token is set.',
+      headerNames: ['Authorization'],
     },
   );
   assert.deepEqual(
@@ -469,6 +481,7 @@ test('buildAuthenticationPresentationPreview covers all Auth Manager providers',
     {
       preview: `Authorization: Basic ${mask}`,
       validation: 'Missing: Username, Password.',
+      headerNames: ['Authorization'],
     },
   );
   assert.deepEqual(
@@ -482,6 +495,7 @@ test('buildAuthenticationPresentationPreview covers all Auth Manager providers',
     {
       preview: `Authorization: Basic ${mask}`,
       validation: 'Ready — username and password are set.',
+      headerNames: ['Authorization'],
     },
   );
   assert.deepEqual(
@@ -494,6 +508,7 @@ test('buildAuthenticationPresentationPreview covers all Auth Manager providers',
     {
       preview: `X-API-Key: ${mask}`,
       validation: 'API key secret is missing.',
+      headerNames: ['X-API-Key'],
     },
   );
   assert.deepEqual(
@@ -507,6 +522,7 @@ test('buildAuthenticationPresentationPreview covers all Auth Manager providers',
       preview: `X-API-Key: ${mask}`,
       validation:
         'Key name is empty — set a header or query parameter name.',
+      headerNames: ['X-API-Key'],
     },
   );
   assert.deepEqual(
@@ -519,6 +535,7 @@ test('buildAuthenticationPresentationPreview covers all Auth Manager providers',
     {
       preview: `X-API-Key: ${mask}`,
       validation: 'Ready — API key secret is set.',
+      headerNames: ['X-API-Key'],
     },
   );
   assert.deepEqual(
@@ -531,6 +548,7 @@ test('buildAuthenticationPresentationPreview covers all Auth Manager providers',
     {
       preview: `Query: api_key=${mask}`,
       validation: 'Ready — API key secret is set.',
+      headerNames: [],
     },
   );
   assert.deepEqual(
@@ -538,6 +556,7 @@ test('buildAuthenticationPresentationPreview covers all Auth Manager providers',
     {
       preview: 'Unknown provider.',
       validation: 'Unsupported provider.',
+      headerNames: [],
     },
   );
 });
@@ -643,5 +662,408 @@ test('commit validation enforces UI rules with stable user-facing messages', () 
       defaultProfileId: 'key',
     }).issues.length,
     0,
+  );
+});
+
+test('deriveAuthenticationHealth covers never tested, healthy ago, expired, expires in', () => {
+  const now = Date.parse('2026-07-30T12:00:00.000Z');
+  assert.equal(
+    deriveAuthenticationHealth({ session: undefined, now }).label,
+    'Never tested',
+  );
+  assert.equal(
+    deriveAuthenticationHealth({
+      session: {
+        authenticationId: 'p',
+        status: 'ready',
+        lastTestedAt: '2026-07-30T11:50:00.000Z',
+      },
+      now,
+    }).label,
+    'Healthy (10m ago)',
+  );
+  assert.equal(
+    deriveAuthenticationHealth({
+      session: {
+        authenticationId: 'p',
+        status: 'ready',
+        expiresAt: '2026-07-30T11:00:00.000Z',
+      },
+      now,
+    }).status,
+    'expired',
+  );
+  assert.match(
+    deriveAuthenticationHealth({
+      session: {
+        authenticationId: 'p',
+        status: 'ready',
+        accessTokenPresent: true,
+        expiresAt: '2026-07-30T12:30:00.000Z',
+        lastAuthenticatedAt: '2026-07-30T11:55:00.000Z',
+      },
+      now,
+    }).label,
+    /Expires in 30m/u,
+  );
+  assert.equal(
+    deriveAuthenticationHealth({
+      session: {
+        authenticationId: 'p',
+        status: 'ready',
+        accessTokenPresent: true,
+        lastAuthenticatedAt: '2026-07-30T11:55:00.000Z',
+      },
+      profileSecretPresent: false,
+      now,
+    }).status,
+    'ready',
+  );
+  assert.match(
+    deriveAuthenticationHealth({
+      session: {
+        authenticationId: 'p',
+        status: 'ready',
+        accessTokenPresent: true,
+        lastAuthenticatedAt: '2026-07-30T11:55:00.000Z',
+      },
+      profileSecretPresent: false,
+      now,
+    }).label,
+    /Healthy/u,
+  );
+  assert.equal(
+    deriveAuthenticationHealth({
+      session: {
+        authenticationId: 'p',
+        status: 'unhealthy',
+        lastTestSummary: 'HTTP 500',
+      },
+      now,
+    }).label,
+    'Needs Login',
+  );
+});
+
+test('explainAuthenticationResolution mirrors request → collection → workspace precedence', async () => {
+  const { explainAuthenticationResolution } = await import(
+    './explain-authentication-resolution.js'
+  );
+  assert.deepEqual(
+    explainAuthenticationResolution({
+      requestOverrideId: 'req',
+      collectionDefaultId: 'col',
+      workspaceDefaultId: 'ws',
+    }),
+    {
+      steps: [
+        {
+          source: 'request',
+          label: 'Request Override',
+          authenticationId: 'req',
+          selected: true,
+        },
+        {
+          source: 'collection',
+          label: 'Collection Default',
+          authenticationId: 'col',
+          selected: false,
+        },
+        {
+          source: 'workspace',
+          label: 'Workspace/Session Default',
+          authenticationId: 'ws',
+          selected: false,
+        },
+      ],
+      selectedId: 'req',
+      source: 'request',
+    },
+  );
+  assert.equal(
+    explainAuthenticationResolution({
+      collectionDefaultId: 'col',
+      workspaceDefaultId: 'ws',
+    }).selectedId,
+    'col',
+  );
+  assert.equal(
+    explainAuthenticationResolution({ workspaceDefaultId: 'ws' }).source,
+    'workspace',
+  );
+  assert.equal(explainAuthenticationResolution({}).source, 'none');
+});
+
+test('detectAuthIdentityFromJson returns email/username without tokens', async () => {
+  const { detectAuthIdentityFromJson } = await import(
+    './detect-auth-identity.js'
+  );
+  assert.equal(
+    detectAuthIdentityFromJson({ email: 'a@example.com', access_token: 'x' }),
+    'a@example.com',
+  );
+  assert.equal(
+    detectAuthIdentityFromJson({ preferred_username: 'alice' }),
+    'alice',
+  );
+  assert.equal(
+    detectAuthIdentityFromJson({
+      sub: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.aaa.bbb',
+    }),
+    undefined,
+  );
+});
+
+test('formatAuthTestSummary accepts richer presentation options', () => {
+  assert.equal(formatAuthTestSummary(200), 'HTTP 200');
+  assert.match(
+    formatAuthTestSummary({
+      statusCode: 200,
+      url: 'https://api.example.com/me',
+      latencyMs: 42,
+      identity: 'a@example.com',
+      rateLimitRemaining: '99',
+      rateLimitLimit: '100',
+    }),
+    /HTTP 200 · https:\/\/api\.example\.com\/me · 42ms · user a@example\.com · rate 99\/100/u,
+  );
+});
+
+test('one-shot ephemeral resolution decorates bearer without a profile', async () => {
+  const output = await new DefaultAuthenticationResolver(registry()).resolve(
+    resolved(),
+    {
+      profiles: [],
+      variables: new Map(),
+      secrets: new DefaultAuthenticationSecretRepository(new MemorySecrets()),
+      ephemeral: {
+        providerId: 'bearer',
+        material: { token: 'ephemeral-token' },
+      },
+    },
+  );
+  assert.equal(output.authentication.scheme, 'bearer');
+  assert.equal(
+    output.headers.find((header) => header.name === 'Authorization')?.value,
+    'Bearer ephemeral-token',
+  );
+  assert.equal(output.authentication.extensions.profileId, 'oneshot');
+});
+
+test('collection default precedes session default in selectAuthenticationReference', () => {
+  const request = resolved({
+    authentication: { kind: 'none', extensions: {} },
+  });
+  assert.equal(
+    selectAuthenticationReference(request, {
+      collectionDefaultAuthenticationId: 'collection-auth',
+      defaultProfileId: 'session-auth',
+    }),
+    'collection-auth',
+  );
+  assert.equal(
+    selectAuthenticationReference(
+      resolved({
+        authentication: {
+          kind: 'unresolved',
+          reference: 'request-auth',
+          extensions: {},
+        },
+      }),
+      {
+        collectionDefaultAuthenticationId: 'collection-auth',
+        defaultProfileId: 'session-auth',
+      },
+    ),
+    'request-auth',
+  );
+});
+
+test('detectAuthTokensInJson ranks access_token and nested data.accessToken', () => {
+  const candidates = detectAuthTokensInJson({
+    data: { accessToken: 'abc', refresh_token: 'r' },
+    expires_in: 3600,
+  });
+  assert.ok(candidates.some((c) => c.path === 'data.accessToken'));
+  assert.ok(candidates.some((c) => c.kind === 'refresh_token'));
+  assert.ok(candidates.some((c) => c.kind === 'expires_in'));
+  assert.equal(candidates[0]?.path.includes('accessToken') || candidates[0]?.kind === 'access_token' || candidates[0]?.kind === 'generic_token', true);
+});
+
+test('session access token is preferred when decorating bearer', async () => {
+  const profile = {
+    id: 'svc',
+    providerId: 'bearer',
+    token: { kind: 'secret' },
+  } as const;
+  const store = new MemorySecrets();
+  const secrets = new DefaultAuthenticationSecretRepository(store);
+  await secrets.store(profile.id, 'token', 'static-token');
+  await secrets.store(profile.id, SESSION_SECRET_FIELDS.accessToken, 'session-token');
+  const sessions = new AuthenticationSessionStore();
+  sessions.patch(profile.id, {
+    status: 'ready',
+    accessTokenPresent: true,
+  });
+  const output = await new DefaultAuthenticationResolver(registry()).resolve(
+    resolved({
+      authentication: {
+        kind: 'unresolved',
+        reference: profile.id,
+        extensions: {},
+      },
+    }),
+    {
+      profiles: [profile],
+      variables: new Map(),
+      secrets,
+      sessions,
+    },
+  );
+  assert.equal(
+    output.headers.find((header) => header.name === 'Authorization')?.value,
+    'Bearer session-token',
+  );
+});
+
+test('leftover session secret is ignored when accessTokenPresent is false', async () => {
+  const profile = {
+    id: 'svc',
+    providerId: 'bearer',
+    token: { kind: 'secret' },
+  } as const;
+  const store = new MemorySecrets();
+  const secrets = new DefaultAuthenticationSecretRepository(store);
+  await secrets.store(profile.id, 'token', 'static-token');
+  await secrets.store(profile.id, SESSION_SECRET_FIELDS.accessToken, 'stale-session');
+  const sessions = new AuthenticationSessionStore();
+  sessions.patch(profile.id, {
+    status: 'unknown',
+    accessTokenPresent: false,
+  });
+  const output = await new DefaultAuthenticationResolver(registry()).resolve(
+    resolved({
+      authentication: {
+        kind: 'unresolved',
+        reference: profile.id,
+        extensions: {},
+      },
+    }),
+    {
+      profiles: [profile],
+      variables: new Map(),
+      secrets,
+      sessions,
+    },
+  );
+  assert.equal(
+    output.headers.find((header) => header.name === 'Authorization')?.value,
+    'Bearer static-token',
+  );
+});
+
+test('applySessionTokensFromJson clears stale expiresAt and failed secrets', async () => {
+  const store = new MemorySecrets();
+  const secrets = new DefaultAuthenticationSecretRepository(store);
+  const sessions = new AuthenticationSessionStore();
+  sessions.patch('svc', {
+    status: 'ready',
+    accessTokenPresent: true,
+    expiresAt: '2099-01-01T00:00:00.000Z',
+  });
+  await secrets.store('svc', SESSION_SECRET_FIELDS.accessToken, 'old');
+
+  const applied = await applySessionTokensFromJson({
+    authenticationId: 'svc',
+    body: { access_token: 'new-token' },
+    secrets,
+    sessions,
+    now: new Date('2026-07-30T12:00:00.000Z'),
+  });
+  assert.equal(applied.session.accessTokenPresent, true);
+  assert.equal(applied.session.expiresAt, undefined);
+  assert.equal(await secrets.get('svc', SESSION_SECRET_FIELDS.accessToken), 'new-token');
+
+  const failed = await applySessionTokensFromJson({
+    authenticationId: 'svc',
+    body: { unrelated: true },
+    secrets,
+    sessions,
+  });
+  assert.equal(failed.session.accessTokenPresent, false);
+  assert.equal(failed.session.expiresAt, undefined);
+  assert.equal(await secrets.get('svc', SESSION_SECRET_FIELDS.accessToken), undefined);
+});
+
+test('saveAsAuthenticationProfile stores secret-backed bearer profile', async () => {
+  const store = new MemorySecrets();
+  const secrets = new DefaultAuthenticationSecretRepository(store);
+  const result = await saveAsAuthenticationProfile({
+    id: 'saved',
+    label: 'Saved',
+    ephemeral: {
+      providerId: 'bearer',
+      material: { token: 'paste-me' },
+    },
+    existingProfiles: [],
+    secrets,
+  });
+  assert.equal(result.ok, true);
+  if (result.ok) {
+    assert.equal(result.profile.providerId, 'bearer');
+    assert.equal(await secrets.get('saved', 'token'), 'paste-me');
+  }
+});
+
+test('Use as Authentication path stores profile token secret not session access token', async () => {
+  const store = new MemorySecrets();
+  const secrets = new DefaultAuthenticationSecretRepository(store);
+  const body = { access_token: 'from-response' };
+  const accessPath = 'access_token';
+  const tokenValue = readJsonPathValue(body, accessPath);
+  assert.equal(tokenValue, 'from-response');
+  const secretField = secretFieldNamesForProvider('bearer')[0] ?? 'token';
+  await secrets.store('svc', secretField, String(tokenValue));
+  assert.equal(await secrets.get('svc', 'token'), 'from-response');
+  assert.equal(
+    await secrets.get('svc', SESSION_SECRET_FIELDS.accessToken),
+    undefined,
+  );
+});
+
+test('saveAsAuthenticationProfile rejects empty basic credentials', async () => {
+  const store = new MemorySecrets();
+  const secrets = new DefaultAuthenticationSecretRepository(store);
+  const emptyUser = await saveAsAuthenticationProfile({
+    id: 'basic1',
+    label: 'Basic',
+    ephemeral: {
+      providerId: 'basic',
+      material: { username: '', password: 'x' },
+    },
+    existingProfiles: [],
+    secrets,
+  });
+  assert.equal(emptyUser.ok, false);
+  const emptyPass = await saveAsAuthenticationProfile({
+    id: 'basic2',
+    label: 'Basic',
+    ephemeral: {
+      providerId: 'basic',
+      material: { username: 'u', password: '' },
+    },
+    existingProfiles: [],
+    secrets,
+  });
+  assert.equal(emptyPass.ok, false);
+});
+
+test('presentation preview still masks bearer and oneshot-ready copy', () => {
+  assert.equal(
+    buildAuthenticationPresentationPreview({
+      providerId: 'bearer',
+      secretFields: [{ field: 'token', label: 'Token', status: 'set' }],
+    }).preview,
+    `Authorization: Bearer ${AUTHENTICATION_PRESENTATION_MASK}`,
   );
 });

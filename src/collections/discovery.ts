@@ -207,6 +207,7 @@ export class CollectionDiscoveryService {
           name: marker?.name?.trim() || root.name,
           description: marker?.description,
           order: marker?.order,
+          defaultAuthenticationId: marker?.defaultAuthenticationId,
           folderOrder: marker?.folderOrder,
           requestOrder: marker?.requestOrder,
           files: relativeFiles,
@@ -296,6 +297,7 @@ export class CollectionDiscoveryService {
     readonly name: string;
     readonly description?: string;
     readonly order?: number;
+    readonly defaultAuthenticationId?: string;
     readonly folderOrder?: CollectionMarkerDocument['folderOrder'];
     readonly requestOrder?: CollectionMarkerDocument['requestOrder'];
     readonly files: readonly DiscoveredApiFile[];
@@ -309,6 +311,7 @@ export class CollectionDiscoveryService {
       name,
       description,
       order,
+      defaultAuthenticationId,
       folderOrder,
       requestOrder,
       files,
@@ -457,6 +460,9 @@ export class CollectionDiscoveryService {
         ...(description !== undefined ? { description } : {}),
         workspacePath: rootPath,
         ...(order !== undefined ? { order } : {}),
+        ...(defaultAuthenticationId !== undefined
+          ? { defaultAuthenticationId }
+          : {}),
         lastModified,
         requestCount: Object.keys(requests).length,
         folderCount: Object.keys(folders).length,

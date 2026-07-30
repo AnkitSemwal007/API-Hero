@@ -13,10 +13,12 @@ import {
   ApiKeyAuthenticationProvider,
   AuthenticationProfileManager,
   AuthenticationProviderRegistry,
+  AuthenticationSessionStore,
   BasicAuthenticationProvider,
   BearerAuthenticationProvider,
   DefaultAuthenticationResolver,
   DefaultAuthenticationSecretRepository,
+  EphemeralAuthenticationSlot,
   NoneAuthenticationProvider,
 } from './auth';
 import { registerAssertions } from './assertions/vscode';
@@ -202,6 +204,26 @@ export async function activate(context: ExtensionContext): Promise<void> {
   const authenticationSecrets = new DefaultAuthenticationSecretRepository(
     secretStorage,
   );
+  const ephemeralAuthentication = new EphemeralAuthenticationSlot();
+  const authenticationSessions = new AuthenticationSessionStore();
+  const rawSessions = context.workspaceState.get<unknown>(
+    'apiHero.authentication.sessions',
+  );
+  if (Array.isArray(rawSessions)) {
+    authenticationSessions.replaceAll(
+      rawSessions.filter(
+        (entry): entry is import('./auth').AuthenticationSession =>
+          entry !== null &&
+          typeof entry === 'object' &&
+          typeof (entry as { authenticationId?: unknown }).authenticationId ===
+            'string' &&
+          typeof (entry as { status?: unknown }).status === 'string',
+      ),
+    );
+  }
+  let resolveCollectionDefaultAuthenticationId: (
+    sourceId: string,
+  ) => string | undefined = () => undefined;
   /**
    * Active run-scope definitions: collection-run store while a collection
    * execute is active, otherwise the session store (Phase 1 single-request).
@@ -296,11 +318,16 @@ export async function activate(context: ExtensionContext): Promise<void> {
     resolveCollectionRootPathForSource: (sourceId) =>
       resolveCollectionRootPathForSource(sourceId),
   });
+  const useResponseAsAuthenticationHandler: {
+    current?: (body: unknown) => Promise<void>;
+  } = {};
   const responseViewer = new ResponseViewerService(
     new VsCodeResponsePanelFactory(),
     undefined,
     createVsCodeResponseViewerHostActions({
       writer: extractionRegistration.writer,
+      useResponseAsAuthentication: (body) =>
+        useResponseAsAuthenticationHandler.current?.(body),
     }),
     {
       getKnownVariableNames: (context) => {
@@ -388,10 +415,22 @@ export async function activate(context: ExtensionContext): Promise<void> {
       };
     },
     authenticationResolver,
-    () => ({
-      ...authenticationProfiles.capture(),
-      secrets: authenticationSecrets,
-    }),
+    (_variables, meta) => {
+      const ephemeral = ephemeralAuthentication.take();
+      const collectionDefault =
+        meta?.sourceId === undefined
+          ? undefined
+          : resolveCollectionDefaultAuthenticationId(meta.sourceId);
+      return {
+        ...authenticationProfiles.capture(),
+        secrets: authenticationSecrets,
+        sessions: authenticationSessions,
+        ...(ephemeral === undefined ? {} : { ephemeral }),
+        ...(collectionDefault === undefined
+          ? {}
+          : { collectionDefaultAuthenticationId: collectionDefault }),
+      };
+    },
     historyInfrastructure.recorder,
     () => getHistoryCaptureContext(),
     assertionsRegistration.observer,
@@ -467,6 +506,21 @@ export async function activate(context: ExtensionContext): Promise<void> {
     }
     return undefined;
   };
+  resolveCollectionDefaultAuthenticationId = (sourceId) => {
+    const snapshot = collectionsRegistration.discovery.snapshot;
+    if (snapshot === undefined) {
+      return undefined;
+    }
+    const target = normalizePathKey(sourceId);
+    for (const collection of Object.values(snapshot.collections)) {
+      for (const request of Object.values(collection.requests)) {
+        if (normalizePathKey(request.filePath) === target) {
+          return collection.metadata.defaultAuthenticationId;
+        }
+      }
+    }
+    return undefined;
+  };
   const historyRegistration = registerHistory({
     context,
     logger,
@@ -518,16 +572,58 @@ export async function activate(context: ExtensionContext): Promise<void> {
     logger,
     discovery: collectionsRegistration.discovery,
   });
+  registerEnvironments({
+    context,
+    environmentManager,
+  });
+  const authRegistration = registerAuth({
+    context,
+    profileManager: authenticationProfiles,
+    secrets: authenticationSecrets,
+    executor,
+    sessions: authenticationSessions,
+    discovery: collectionsRegistration.discovery,
+  });
+  useResponseAsAuthenticationHandler.current = async (body) => {
+    const { runUseResponseAsAuthenticationCommand } = await import(
+      './auth/vscode/auth-commands.js'
+    );
+    await runUseResponseAsAuthenticationCommand(authRegistration.services, body);
+  };
   registerRequestEditor({
     context,
     orchestrator,
     discovery: collectionsRegistration.discovery,
     mutation: collectionsRegistration.mutation,
     getAuthProfiles: () =>
-      authenticationProfiles.list().map((profile) => ({
-        id: profile.id,
-        label: profile.label?.trim() || profile.id,
-      })),
+      authenticationProfiles.list().map((profile) => {
+        const option: {
+          id: string;
+          label: string;
+          providerId: string;
+          name?: string;
+          location?: 'header' | 'query';
+        } = {
+          id: profile.id,
+          label: profile.label?.trim() || profile.id,
+          providerId: profile.providerId,
+        };
+        if (profile.providerId === 'apiKey') {
+          const data = profile as {
+            readonly name?: unknown;
+            readonly location?: unknown;
+          };
+          if (typeof data.name === 'string' && data.name.length > 0) {
+            option.name = data.name;
+          }
+          if (data.location === 'header' || data.location === 'query') {
+            option.location = data.location;
+          }
+        }
+        return option;
+      }),
+    ephemeralAuthentication,
+    authServices: () => authRegistration.services,
     variableResolver,
     getExternalVariableDefinitions: () =>
       externalVariableContext().definitions,
@@ -541,15 +637,6 @@ export async function activate(context: ExtensionContext): Promise<void> {
         (environment) => environment.id === activeId,
       )?.name;
     },
-  });
-  registerEnvironments({
-    context,
-    environmentManager,
-  });
-  registerAuth({
-    context,
-    profileManager: authenticationProfiles,
-    secrets: authenticationSecrets,
   });
   registerOverview({
     context,

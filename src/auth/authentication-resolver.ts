@@ -15,6 +15,11 @@ import {
   type AuthenticationProviderRegistry,
 } from './authentication-provider';
 import type { AuthenticationProfileIssue } from './authentication-profile-validation';
+import {
+  SESSION_SECRET_FIELDS,
+  type AuthenticationSessionStore,
+} from './authentication-session';
+import type { EphemeralAuthenticationBinding } from './ephemeral-authentication';
 
 export { authenticationSecretKey, legacyAuthenticationSecretKey };
 
@@ -102,14 +107,41 @@ implements AuthenticationSecretRepository {
   }
 }
 
-/** Immutable profile/default/variable snapshot captured once for a run. */
+/**
+ * Immutable profile/default/variable snapshot captured once for a run.
+ *
+ * Precedence for saved Authentication (when no ephemeral binding):
+ * 1. request `@auth` / unresolved reference on the request
+ * 2. document `@auth` (already folded into the request reference by the builder)
+ * 3. collection `defaultAuthenticationId`
+ * 4. session `defaultProfileId`
+ * 5. none
+ *
+ * One-shot (`ephemeral`) overrides everything for that run and is never
+ * written to `.api`.
+ */
 export interface AuthenticationResolutionContext {
   readonly profiles: readonly AuthenticationProfile[];
   /** Structured issues for entries excluded by profile validation. */
   readonly issues?: readonly AuthenticationProfileIssue[];
   readonly defaultProfileId?: string;
+  /**
+   * Collection-level default Authentication id (shallow inheritance).
+   * Applied only when the request has no `@auth` reference.
+   */
+  readonly collectionDefaultAuthenticationId?: string;
   readonly variables: ReadonlyMap<string, VariableValue>;
   readonly secrets: AuthenticationSecretRepository;
+  /**
+   * Runtime-only one-shot credentials. When present, profile id resolution is
+   * skipped and the provider decorates with this material.
+   */
+  readonly ephemeral?: EphemeralAuthenticationBinding;
+  /**
+   * Optional session store so bearer/apiKey can prefer a Login API session
+   * access token when present in Secret Storage.
+   */
+  readonly sessions?: AuthenticationSessionStore;
 }
 
 export interface AuthenticationResolver {
@@ -129,9 +161,10 @@ export class DefaultAuthenticationResolver implements AuthenticationResolver {
     signal?: AbortSignal,
   ): Promise<AuthenticatedRequest> {
     assertNotAborted(signal);
-    const reference = request.authentication.kind === 'unresolved'
-      ? request.authentication.reference?.trim()
-      : context.defaultProfileId?.trim();
+    if (context.ephemeral !== undefined) {
+      return resolveEphemeral(request, context.ephemeral, this.registry);
+    }
+    const reference = selectAuthenticationReference(request, context);
     const profile = reference === undefined || reference.length === 0
       ? NO_AUTH_PROFILE
       : findProfile(context, reference);
@@ -150,6 +183,88 @@ export class DefaultAuthenticationResolver implements AuthenticationResolver {
       profile,
       provider.decorate(request, profile, material),
     );
+  }
+}
+
+/**
+ * Resolves which saved Authentication id applies for this run.
+ * Request/document `@auth` wins over collection default over session default.
+ */
+export function selectAuthenticationReference(
+  request: ResolvedRequest,
+  context: Pick<
+    AuthenticationResolutionContext,
+    'defaultProfileId' | 'collectionDefaultAuthenticationId'
+  >,
+): string | undefined {
+  if (request.authentication.kind === 'unresolved') {
+    const reference = request.authentication.reference?.trim();
+    if (reference !== undefined && reference.length > 0) {
+      return reference;
+    }
+  }
+  const collectionDefault = context.collectionDefaultAuthenticationId?.trim();
+  if (collectionDefault !== undefined && collectionDefault.length > 0) {
+    return collectionDefault;
+  }
+  const sessionDefault = context.defaultProfileId?.trim();
+  if (sessionDefault !== undefined && sessionDefault.length > 0) {
+    return sessionDefault;
+  }
+  return undefined;
+}
+
+function resolveEphemeral(
+  request: ResolvedRequest,
+  ephemeral: EphemeralAuthenticationBinding,
+  registry: AuthenticationProviderRegistry,
+): AuthenticatedRequest {
+  const profile = ephemeralProfile(ephemeral);
+  const provider = registry.get(profile.providerId);
+  if (provider === undefined) {
+    throw new AuthenticationError(
+      'UNKNOWN_PROVIDER',
+      profile.id,
+      profile.providerId,
+    );
+  }
+  return applyAuthenticationDecoration(
+    request,
+    profile,
+    provider.decorate(request, profile, ephemeral.material),
+  );
+}
+
+function ephemeralProfile(
+  ephemeral: EphemeralAuthenticationBinding,
+): AuthenticationProfile {
+  switch (ephemeral.providerId) {
+    case 'bearer':
+      return Object.freeze({
+        id: 'oneshot',
+        providerId: 'bearer',
+        label: 'One-shot',
+        token: { kind: 'literal', value: '', unsafe: true as const },
+      });
+    case 'basic':
+      return Object.freeze({
+        id: 'oneshot',
+        providerId: 'basic',
+        label: 'One-shot',
+        username: { kind: 'literal', value: '', unsafe: true as const },
+        password: { kind: 'literal', value: '', unsafe: true as const },
+      });
+    case 'apiKey':
+      return Object.freeze({
+        id: 'oneshot',
+        providerId: 'apiKey',
+        label: 'One-shot',
+        name: ephemeral.apiKeyName?.trim() || 'X-API-Key',
+        location: ephemeral.apiKeyLocation === 'query' ? 'query' : 'header',
+        value: { kind: 'literal', value: '', unsafe: true as const },
+      });
+    default:
+      return NO_AUTH_PROFILE;
   }
 }
 
@@ -182,6 +297,10 @@ async function resolveMaterial(
   context: AuthenticationResolutionContext,
   signal?: AbortSignal,
 ): Promise<Readonly<Record<string, string>>> {
+  const sessionToken = await preferSessionAccessToken(profile, context, signal);
+  if (sessionToken !== undefined) {
+    return sessionToken;
+  }
   const fields = profileFields(profile);
   const material = Object.create(null) as Record<string, string>;
   for (const [field, source] of fields) {
@@ -199,6 +318,43 @@ async function resolveMaterial(
     });
   }
   return Object.freeze(material);
+}
+
+/**
+ * When a Login API / response-extraction session access token exists in Secret
+ * Storage, prefer it for bearer and apiKey decoration.
+ */
+async function preferSessionAccessToken(
+  profile: AuthenticationProfile,
+  context: AuthenticationResolutionContext,
+  signal?: AbortSignal,
+): Promise<Readonly<Record<string, string>> | undefined> {
+  if (profile.providerId !== 'bearer' && profile.providerId !== 'apiKey') {
+    return undefined;
+  }
+  const session = context.sessions?.get(profile.id);
+  if (session?.accessTokenPresent !== true) {
+    return undefined;
+  }
+  if (session.expiresAt !== undefined) {
+    const expiresAt = Date.parse(session.expiresAt);
+    if (Number.isFinite(expiresAt) && expiresAt <= Date.now()) {
+      return undefined;
+    }
+  }
+  assertNotAborted(signal);
+  const token = await context.secrets.get(
+    profile.id,
+    SESSION_SECRET_FIELDS.accessToken,
+  );
+  assertNotAborted(signal);
+  if (token === undefined || token.length === 0) {
+    return undefined;
+  }
+  if (profile.providerId === 'bearer') {
+    return Object.freeze({ token });
+  }
+  return Object.freeze({ value: token });
 }
 
 function profileFields(

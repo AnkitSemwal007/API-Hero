@@ -204,7 +204,12 @@ function projectCollection(
       ? '1 request'
       : `${collection.metadata.requestCount} requests`;
   const kindSuffix = collection.kind === 'legacy' ? ' · Legacy' : '';
-  const baseDescription = `${requestDescription}${kindSuffix}`;
+  const authSuffix =
+    collection.metadata.defaultAuthenticationId !== undefined &&
+    collection.metadata.defaultAuthenticationId.length > 0
+      ? ` · Default Authentication: ${collection.metadata.defaultAuthenticationId}`
+      : '';
+  const baseDescription = `${requestDescription}${kindSuffix}${authSuffix}`;
   return {
     id: collection.id,
     kind: 'collection',

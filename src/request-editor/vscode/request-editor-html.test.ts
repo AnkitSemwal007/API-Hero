@@ -44,6 +44,9 @@ describe('request editor webview helpers', () => {
     assert.match(html, /type: 'run'/u);
     assert.match(html, /id="envShortcut"/u);
     assert.match(html, /id="authShortcut"/u);
+    assert.match(html, />Authentication</u);
+    assert.match(html, /Authentication mode/u);
+    assert.match(html, /function buildSavedAuthPreview/u);
     assert.match(html, /id="method"/u);
     assert.match(html, /id="url"/u);
     assert.match(html, /id="varSuggest"/u);
@@ -60,10 +63,19 @@ describe('request editor webview helpers', () => {
     assert.match(html, /class="identity-block"/u);
     assert.match(html, /id="name"/u);
     assert.match(html, /id="tab-request"/u);
+    assert.match(html, /id="authMode"/u);
+    assert.match(html, /id="oneshotToken"/u);
     assert.match(html, /id="manageAuthProfiles"/u);
     assert.match(html, /id="manageEnvironments"/u);
     assert.match(html, /Manage Authentication/u);
     assert.match(html, /Manage Environments/u);
+    // One-shot must preserve authProfileId (never delete @auth on mode switch).
+    assert.match(html, /leave authProfileId unchanged/u);
+    assert.doesNotMatch(
+      html,
+      /None and one-shot must never write @auth/u,
+    );
+    assert.match(html, /Paste a Bearer token for one-shot authentication before Send/u);
     assert.match(html, /No Request variables/u);
     assert.match(html, /id="variablesPrecedenceLegend"/u);
     assert.match(
@@ -224,6 +236,14 @@ describe('request editor webview helpers', () => {
       parseRequestEditorMessage({ type: 'manageEnvironments' }),
       { type: 'manageEnvironments' },
     );
+    assert.deepEqual(
+      parseRequestEditorMessage({ type: 'saveAsAuthentication' }),
+      { type: 'saveAsAuthentication' },
+    );
+    assert.deepEqual(
+      parseRequestEditorMessage({ type: 'dismissSaveAsAuthentication' }),
+      { type: 'dismissSaveAsAuthentication' },
+    );
   });
 
   test('parseRequestEditorMessage validates updateModel payloads', () => {
@@ -314,7 +334,9 @@ describe('request editor webview helpers', () => {
     assert.match(html, /formDirty/u);
     assert.match(html, /flushPendingUpdate/u);
     assert.match(html, /if \(formDirty\)/u);
-    assert.match(html, /flushPendingUpdate\(\);\s*post\(\{ type: 'run' \}\)/u);
+    assert.match(html, /flushPendingUpdate\(\)/u);
+    assert.match(html, /post\(\{\s*type: 'run'/u);
+    assert.match(html, /ephemeralAuth/u);
 
     // Ack updates version / preview only — does not call applyState.
     const ackIdx = html.indexOf("message.type === 'ack'");
