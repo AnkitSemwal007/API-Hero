@@ -66,6 +66,11 @@ export const COMMAND_IDS = {
    * code actions to prompt and store a secret field.
    */
   setAuthSecret: 'apiHero.setAuthSecret',
+  testAuthentication: 'apiHero.testAuthentication',
+  saveAsAuthentication: 'apiHero.saveAsAuthentication',
+  useResponseAsAuthentication: 'apiHero.useResponseAsAuthentication',
+  runAuthenticationLogin: 'apiHero.runAuthenticationLogin',
+  setCollectionDefaultAuthentication: 'apiHero.setCollectionDefaultAuthentication',
 } as const;
 
 /** A command identifier contributed by API Hero. */
@@ -137,6 +142,11 @@ export const LEGACY_COMMAND_IDS = {
   createScenario: 'apiRunner.createScenario',
   focusScenarios: 'apiRunner.focusScenarios',
   setAuthSecret: 'apiRunner.setAuthSecret',
+  testAuthentication: 'apiRunner.testAuthentication',
+  saveAsAuthentication: 'apiRunner.saveAsAuthentication',
+  useResponseAsAuthentication: 'apiRunner.useResponseAsAuthentication',
+  runAuthenticationLogin: 'apiRunner.runAuthenticationLogin',
+  setCollectionDefaultAuthentication: 'apiRunner.setCollectionDefaultAuthentication',
 } as const;
 
 /** A legacy `apiRunner.*` command alias. */

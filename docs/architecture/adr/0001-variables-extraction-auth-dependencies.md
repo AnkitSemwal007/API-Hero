@@ -218,6 +218,8 @@ Layer 3  Authentication providers       → scheme-aware decoration
 | Refresh token | Capture via extraction; **refresh orchestration** is a future auth lifecycle hook |
 | OAuth2 / OIDC | Future specialized **provider** that may perform network flows **only through the orchestrator**; writes tokens via extraction/storage APIs; decorates like bearer |
 
+**Phase 2 amendment:** Login API is first-class **Session** configuration on Authentication (not a separate Connection). Auth Manager **Test** / **Login** health probes may call `RequestExecutor` directly for a single probe request. OAuth / refresh token orchestration (when added) must still go through `ExecutionOrchestrator` — probes do not replace that boundary.
+
 ### 7.3 Preferred dynamic pattern
 
 ```api
@@ -240,6 +242,8 @@ Manual `Authorization: Bearer {{accessToken}}` remains an escape hatch; it is **
 ### 7.4 Boundary change
 
 Today’s docs state auth does not perform network flows or persist variables. **This ADR revises that for future OAuth/refresh providers only:** they may initiate orchestrated network flows and update stores via VariableWriter — they must not bypass `ExecutionOrchestrator` or duplicate HTTP transport.
+
+**Phase 2 note:** Login / Test health probes using `RequestExecutor` are an intentional exception for Auth Manager diagnostics only; they do not authorize OAuth or refresh to bypass the orchestrator.
 
 ---
 

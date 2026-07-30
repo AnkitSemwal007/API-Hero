@@ -7,6 +7,9 @@
 /** Presentation mask matching auth provider URL decoration glyphs. */
 export const AUTHENTICATION_PRESENTATION_MASK = '••••••••';
 
+/** Inline credential field mask shown in Auth Manager when a secret is set. */
+export const AUTHENTICATION_SECRET_FIELD_MASK = '***************';
+
 /** Prefix for Basic-auth missing-secret validation copy. */
 export const BASIC_MISSING_VALIDATION_PREFIX = 'Missing: ';
 
@@ -32,6 +35,8 @@ export interface AuthenticationPresentationPreviewInput {
 export interface AuthenticationPresentationPreview {
   readonly preview: string;
   readonly validation: string;
+  /** Header names that may be copied (never values). */
+  readonly headerNames: readonly string[];
 }
 
 /**
@@ -46,7 +51,7 @@ export function formatBasicMissingValidation(
 
 /**
  * Builds the Auth Manager Preview tab strings for a profile draft.
- * Empty-selection copy (`Select a profile to preview.`) stays in the webview.
+ * Empty-selection copy stays in the webview.
  */
 export function buildAuthenticationPresentationPreview(
   input: AuthenticationPresentationPreviewInput,
@@ -60,6 +65,7 @@ export function buildAuthenticationPresentationPreview(
     return {
       preview: 'No authentication headers will be added.',
       validation: '',
+      headerNames: [],
     };
   }
   if (input.providerId === 'bearer') {
@@ -69,6 +75,7 @@ export function buildAuthenticationPresentationPreview(
         missing.length > 0
           ? 'Token secret is missing.'
           : 'Ready — token is set.',
+      headerNames: ['Authorization'],
     };
   }
   if (input.providerId === 'basic') {
@@ -78,6 +85,7 @@ export function buildAuthenticationPresentationPreview(
         missing.length > 0
           ? formatBasicMissingValidation(missing.map((field) => field.label))
           : 'Ready — username and password are set.',
+      headerNames: ['Authorization'],
     };
   }
   if (input.providerId === 'apiKey') {
@@ -94,7 +102,12 @@ export function buildAuthenticationPresentationPreview(
           : !input.apiKeyName || !input.apiKeyName.trim()
             ? 'Key name is empty — set a header or query parameter name.'
             : 'Ready — API key secret is set.',
+      headerNames: location === 'header' ? [name] : [],
     };
   }
-  return { preview: 'Unknown provider.', validation: 'Unsupported provider.' };
+  return {
+    preview: 'Unknown provider.',
+    validation: 'Unsupported provider.',
+    headerNames: [],
+  };
 }

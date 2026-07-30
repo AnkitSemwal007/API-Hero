@@ -75,6 +75,10 @@ export interface RegisterRequestEditorOptions {
   readonly discovery?: CollectionDiscoveryService;
   /** Mutation service for same-folder requestOrder alignment after depends-on. */
   readonly mutation?: CollectionMutationService;
+  /** Host-side one-shot auth slot cleared after each resolve. */
+  readonly ephemeralAuthentication?: import('../../auth').EphemeralAuthenticationSlot;
+  /** Lazy auth command services for Save as Authentication after one-shot. */
+  readonly authServices?: () => import('../../auth/vscode/auth-commands').AuthCommandServices;
 }
 
 export interface RequestEditorRegistration {
@@ -93,6 +97,16 @@ export function registerRequestEditor(
 
   const provider = new RequestEditorProvider({
     getAuthProfiles: options.getAuthProfiles,
+    getWorkspaceDefaultAuthenticationId: () =>
+      options.authServices?.().profileManager.defaultProfileId,
+    getCollectionDefaultAuthenticationId: (documentPath) => {
+      const aggregate = options.discovery?.snapshot;
+      if (aggregate === undefined) {
+        return undefined;
+      }
+      return findCollectionForDocumentPath(aggregate, documentPath)?.metadata
+        .defaultAuthenticationId;
+    },
     getVariablePreview: (model) =>
       buildVariablePreview(
         options.variableResolver,
@@ -163,7 +177,23 @@ export function registerRequestEditor(
         });
       };
     })(),
-    runDocument: (document) => runRequestDocument(orchestrator, document),
+    runDocument: (document, ephemeralAuth) =>
+      runRequestDocument(
+        orchestrator,
+        document,
+        options.ephemeralAuthentication,
+        ephemeralAuth,
+        options.authServices,
+      ),
+    saveAsAuthentication: async (ephemeralAuth) => {
+      if (options.authServices === undefined) {
+        return;
+      }
+      const { runSaveAsAuthenticationCommand } = await import(
+        '../../auth/vscode/auth-commands.js'
+      );
+      await runSaveAsAuthenticationCommand(options.authServices(), ephemeralAuth);
+    },
   });
 
   const editorOptions = {
@@ -354,12 +384,45 @@ async function persistIgnoredUnknownVariable(
 async function runRequestDocument(
   orchestrator: ExecutionOrchestrator,
   document: TextDocument,
-): Promise<void> {
-  await orchestrator.runAtPosition({
-    text: document.getText(),
-    sourceId: document.uri.toString(),
-    offset: 0,
-  });
+  ephemeralAuthentication:
+    | import('../../auth').EphemeralAuthenticationSlot
+    | undefined,
+  ephemeralAuth:
+    | {
+        readonly providerId: 'bearer' | 'basic' | 'apiKey';
+        readonly material: Readonly<Record<string, string>>;
+        readonly apiKeyName?: string;
+        readonly apiKeyLocation?: 'header' | 'query';
+      }
+    | undefined,
+  authServices:
+    | (() => import('../../auth/vscode/auth-commands').AuthCommandServices)
+    | undefined,
+): Promise<{ readonly offerSaveAsAuthentication?: boolean } | void> {
+  if (ephemeralAuth !== undefined && ephemeralAuthentication !== undefined) {
+    ephemeralAuthentication.set(ephemeralAuth);
+  }
+  try {
+    const result = await orchestrator.runAtSourceLocation({
+      text: document.getText(),
+      sourceId: document.uri.toString(),
+      offset: 0,
+    });
+    if (
+      result.outcome === 'success' &&
+      ephemeralAuth !== undefined &&
+      authServices !== undefined
+    ) {
+      // Soft offer: in-editor banner via host message; optional status toast.
+      window.setStatusBarMessage(
+        'API Hero: Reuse this Authentication? Open the Auth tab to Save.',
+        8_000,
+      );
+      return { offerSaveAsAuthentication: true };
+    }
+  } finally {
+    ephemeralAuthentication?.clear();
+  }
 }
 
 function collectDefinitions(

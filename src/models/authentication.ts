@@ -45,3 +45,10 @@ export type AuthenticationProfile =
 
 /** Legacy metadata name retained as an alias to the profile extension shape. */
 export type Authentication = AuthenticationProfile;
+
+/**
+ * Request Auth modes (product IA). One-shot is runtime-only and never
+ * serializes into `@auth` / `.api`. Session types live in
+ * `src/auth/authentication-session.ts`.
+ */
+export type RequestAuthenticationMode = 'none' | 'oneshot' | 'saved';

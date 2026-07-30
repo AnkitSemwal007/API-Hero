@@ -24,7 +24,7 @@ VS Code adapters live in `src/request-editor/vscode/`.
 | Params | Query table ↔ URL query (`parseParameters` / serializer) |
 | Headers | Key / Value / Enabled (disabled → `# Name: value`) |
 | Body | none / json / text / form / raw / multipart / binary |
-| Auth | Profile dropdown → `@auth <id>` (no secrets in webview) |
+| Auth | Authentication dropdown / modes (None, One-shot, Saved) → `@auth <id>` (no secrets in webview) |
 | Variables | `@variable` rows, `{{name}}` insert, read-only resolution preview, IntelliSense |
 | Tests | Structured UI → `expect …` lines; assertion value field supports `{{vars}}` |
 | Settings | `@timeout` only (no invented directives) |

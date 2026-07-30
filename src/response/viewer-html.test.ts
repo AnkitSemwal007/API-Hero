@@ -491,6 +491,25 @@ test('JSON tree exposes path metadata and Create Variable chrome when enabled', 
   assert.match(html, /data-enable-create-variable="true"/u);
 });
 
+test('Detected Authentication renders multiple useAsAuth CTAs and binds all of them', () => {
+  const model = presentExecutionResult(
+    result('{"access_token":"abc"}'),
+  );
+  const html = renderResponseViewerHtml(model, 'nonce', {
+    enableCreateVariable: true,
+    detectedAuthTokenCount: 1,
+  });
+  const useAsAuthButtons =
+    html.match(/<button\b[^>]*\bdata-action="useAsAuth"/gu) ?? [];
+  assert.equal(useAsAuthButtons.length, 2);
+  assert.match(html, /Detected Authentication/u);
+  assert.match(html, /Create Session \/ Use as Authentication/u);
+  assert.match(
+    html,
+    /querySelectorAll\('\[data-action="useAsAuth"\]'\)/u,
+  );
+});
+
 test('JSON tree marks non-identifier keys as non-extractable', () => {
   const model = presentExecutionResult(result('{"invalid key":"x","ok":1}'));
   const html = renderResponseViewerHtml(model, 'nonce', {

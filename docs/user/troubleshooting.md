@@ -30,7 +30,9 @@ History skips runs that never reached transport (parse/validate/variables/auth f
 
 ## Stubs
 
-**Run File**, **Login**, and **Logout** show Coming Soon and are hidden from the Command Palette.
+**Run File**, **Account Login**, and **Account Logout** are not available and are
+hidden from the Command Palette. They are unrelated to **Authentication Login API**
+(**Run Authentication Login** / Auth Manager **Run Login**), which is supported.
 
 ## Related
 

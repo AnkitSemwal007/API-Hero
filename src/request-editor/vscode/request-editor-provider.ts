@@ -15,6 +15,7 @@ import {
 } from 'vscode';
 
 import { COMMAND_IDS, REQUEST_EDITOR_VIEW_TYPE } from '../../constants';
+import { explainAuthenticationResolution } from '../../auth/explain-authentication-resolution';
 import { describeFilesystemFailure, fireAndForget } from '../../shared';
 import { createWebviewNonce } from '../../ui/webview';
 import {
@@ -47,6 +48,12 @@ import {
 
 export interface RequestEditorProviderOptions {
   readonly getAuthProfiles: () => readonly RequestEditorAuthProfileOption[];
+  /** Workspace / session default Authentication id. */
+  readonly getWorkspaceDefaultAuthenticationId?: () => string | undefined;
+  /** Collection default Authentication id for a document path. */
+  readonly getCollectionDefaultAuthenticationId?: (
+    documentPath: string,
+  ) => string | undefined;
   readonly getVariablePreview?: (
     model: RequestSourceDocument,
   ) => Readonly<Record<string, string>>;
@@ -103,7 +110,24 @@ export interface RequestEditorProviderOptions {
    * Preferred over executeCommand so Custom Text Editors work without an
    * active TextEditor.
    */
-  readonly runDocument: (document: TextDocument) => Promise<void>;
+  readonly runDocument: (
+    document: TextDocument,
+    ephemeralAuth?: {
+      readonly providerId: 'bearer' | 'basic' | 'apiKey';
+      readonly material: Readonly<Record<string, string>>;
+      readonly apiKeyName?: string;
+      readonly apiKeyLocation?: 'header' | 'query';
+    },
+  ) => Promise<{ readonly offerSaveAsAuthentication?: boolean } | void>;
+  /** Optional: persist one-shot credentials after banner Save. */
+  readonly saveAsAuthentication?: (
+    ephemeralAuth: {
+      readonly providerId: 'bearer' | 'basic' | 'apiKey';
+      readonly material: Readonly<Record<string, string>>;
+      readonly apiKeyName?: string;
+      readonly apiKeyLocation?: 'header' | 'query';
+    },
+  ) => Promise<void>;
 }
 
 /**
@@ -140,6 +164,14 @@ class RequestEditorDocumentSync implements Disposable {
     | undefined;
   private applyInFlight = false;
   private readonly drainWaiters: Array<() => void> = [];
+  private lastEphemeralAuth:
+    | {
+        readonly providerId: 'bearer' | 'basic' | 'apiKey';
+        readonly material: Readonly<Record<string, string>>;
+        readonly apiKeyName?: string;
+        readonly apiKeyLocation?: 'header' | 'query';
+      }
+    | undefined;
 
   public constructor(
     private readonly document: TextDocument,
@@ -238,6 +270,20 @@ class RequestEditorDocumentSync implements Disposable {
       await commands.executeCommand(COMMAND_IDS.manageEnvironments);
       return;
     }
+    if (message.type === 'saveAsAuthentication') {
+      if (
+        this.lastEphemeralAuth !== undefined &&
+        this.options.saveAsAuthentication !== undefined
+      ) {
+        await this.options.saveAsAuthentication(this.lastEphemeralAuth);
+        this.lastEphemeralAuth = undefined;
+      }
+      return;
+    }
+    if (message.type === 'dismissSaveAsAuthentication') {
+      this.lastEphemeralAuth = undefined;
+      return;
+    }
     if (message.type === 'ignoreUnknownVariable') {
       await this.options.ignoreUnknownVariable?.(message.name);
       await this.postState();
@@ -247,7 +293,18 @@ class RequestEditorDocumentSync implements Disposable {
       try {
         // Wait for any in-flight / pending form→text apply before executing.
         await this.waitUntilFormAppliesIdle();
-        await this.options.runDocument(this.document);
+        if (message.ephemeralAuth !== undefined) {
+          this.lastEphemeralAuth = message.ephemeralAuth;
+        }
+        const outcome = await this.options.runDocument(
+          this.document,
+          message.ephemeralAuth,
+        );
+        if (outcome?.offerSaveAsAuthentication === true) {
+          await this.panel.webview.postMessage({
+            type: 'offerSaveAsAuthentication',
+          });
+        }
       } catch (error) {
         const text = error instanceof Error ? error.message : String(error);
         await this.panel.webview.postMessage({ type: 'error', message: text });
@@ -550,17 +607,63 @@ class RequestEditorDocumentSync implements Disposable {
       this.document.uri.toString(),
     );
     const authProfiles = this.options.getAuthProfiles();
+    const workspaceDefaultAuthenticationId =
+      this.options.getWorkspaceDefaultAuthenticationId?.();
+    const collectionDefaultAuthenticationId =
+      this.options.getCollectionDefaultAuthenticationId?.(
+        this.document.uri.fsPath,
+      );
     const activeEnvironmentLabel = this.options.getActiveEnvironmentLabel?.();
-    const withActiveEnv = <T extends RequestEditorState>(
-      base: Omit<T, 'activeEnvironmentLabel'>,
-    ): T =>
-      (activeEnvironmentLabel === undefined
-        ? base
-        : { ...base, activeEnvironmentLabel }) as T;
+    const withAuthMeta = <T extends RequestEditorState>(
+      base: Omit<
+        T,
+        | 'activeEnvironmentLabel'
+        | 'workspaceDefaultAuthenticationId'
+        | 'collectionDefaultAuthenticationId'
+        | 'authResolution'
+      > & { readonly model?: RequestSourceDocument },
+    ): T => {
+      const requestOverrideId = base.model?.authProfileId;
+      const resolution = explainAuthenticationResolution({
+        ...(requestOverrideId !== undefined
+          ? { requestOverrideId }
+          : {}),
+        ...(collectionDefaultAuthenticationId !== undefined
+          ? { collectionDefaultId: collectionDefaultAuthenticationId }
+          : {}),
+        ...(workspaceDefaultAuthenticationId !== undefined
+          ? { workspaceDefaultId: workspaceDefaultAuthenticationId }
+          : {}),
+      });
+      return {
+        ...base,
+        ...(activeEnvironmentLabel === undefined
+          ? {}
+          : { activeEnvironmentLabel }),
+        ...(workspaceDefaultAuthenticationId === undefined
+          ? {}
+          : { workspaceDefaultAuthenticationId }),
+        ...(collectionDefaultAuthenticationId === undefined
+          ? {}
+          : { collectionDefaultAuthenticationId }),
+        authResolution: {
+          steps: resolution.steps.map((step) => ({
+            label: step.label,
+            ...(step.authenticationId !== undefined
+              ? { authenticationId: step.authenticationId }
+              : {}),
+            selected: step.selected,
+          })),
+          ...(resolution.selectedId !== undefined
+            ? { selectedId: resolution.selectedId }
+            : {}),
+        },
+      } as unknown as T;
+    };
     let state: RequestEditorState;
 
     if (parsed.kind === 'multi') {
-      state = withActiveEnv({
+      state = withAuthMeta({
         mode: 'multi',
         documentVersion: this.document.version,
         sourceText,
@@ -569,7 +672,7 @@ class RequestEditorDocumentSync implements Disposable {
         fileName: this.document.fileName,
       });
     } else if (parsed.kind === 'empty') {
-      state = withActiveEnv({
+      state = withAuthMeta({
         mode: 'empty',
         documentVersion: this.document.version,
         sourceText,
@@ -595,7 +698,7 @@ class RequestEditorDocumentSync implements Disposable {
           unknownVariables: [],
           ambiguousProducers: [],
         };
-      state = withActiveEnv({
+      state = withAuthMeta({
         mode: 'form',
         documentVersion: this.document.version,
         sourceText,
@@ -609,11 +712,9 @@ class RequestEditorDocumentSync implements Disposable {
         manualDependencies: projection.manualDependencies,
         unknownVariables: projection.unknownVariables,
         ambiguousProducers: projection.ambiguousProducers,
-        ...(projection.dependencyProjectionError === undefined
-          ? {}
-          : {
-              dependencyProjectionError: projection.dependencyProjectionError,
-            }),
+        ...(projection.dependencyProjectionError !== undefined
+          ? { dependencyProjectionError: projection.dependencyProjectionError }
+          : {}),
         fileName: this.document.fileName,
       });
     }

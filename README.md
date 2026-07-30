@@ -4,7 +4,7 @@
 
 Author `.api` requests beside your code, run them with assertions, and keep collections in Git — without leaving the editor.
 
-> Extension ID: **`ankitsemwal.api-hero`** · Version: **2.4.0** · License: [MIT](LICENSE)
+> Extension ID: **`ankitsemwal.api-hero`** · Version: **2.5.0** · License: [MIT](LICENSE)
 
 [Documentation](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/README.md) · [Changelog](CHANGELOG.md) · [Support](SUPPORT.md)
 
@@ -13,9 +13,10 @@ Author `.api` requests beside your code, run them with assertions, and keep coll
 **Why developers use API Hero**
 
 - **Stay in VS Code** — Request Editor, Response Viewer, Collections, Scenarios, Execution, and History live in the editor
+- **Authentication that stays secret** — profiles, Login API sessions, one-shot Bearer, and collection defaults — secrets in VS Code Secret Storage
+- **Scenarios for real workflows** — multi-step orchestration with templates, request binding, live step status, and Scenario Reports
 - **Git-native collections** — folders and human-readable `.api` files you can diff and review in PRs
-- **Run with confidence** — assertions, environments, auth profiles, Scenarios for multi-step flows, and a Live Run Report for collection runs
-- **Safe by default** — secrets use VS Code Secret Storage; presentation URLs mask sensitive values
+- **Run with confidence** — assertions, environments, Live Run Report for collection runs, and health-aware auth
 - **Import and grow** — OpenAPI 3.x import into the same `.api` + collection layout
 
 ---
@@ -44,7 +45,7 @@ No context switching. No binary collections. Same workflow as the rest of your c
 ```bash
 npm install
 npm run package
-code --install-extension release/api-hero-2.4.0.vsix
+code --install-extension release/api-hero-2.5.0.vsix
 ```
 
 Requires VS Code **1.90+**.
@@ -116,9 +117,14 @@ History stores metadata-safe summaries of past **runs** (masked presentation URL
 
 → [History](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/history.md)
 
-### Scenarios
+### Scenarios *(flagship)*
 
-Multi-step orchestration with `.api-hero/scenarios/*.scenario.json`. Use the **Scenarios** Activity Bar view to create, edit, and run scenarios; review results in a **Scenario Run Report**.
+Automate one API workflow with branches and shared data — distinct from Collection Runner (many requests). Definitions live under `.api-hero/scenarios/*.scenario.json`.
+
+- **Starter templates** when you create a scenario (login + token reuse, health-check branch, CRUD, …)
+- **Scenario Editor** with step palette, request binding, and guided properties
+- **Run** with optional variable overrides, live step status, and a **Scenario Run Report**
+- **Last-run status** in the Scenarios Activity Bar tree
 
 → [Scenarios](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/scenarios.md)
 
@@ -134,9 +140,15 @@ Manage named environments in the **Environment Manager**. Precedence: **run → 
 
 → [Environments](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/environments.md) · [Variables](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/variables.md)
 
-### Authentication
+### Authentication *(flagship)*
 
-Create profiles (none, basic, bearer, API key) in **Manage Authentication**. Secrets use VS Code **Secret Storage**. Attach with `@auth <profile-id>` (id, not label) or **Select Authentication**.
+Secure, profile-based auth without putting secrets in `.api` files.
+
+- **Manage Authentication** — templates, inline secrets (masked after save), **Test**, and **Run Login**
+- **Login API / Session** — obtain tokens via your API; store access/refresh in **Secret Storage**; see health and identity
+- **One-shot Bearer** in the Request Editor for a single Send; optional **Save as Authentication**
+- **Collection default** and session default; attach with `@auth <profile-id>` (id, not label)
+- **Response → Use as Authentication** when tokens are detected (confirm before overwrite)
 
 → [Authentication](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/authentication.md)
 
@@ -180,7 +192,7 @@ Manual `@depends-on` picker plus Auto / Unknown / Ambiguous projections from the
 
 **Overview** is a command-opened home for recent runs, collections, and quick actions. The `.api` language adds highlighting, snippets, hover, outline, diagnostics, and CodeLens.
 
-**Not in this release:** Run File (all requests in one editor), Login/Logout OAuth, cookie jar, GraphQL/gRPC/WebSocket, Variable Manager UI, persistent Collection Run Report storage, Scenarios Phase 2+ (advanced step types beyond Phase 1).
+**Not in this release:** Run File (all requests in one editor), OAuth2 / OIDC account Login/Logout, cookie jar, GraphQL/gRPC/WebSocket, Variable Manager UI, persistent Collection Run Report storage, Scenarios Phase 2+ (advanced step types beyond the Scenario Experience in **2.5.0**). Authentication Login API (session login against *your* API) **is** included — that is separate from palette-hidden Account Login stubs.
 
 ---
 
@@ -230,7 +242,7 @@ Also used for listing / social: [banner](https://res.cloudinary.com/iaojzqjd/ima
 
 ## Roadmap
 
-Near term: Scenarios Phase 2+ polish, sample collections, Walkthrough contribution, Run File, richer auth (OAuth) when ready.
+Near term: Marketplace screenshots for Auth Manager / Scenario Editor, Scenarios Phase 2+ polish, sample collections, Walkthrough contribution, Run File, OAuth2 when ready.
 
 → [Roadmap](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/product/roadmap.md)
 

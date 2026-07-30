@@ -31,7 +31,8 @@ export type ResponseViewerMessage =
       readonly path: string;
       readonly scope: string;
       readonly sensitive: boolean;
-    };
+    }
+  | { readonly type: 'useAsAuthentication' };
 
 const BODY_MODES = new Set(['pretty', 'raw']);
 const CREATE_VARIABLE_SCOPES = new Set([
@@ -58,6 +59,9 @@ export function parseResponseViewerMessage(
   }
   if (keys.length === 1 && record.type === 'copyHeaders') {
     return { type: 'copyHeaders' };
+  }
+  if (keys.length === 1 && record.type === 'useAsAuthentication') {
+    return { type: 'useAsAuthentication' };
   }
   if (
     keys.length === 2
@@ -110,6 +114,8 @@ export interface ResponseViewerRenderOptions {
   readonly enableCreateVariable?: boolean;
   /** Names already known (any scope) for overwrite warnings in the sheet. */
   readonly knownVariableNames?: readonly string[];
+  /** When > 0, show Detected Authentication affordance (paths counted on host). */
+  readonly detectedAuthTokenCount?: number;
 }
 
 /** Builds a self-contained response document with no remote resource access. */
@@ -399,7 +405,22 @@ function renderBody(
     options.enableCreateVariable === true
     && body.language === 'json'
     && body.prettyAvailable
-      ? '<button type="button" data-action="saveAsVariable" id="saveAsVariableBtn" title="Save selected JSON leaf as a variable" disabled>Save as Variable</button>'
+      ? '<button type="button" data-action="saveAsVariable" id="saveAsVariableBtn" title="Save selected JSON leaf as a variable" disabled>Save as Variable</button><button type="button" data-action="useAsAuth" id="useAsAuthBtn" title="Store detected token in Authentication Session">Use as Authentication</button>'
+      : '';
+  const detectedAuth =
+    options.enableCreateVariable === true
+    && body.language === 'json'
+    && body.prettyAvailable
+    && (options.detectedAuthTokenCount ?? 0) > 0
+      ? `<div class="detected-auth cta" role="status">
+  <div>
+    <strong>Detected Authentication</strong>
+    <span class="hint">${options.detectedAuthTokenCount} likely token field${options.detectedAuthTokenCount === 1 ? '' : 's'} found. Confirm before creating a Session.</span>
+  </div>
+  <div class="toolbar">
+    <button type="button" data-action="useAsAuth" class="primary">Create Session / Use as Authentication</button>
+  </div>
+</div>`
       : '';
   return `<div class="panel-toolbar body-toolbar">
     <div class="toolbar" role="group" aria-label="Body view">
@@ -421,6 +442,7 @@ function renderBody(
       <button type="button" data-action="saveBody" title="${body.truncated ? 'Save unavailable for truncated preview' : 'Save body'}"${body.truncated ? ' disabled' : ''}>Save</button>
     </div>
   </div>
+  ${detectedAuth}
   ${truncation}
   <div data-view="pretty" class="body-view">${pretty}</div>
   <div data-view="raw" class="body-view" hidden><pre tabindex="0"><code>${highlight(body.raw, body.language)}</code></pre></div>`;
@@ -527,6 +549,7 @@ function renderCreateVariableChrome(): string {
   <button type="button" role="menuitem" data-menu="copyValue">Copy Value</button>
   <button type="button" role="menuitem" data-menu="copyPath">Copy JSON Path</button>
   <button type="button" role="menuitem" data-menu="extract">Extract Variable…</button>
+  <button type="button" role="menuitem" data-menu="useAsAuth">Use as Authentication…</button>
   <button type="button" role="menuitem" data-menu="expand" hidden>Expand</button>
   <button type="button" role="menuitem" data-menu="collapse" hidden>Collapse</button>
 </nav>
@@ -699,6 +722,20 @@ main { display: flex; flex-direction: column; gap: 0; min-height: 100vh; }
   border-bottom: 1px solid var(--vscode-panel-border);
   align-items: flex-start;
 }
+.detected-auth {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ah-space-3);
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 0 var(--ah-space-3);
+  padding: var(--ah-space-3);
+  border-radius: var(--ah-radius);
+  background: var(--vscode-inputValidation-infoBackground, var(--vscode-editorWidget-background));
+  border: 1px solid var(--vscode-focusBorder, var(--vscode-panel-border));
+}
+.detected-auth strong { display: block; margin-bottom: 2px; }
+.detected-auth .hint { color: var(--vscode-descriptionForeground); font-size: 12px; }
 .meta-grid {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: var(--ah-space-2); padding: var(--ah-space-3) var(--ah-space-4) var(--ah-space-4);
@@ -941,6 +978,11 @@ const VIEWER_SCRIPT = `
   document.querySelector('[data-action="copyBody"]')?.addEventListener('click', () => {
     vscode.postMessage({ type: 'copyBody', mode: activeMode });
   });
+  for (const button of document.querySelectorAll('[data-action="useAsAuth"]')) {
+    button.addEventListener('click', () => {
+      vscode.postMessage({ type: 'useAsAuthentication' });
+    });
+  }
   document.querySelector('[data-action="copyHeaders"]')?.addEventListener('click', () => {
     vscode.postMessage({ type: 'copyHeaders' });
   });
@@ -1254,6 +1296,8 @@ const VIEWER_SCRIPT = `
         vscode.postMessage({ type: 'copyText', text: selectedNode.dataset.jsonPath ?? '' });
       } else if (action === 'extract') {
         openSheet(selectedNode);
+      } else if (action === 'useAsAuth') {
+        vscode.postMessage({ type: 'useAsAuthentication' });
       } else if (action === 'expand' && selectedNode.tagName === 'DETAILS') {
         selectedNode.open = true;
       } else if (action === 'collapse' && selectedNode.tagName === 'DETAILS') {

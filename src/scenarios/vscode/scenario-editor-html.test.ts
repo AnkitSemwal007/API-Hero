@@ -185,6 +185,65 @@ describe('scenarios/vscode/scenario-editor-html', () => {
     );
   });
 
+  test('parses additive webview messages pickRequest, openAuth, dismissBanner', () => {
+    assert.deepEqual(parseScenarioEditorMessage({ type: 'openAuth' }), {
+      type: 'openAuth',
+    });
+    assert.deepEqual(parseScenarioEditorMessage({ type: 'dismissBanner' }), {
+      type: 'dismissBanner',
+    });
+    assert.deepEqual(
+      parseScenarioEditorMessage({ type: 'pickRequest', stepId: 'S1' }),
+      { type: 'pickRequest', stepId: 'S1' },
+    );
+    assert.equal(
+      parseScenarioEditorMessage({ type: 'pickRequest' }),
+      undefined,
+    );
+    assert.equal(
+      parseScenarioEditorMessage({ type: 'deleteStep', stepId: 'S1' }),
+      undefined,
+    );
+    assert.equal(
+      parseScenarioEditorMessage({
+        type: 'prepareRun',
+        scenario: sampleScenario(),
+      }),
+      undefined,
+    );
+  });
+
+  test('renderScenarioEditorHtml includes palette layout and differentiation copy', () => {
+    const html = renderScenarioEditorHtml('ux2');
+    assert.match(html, /grid-template-columns:\s*200px 1fr 300px/u);
+    assert.match(html, /id="palette"/u);
+    assert.match(html, /Collection Runner executes many requests/u);
+    assert.match(html, /pickRequest/u);
+    assert.match(html, /openAuth/u);
+    assert.match(html, /runProgress/u);
+    assert.match(html, /cmdk/u);
+    assert.match(html, /id="run-status"/u);
+    assert.match(html, /id="bind-banner"/u);
+    assert.match(html, /id="result-strip"/u);
+    assert.match(html, /Manage Authentication…/u);
+    assert.doesNotMatch(html, /Show advanced/u);
+    assert.match(html, /How to bind/u);
+    assert.match(html, /Duration \(ms\)/u);
+    assert.match(html, /Open Scenario Report for details/u);
+    assert.match(html, /aria-label="Dismiss"/u);
+    assert.match(html, /aria-live="polite"/u);
+    assert.match(html, /prefers-reduced-motion/u);
+    assert.match(html, /Scenarios call Collection requests/u);
+    assert.match(html, /Bind requests first/u);
+    assert.match(html, /Run inputs/u);
+    assert.match(html, /Produced by steps/u);
+    assert.match(html, /Used by requests/u);
+    assert.match(html, /dismissBanner/u);
+    assert.match(html, /True branch/u);
+    assert.match(html, /False branch/u);
+    assert.doesNotMatch(html, /<h2>Authentication<\/h2>/u);
+  });
+
   test('collectVariablesFromUi script preserves sensitive from checkbox', () => {
     const html = renderScenarioEditorHtml('sens');
     assert.match(html, /function collectVariablesFromUi\(\)/u);

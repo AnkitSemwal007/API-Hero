@@ -9,12 +9,21 @@ import {
 } from 'vscode';
 
 import { COMMAND_IDS } from '../../constants';
+import {
+  formatLastRunDetail,
+  type ScenarioLastRunRecord,
+  type ScenarioLastRunStatus,
+} from './scenario-last-runs';
 
 export interface ScenarioTreeNode {
   readonly kind: 'scenario';
   readonly id: string;
   readonly name: string;
   readonly filePath: string;
+  readonly description?: string;
+  readonly tags?: readonly string[];
+  readonly lastRunStatus?: ScenarioLastRunStatus;
+  readonly lastRunAt?: string;
 }
 
 /**
@@ -38,16 +47,32 @@ export class ScenarioTreeDataProvider
   }
 
   public getTreeItem(element: ScenarioTreeNode): TreeItem {
+    const lastRun: ScenarioLastRunRecord | undefined =
+      element.lastRunStatus !== undefined && element.lastRunAt !== undefined
+        ? { status: element.lastRunStatus, at: element.lastRunAt }
+        : undefined;
+    const detail = formatLastRunDetail(lastRun);
+    const tooltipLines = [
+      element.name,
+      element.description,
+      element.tags !== undefined && element.tags.length > 0
+        ? `Tags: ${element.tags.join(', ')}`
+        : undefined,
+      detail,
+      element.filePath,
+    ].filter((line): line is string => typeof line === 'string' && line.length > 0);
+
     return {
       id: element.id,
       label: element.name,
-      description: element.filePath,
+      description: detail,
+      tooltip: tooltipLines.join('\n'),
       collapsibleState: TreeItemCollapsibleState.None,
       contextValue: 'scenario',
-      iconPath: new ThemeIcon('debug-breakpoint-log'),
+      iconPath: iconForStatus(element.lastRunStatus),
       command: {
         command: COMMAND_IDS.openScenarioEditor,
-        title: 'Open Scenario',
+        title: 'Open Scenario Editor',
         arguments: [element],
       },
     };
@@ -60,5 +85,20 @@ export class ScenarioTreeDataProvider
 
   public dispose(): void {
     this.onDidChangeTreeDataEmitter.dispose();
+  }
+}
+
+function iconForStatus(
+  status: ScenarioLastRunStatus | undefined,
+): ThemeIcon {
+  switch (status) {
+    case 'completed':
+      return new ThemeIcon('pass');
+    case 'failed':
+      return new ThemeIcon('error');
+    case 'cancelled':
+      return new ThemeIcon('circle-slash');
+    default:
+      return new ThemeIcon('debug-breakpoint-log');
   }
 }

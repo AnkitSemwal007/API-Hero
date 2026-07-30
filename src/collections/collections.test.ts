@@ -27,6 +27,7 @@ import {
   normalizeRelativePath,
   parseApiFileRequests,
   parseCollectionMarker,
+  serializeCollectionMarker,
   requestIdFor,
   treePathToRequest,
   type ApiFileReader,
@@ -535,6 +536,7 @@ test('parseCollectionMarker accepts name description order and sibling arrays', 
       name: 'A',
       description: 'B',
       order: 2,
+      defaultAuthenticationId: 'bearer-prod',
       folderOrder: ['Authentication', 'Users'],
       requestOrder: {
         '.': ['Health.api'],
@@ -547,12 +549,17 @@ test('parseCollectionMarker accepts name description order and sibling arrays', 
     name: 'A',
     description: 'B',
     order: 2,
+    defaultAuthenticationId: 'bearer-prod',
     folderOrder: ['Authentication', 'Users'],
     requestOrder: {
       '.': ['Health.api'],
       Authentication: ['Login.api'],
     },
   });
+  assert.match(
+    serializeCollectionMarker(parsed!),
+    /"defaultAuthenticationId": "bearer-prod"/u,
+  );
   assert.equal(parseCollectionMarker('not-json'), undefined);
   assert.equal(parseCollectionMarker('[]'), undefined);
 });

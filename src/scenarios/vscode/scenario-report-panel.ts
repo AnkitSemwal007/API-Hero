@@ -19,9 +19,13 @@ export class ScenarioRunReportPanel implements Disposable {
   private model: ReturnType<typeof buildScenarioReportViewModel> | undefined;
 
   public show(report: ExecutionReport): void {
+    const panelExisted = this.panel !== undefined;
     this.model = buildScenarioReportViewModel(report);
     this.ensurePanel(`Scenario Report: ${report.scenarioName}`);
-    void this.postInit();
+    // New webview posts init once on `ready`; existing panel needs an immediate re-init.
+    if (panelExisted) {
+      void this.postInit();
+    }
   }
 
   public dispose(): void {

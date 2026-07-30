@@ -47,11 +47,48 @@ encoded bytes, duplicate order, empty values, and fragments.
 
 ## Profiles, references, and precedence
 
-`@auth profileName` is the source-visible reference syntax. No grammar change
-is required. A request-level directive takes precedence over a document-level
-directive, which takes precedence over the explicit session default selected by
-`API Hero: Select Authentication Profile`. If none exists, `none` is used.
-The picker does not edit `.api` files or persist a default.
+`@auth profileName` is the source-visible reference syntax for **Saved
+Authentication**. No grammar change is required. Precedence:
+
+1. Request `@auth` / saved auth on the request
+2. Document `@auth` (folded into the request reference by the builder)
+3. Collection `defaultAuthenticationId` (shallow; from `api-hero.collection.json`)
+4. Session default from **API Hero: Select Authentication**
+5. None
+
+**One-shot Authentication** is runtime-only: Bearer (or other) credentials pasted
+in the Request Editor for a single Send. One-shot overrides the precedence list
+above for that run and is **never** written to `.api` / `@auth` / settings.
+After a successful one-shot Send, the host may offer **Save as Authentication**,
+which creates a secret-backed profile via Secret Storage.
+
+## Session and health
+
+Each Authentication profile may have a **Session**: non-secret metadata
+(`status`, token presence flags, expiry, last tested / authenticated) plus
+optional Login API configuration. Access and refresh token material live only in
+Secret Storage (`sessionAccessToken` / `sessionRefreshToken`). Health is
+**derived** from the session (Never tested / Healthy … / Unauthorized /
+Expired / Token expires in Xm / missing secret) — never a permanent green
+"Connected" badge.
+
+Bearer and API-key decoration prefer a present, non-expired session access token
+over the profile's static credential when resolving.
+
+## Login API
+
+Login API is configuration on Authentication (session.login), not a separate
+Connection. **API Hero: Run Authentication Login** prompts for credentials
+(Secret Storage), executes the login request through the Request Engine (no raw
+`fetch`), detects token fields (`detectAuthTokensInJson`), and updates Session +
+Secret Storage. Response viewer **Use as Authentication** applies the same
+session write path from a successful JSON body.
+
+**Phase 2 (intentional):** Auth Manager **Login** and **Test Authentication**
+health probes may use `RequestExecutor` for a single diagnostic request. Full
+OAuth / refresh flows (when added) must still go through `ExecutionOrchestrator`.
+
+The picker does not edit `.api` files or persist a session default into source.
 
 Non-secret profile metadata lives in `apiHero.authentication.profiles`:
 
@@ -143,6 +180,10 @@ flows, refresh tokens, persist variable values, or render credentials.
 
 **API Hero: Manage Authentication** opens the Auth Manager webview
 (`src/auth/vscode/auth-manager-panel.ts`). It edits
-`apiHero.authentication.profiles` metadata and prompts for Secret Storage
-writes; the webview never receives cleartext secrets after storage. This panel
-is not an Activity Bar view — Activity Bar remains Collections, Execution, and History.
+`apiHero.authentication.profiles` metadata. Secrets are entered inline in the
+manager (cleartext only while editing) and posted once to Secret Storage; the
+webview then shows a masked status only. InputBox remains a fallback for
+command-palette paths. Phase 2 adds templates, Login API wizard steps, Test
+result summaries, and shared masked preview helpers — architecture is unchanged.
+This panel is not an Activity Bar view — Activity Bar remains Collections,
+Execution, and History.

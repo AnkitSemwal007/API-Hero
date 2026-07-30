@@ -22,6 +22,8 @@ export const UNIT_TEST_GLOBS = Object.freeze([
   'dist/collection-runner/vscode/*.test.js',
   'dist/scenarios/*.test.js',
   'dist/scenarios/graph/*.test.js',
+  'dist/scenarios/templates/*.test.js',
+  'dist/scenarios/ui-model/*.test.js',
   'dist/scenarios/validation/*.test.js',
   'dist/scenarios/variables/*.test.js',
   'dist/scenarios/execution/*.test.js',
