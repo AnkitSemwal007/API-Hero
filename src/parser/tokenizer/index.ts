@@ -43,6 +43,7 @@ class TokenizerCursor {
   private column = 0;
   private atLineStart = true;
   private inHeaderValue = false;
+  private inDirectiveValue = false;
   private pendingHeaderColon = false;
 
   public constructor(
@@ -79,7 +80,16 @@ class TokenizerCursor {
       if (this.startsWith('{{')) {
         this.scanVariable(start);
       } else {
-        this.scanHeaderValue(start);
+        this.scanOpaqueLineValue(start, TokenKind.HeaderValue);
+      }
+      return;
+    }
+
+    if (this.inDirectiveValue) {
+      if (this.startsWith('{{')) {
+        this.scanVariable(start);
+      } else {
+        this.scanOpaqueLineValue(start, TokenKind.DirectiveValue);
       }
       return;
     }
@@ -186,10 +196,18 @@ class TokenizerCursor {
     this.emit(TokenKind.Newline, start, '\n');
     this.atLineStart = true;
     this.inHeaderValue = false;
+    this.inDirectiveValue = false;
     this.pendingHeaderColon = false;
   }
 
-  private scanHeaderValue(start: Position): void {
+  /**
+   * Scans one opaque free-text chunk in header-value or directive-value mode.
+   * Stops before whitespace, newline, or `{{` so variables stay separate tokens.
+   */
+  private scanOpaqueLineValue(
+    start: Position,
+    kind: TokenKind.HeaderValue | TokenKind.DirectiveValue,
+  ): void {
     while (!this.isAtEnd()) {
       const character = this.peek();
       if (
@@ -203,7 +221,7 @@ class TokenizerCursor {
       }
       this.advance();
     }
-    this.emit(TokenKind.HeaderValue, start);
+    this.emit(kind, start);
   }
 
   private scanDirective(start: Position): void {
@@ -220,6 +238,7 @@ class TokenizerCursor {
       return;
     }
     this.emit(TokenKind.Directive, start, this.slice(start).slice(1));
+    this.inDirectiveValue = true;
   }
 
   private scanVariable(start: Position): void {

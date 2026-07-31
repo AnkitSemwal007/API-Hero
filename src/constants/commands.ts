@@ -10,7 +10,9 @@ export const COMMAND_IDS = {
   manageAuthProfiles: 'apiHero.manageAuthProfiles',
   selectAuthentication: 'apiHero.selectAuthentication',
   initializeProjectStore: 'apiHero.initializeProjectStore',
+  resetWorkspace: 'apiHero.resetWorkspace',
   refreshCollections: 'apiHero.refreshCollections',
+
   filterCollections: 'apiHero.filterCollections',
   revealActiveRequest: 'apiHero.revealActiveRequest',
   openCollectionRequest: 'apiHero.openCollectionRequest',
@@ -91,7 +93,9 @@ export const LEGACY_COMMAND_IDS = {
   manageAuthProfiles: 'apiRunner.manageAuthProfiles',
   selectAuthentication: 'apiRunner.selectAuthentication',
   initializeProjectStore: 'apiRunner.initializeProjectStore',
+  resetWorkspace: 'apiRunner.resetWorkspace',
   refreshCollections: 'apiRunner.refreshCollections',
+
   filterCollections: 'apiRunner.filterCollections',
   revealActiveRequest: 'apiRunner.revealActiveRequest',
   openCollectionRequest: 'apiRunner.openCollectionRequest',

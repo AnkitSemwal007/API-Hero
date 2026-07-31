@@ -250,6 +250,8 @@ describe('collection-run-report-html', () => {
     assert.deepEqual(details?.dependencyLabels, [
       'List users → Create user (accessToken)',
     ]);
+    // Presentation already identifies the request — no plan-derived fallback.
+    assert.equal(details?.requestInfo, undefined);
     assert.equal(details?.timeline?.startedAt, '2026-07-27T10:00:00.000Z');
     assert.equal(details?.timeline?.durationLabel, '120 ms');
     assert.equal(details?.timeline?.durationLabel, '120 ms');
@@ -274,6 +276,115 @@ describe('collection-run-report-html', () => {
       (details?.presentation as { response?: unknown } | undefined)?.response,
       undefined,
     );
+  });
+
+  test('categorized failure counts flow into the summary model', () => {
+    const model = buildCollectionRunReportModel(sampleSummary());
+    assert.equal(model.assertionFailures, 1);
+    assert.equal(model.preconditionFailures, 0);
+    assert.equal(model.transportFailures, 0);
+    assert.equal(model.extractionFailures, 0);
+  });
+
+  test('precondition failures expose Details without a presentation', () => {
+    const base = sampleSummary();
+    const withPrecondition: RunSummary = {
+      ...base,
+      results: [
+        base.results[0]!,
+        {
+          requestId: 'req_fail',
+          ordinal: 1,
+          label: 'Create user',
+          outcome: RequestRunOutcomeKind.Failed,
+          message: 'Validation Failed\nUndefined variable "productId"',
+          failureDiagnostics: {
+            category: 'precondition',
+            reason: 'Undefined variable "productId"',
+            httpRequestSent: false,
+            failedAtStage: 'variables',
+          },
+        },
+      ],
+      statistics: {
+        ...base.statistics,
+        assertionFailures: 0,
+        preconditionFailures: 1,
+      },
+    };
+
+    const model = buildCollectionRunReportModel(withPrecondition);
+    const row = model.rows[1];
+    assert.equal(model.preconditionFailures, 1);
+    assert.equal(row?.message, 'Validation Failed\nUndefined variable "productId"');
+    const details = row?.details;
+    assert.ok(details !== undefined, 'failure rows must expose Details');
+    assert.equal(details?.presentation, undefined);
+    assert.equal(details?.timeline, undefined);
+    assert.deepEqual(details?.failure, {
+      statusLabel: 'Validation Failed',
+      reason: 'Undefined variable "productId"',
+      stageLabel: 'Variable resolution',
+      httpRequestSent: false,
+      facts: ['HTTP request not sent'],
+    });
+    assert.deepEqual(details?.requestInfo, {
+      label: 'Create user',
+      method: 'POST',
+      url: 'https://example.test/users',
+    });
+  });
+
+  test('failure facts report resolved variables and a sent HTTP request', () => {
+    const base = sampleSummary();
+    const withFacts: RunSummary = {
+      ...base,
+      results: [
+        base.results[0]!,
+        {
+          ...base.results[1]!,
+          resolvedVariables: [
+            {
+              name: 'baseUrl',
+              scope: 'environment',
+              sensitive: false,
+              displayValue: 'https://example.test',
+            },
+          ],
+        },
+      ],
+    };
+
+    const details = buildCollectionRunReportModel(withFacts).rows[1]?.details;
+    assert.deepEqual(details?.failure, {
+      statusLabel: 'Assertion Failed',
+      reason: 'Expected status 200 but received 500.',
+      stageLabel: 'Assertions',
+      httpRequestSent: true,
+      facts: ['Variables resolved', 'HTTP request sent'],
+    });
+  });
+
+  test('passed rows keep their existing Details shape', () => {
+    const model = buildCollectionRunReportModel(sampleSummary());
+    assert.equal(model.rows[0]?.details, undefined);
+    assert.equal(model.rows[0]?.message, undefined);
+  });
+
+  test('renderCollectionRunReportHtml renders categorized chips and HTTP-not-sent section', () => {
+    const html = renderCollectionRunReportHtml('reportNonce');
+    assert.match(html, /Validation Failures/u);
+    assert.match(html, /HTTP\/Network Failures/u);
+    assert.match(html, /Assertion Failures/u);
+    assert.match(html, /Extraction Failures/u);
+    assert.match(html, /Execution Status/u);
+    assert.match(html, /Failure Reason/u);
+    assert.match(html, /Execution Stage/u);
+    assert.match(html, /HTTP Request — Not Sent/u);
+    assert.match(html, /Request Information/u);
+    assert.match(html, /failure-facts/u);
+    // Details must not fabricate a timestamped pipeline history.
+    assert.doesNotMatch(html, /stage-timeline/u);
   });
 
   test('producedVariablesLabel formats names only, never values', () => {
@@ -322,6 +433,28 @@ describe('collection-run-report-html', () => {
     assert.match(html, /vars-produced/);
     assert.match(html, /vars-consumed/);
     assert.match(html, /skip-reason/);
+  });
+
+  test('Assertions section surfaces Expected/Actual without nested expanders', () => {
+    const html = renderCollectionRunReportHtml('reportNonce');
+    assert.match(html, /function renderAssertionsSection/u);
+    assert.match(html, /ASSERTION_DETAIL_VALUE_MAX_CHARS/u);
+    assert.match(html, /truncateAssertionDetailValue/u);
+    assert.match(html, /<dt>Expected<\/dt>/u);
+    assert.match(html, /<dt>Actual<\/dt>/u);
+    assert.match(html, /assert-heading/u);
+    assert.match(html, /assert-status muted-inline">Passed/u);
+    assert.match(html, /assert-status muted-inline">Skipped/u);
+    assert.doesNotMatch(html, /<details class="assert-detail">/u);
+    assert.match(
+      html,
+      /openAssertions[\s\S]*id: 'assertions'[\s\S]*open: openAssertions/u,
+    );
+    assert.match(
+      html,
+      /assertionSummary\.failed[\s\S]*assertionSummary\.malformed/u,
+    );
+    assert.doesNotMatch(html, /stageLabel === 'Assertions'/u);
   });
 
   test('formatDuration handles missing and large values', () => {
@@ -630,6 +763,10 @@ function sampleDependencySummary(): RunSummary {
       assertionsPassed: 0,
       assertionsFailed: 0,
       assertionsTotal: 0,
+      preconditionFailures: 0,
+      transportFailures: 0,
+      assertionFailures: 0,
+      extractionFailures: 0,
     },
     completedAt: '2026-07-21T10:00:01.000Z',
     status: CollectionRunStatus.Completed,
@@ -688,7 +825,13 @@ function sampleSummary(): RunSummary {
         outcome: RequestRunOutcomeKind.Failed,
         durationMs: 80,
         statusCode: 500,
-        message: 'Assertions failed.',
+        message: 'Assertion Failed\nExpected status 200 but received 500.',
+        failureDiagnostics: {
+          category: 'assertion',
+          reason: 'Expected status 200 but received 500.',
+          httpRequestSent: true,
+          failedAtStage: 'assertions',
+        },
         assertionsPassed: 1,
         assertionsFailed: 1,
         assertionsTotal: 2,
@@ -705,6 +848,10 @@ function sampleSummary(): RunSummary {
       assertionsPassed: 3,
       assertionsFailed: 1,
       assertionsTotal: 4,
+      preconditionFailures: 0,
+      transportFailures: 0,
+      assertionFailures: 1,
+      extractionFailures: 0,
     },
     completedAt: '2026-07-21T10:00:01.000Z',
     status: CollectionRunStatus.Completed,

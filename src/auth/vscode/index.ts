@@ -25,7 +25,10 @@ export {
   promptAndStoreAuthSecret,
 } from './auth-secret-prompt';
 export { writeAuthManagerState } from './auth-settings-writer';
-export { registerAuth } from './register-auth';
+export {
+  AUTHENTICATION_SESSIONS_STATE_KEY,
+  registerAuth,
+} from './register-auth';
 export type {
   AuthRegistration,
   RegisterAuthOptions,

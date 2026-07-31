@@ -125,6 +125,54 @@ test('tokenizes generic directives without validating directive names', () => {
   assert.ok(tokens.some((token) => token.raw === '//user@example.test'));
 });
 
+test('treats directive values as opaque text until end of line', () => {
+  const result = tokenize(
+    [
+      '@description List products with the default page size (30).',
+      '@description Uses {{baseUrl}}',
+      '@description GET /products?page=1&limit=30',
+    ].join('\n'),
+  );
+  const values = result.tokens.filter(
+    (token) => token.kind === TokenKind.DirectiveValue,
+  );
+  const variables = result.tokens.filter(
+    (token) => token.kind === TokenKind.Variable,
+  );
+
+  assert.equal(result.diagnostics.length, 0);
+  assert.equal(
+    result.tokens.some((token) => token.kind === TokenKind.Parenthesis),
+    false,
+  );
+  assert.equal(
+    result.tokens.some((token) => token.kind === TokenKind.Number),
+    false,
+  );
+  assert.ok(values.some((token) => token.raw === '(30).'));
+  assert.ok(values.some((token) => token.raw === '/products?page=1&limit=30'));
+  assert.deepEqual(
+    variables.map((token) => token.normalized),
+    ['baseUrl'],
+  );
+  assert.equal(
+    result.tokens.filter((token) => token.kind === TokenKind.Directive).length,
+    3,
+  );
+});
+
+test('does not enter directive-value mode for invalid directive markers', () => {
+  const result = tokenize('@ (still-structured)\nGET /ok');
+
+  assert.ok(
+    result.tokens.some((token) => token.kind === TokenKind.Parenthesis),
+  );
+  assert.equal(
+    result.tokens.some((token) => token.kind === TokenKind.DirectiveValue),
+    false,
+  );
+});
+
 test('tokenizes JSON punctuation, strings, scalars, and numbers', () => {
   const tokens = significantTokens(
     '{"ok":true,"off":FALSE,"none":null,"n":-12.5e+2,"items":[0,+3]}',

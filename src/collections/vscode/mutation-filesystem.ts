@@ -34,11 +34,11 @@ export class VsCodeCollectionFilesystem implements CollectionFilesystem {
 
   public async delete(
     path: string,
-    options?: { recursive?: boolean },
+    options?: { recursive?: boolean; useTrash?: boolean },
   ): Promise<void> {
     await workspace.fs.delete(toUri(path), {
       recursive: options?.recursive === true,
-      useTrash: true,
+      useTrash: options?.useTrash ?? true,
     });
   }
 

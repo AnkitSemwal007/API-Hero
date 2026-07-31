@@ -6,7 +6,9 @@
 import {
   CollectionRunStatus,
   FailurePolicyKind,
+  RequestFailureCategory,
   RequestRunOutcomeKind,
+  describeFailureCategory,
   type DependencyEdge,
   type FailurePolicyKind as FailurePolicyKindType,
   type PlannedRequest,
@@ -70,6 +72,32 @@ export interface CollectionRunReportRequestDetails {
   /** Text labels for edges involving this request. */
   readonly dependencyLabels?: readonly string[];
   readonly timeline?: CollectionRunReportTimeline;
+  /** Projection of `RequestRunResult.failureDiagnostics` when present. */
+  readonly failure?: CollectionRunReportFailure;
+  /** Plan-derived request identity for rows that never reached the network. */
+  readonly requestInfo?: CollectionRunReportRequestInfo;
+}
+
+/**
+ * Failure facts for the Details panel. Every field is recorded data — no
+ * synthesized stage history and no invented timings.
+ */
+export interface CollectionRunReportFailure {
+  /** Category label, e.g. `Validation Failed`. */
+  readonly statusLabel: string;
+  readonly reason: string;
+  /** Human label for the single recorded stage, when one exists. */
+  readonly stageLabel?: string;
+  readonly httpRequestSent: boolean;
+  /** Factual checklist lines derived only from recorded data. */
+  readonly facts: readonly string[];
+}
+
+/** Plan-derived request identity shown when no presentation exists. */
+export interface CollectionRunReportRequestInfo {
+  readonly label: string;
+  readonly method?: string;
+  readonly url?: string;
 }
 
 /**
@@ -120,6 +148,14 @@ export interface CollectionRunReportModel {
   readonly skipped: number;
   readonly cancelled: number;
   readonly total: number;
+  /**
+   * Categorized failure breakdown (additive to {@link failed} / {@link skipped}).
+   * Chips render only for non-zero counts.
+   */
+  readonly preconditionFailures: number;
+  readonly transportFailures: number;
+  readonly assertionFailures: number;
+  readonly extractionFailures: number;
   readonly rows: readonly CollectionRunReportRow[];
   /** True when the dependency-aware execution order differs from plan membership order (§6.6, §10.1). */
   readonly reordered: boolean;
@@ -193,7 +229,7 @@ export function buildCollectionRunReportModel(
       result.assertionsFailed,
       result.assertionsTotal,
     );
-    const details = buildRequestDetails(result, edges, labelByRequestId);
+    const details = buildRequestDetails(result, planned, edges, labelByRequestId);
     return {
       requestId: result.requestId,
       ordinal: result.ordinal,
@@ -258,6 +294,10 @@ export function buildCollectionRunReportModel(
     skipped: stats.skipped,
     cancelled: stats.cancelled,
     total: stats.total,
+    preconditionFailures: stats.preconditionFailures,
+    transportFailures: stats.transportFailures,
+    assertionFailures: stats.assertionFailures,
+    extractionFailures: stats.extractionFailures,
     rows,
     reordered: dependencies?.reordered ?? false,
     dependencyEdges: edges.map((edge) => ({
@@ -324,6 +364,7 @@ export function buildLiveCollectionRunReportModel(
   const cancelled = session.results.filter(
     (result) => result.outcome === RequestRunOutcomeKind.Cancelled,
   ).length;
+  const failureCategories = countFailureCategories(session.results);
 
   const live = session.status === 'running';
   const status =
@@ -355,6 +396,7 @@ export function buildLiveCollectionRunReportModel(
     skipped,
     cancelled,
     total: plan.requests.length,
+    ...failureCategories,
     rows,
     reordered: dependencies?.reordered ?? false,
     dependencyEdges: edges.map((edge) => ({
@@ -371,6 +413,27 @@ export function buildLiveCollectionRunReportModel(
   };
 }
 
+/** Categorized failure counts for live sessions (no summary statistics yet). */
+function countFailureCategories(
+  results: readonly RequestRunResult[],
+): Pick<
+  CollectionRunReportModel,
+  | 'preconditionFailures'
+  | 'transportFailures'
+  | 'assertionFailures'
+  | 'extractionFailures'
+> {
+  const count = (category: RequestFailureCategory): number =>
+    results.filter((result) => result.failureDiagnostics?.category === category)
+      .length;
+  return {
+    preconditionFailures: count(RequestFailureCategory.Precondition),
+    transportFailures: count(RequestFailureCategory.Transport),
+    assertionFailures: count(RequestFailureCategory.Assertion),
+    extractionFailures: count(RequestFailureCategory.Extraction),
+  };
+}
+
 function mapResultRow(
   result: RequestRunResult,
   planned: PlannedRequest | undefined,
@@ -383,7 +446,7 @@ function mapResultRow(
     result.assertionsFailed,
     result.assertionsTotal,
   );
-  const details = buildRequestDetails(result, edges, labelByRequestId);
+  const details = buildRequestDetails(result, planned, edges, labelByRequestId);
   return {
     requestId: result.requestId,
     ordinal: result.ordinal,
@@ -463,6 +526,7 @@ function liveStatusLabel(
  */
 function buildRequestDetails(
   result: RequestRunResult,
+  planned: PlannedRequest | undefined,
   edges: readonly DependencyEdge[],
   labelByRequestId: ReadonlyMap<string, string>,
 ): CollectionRunReportRequestDetails | undefined {
@@ -479,7 +543,8 @@ function buildRequestDetails(
   const hasResolved =
     resolvedVariables !== undefined && resolvedVariables.length > 0;
   const hasDeps = dependencyLabels.length > 0;
-  if (!hasPresentation && !hasResolved && !hasDeps) {
+  const failure = buildFailureDetails(result);
+  if (!hasPresentation && !hasResolved && !hasDeps && failure === undefined) {
     return undefined;
   }
   const timeline =
@@ -490,12 +555,70 @@ function buildRequestDetails(
           completedAt: presentation.statistics.completedAt,
           durationLabel: formatDuration(presentation.statistics.durationMs),
         };
+  // Rows that never reached the network have no presentation to identify the
+  // request, so fall back to the plan entry (method / original URL).
+  const requestInfo =
+    hasPresentation || planned === undefined
+      ? undefined
+      : {
+          label: planned.label,
+          ...(planned.method.length === 0 ? {} : { method: planned.method }),
+          ...(planned.url.length === 0 ? {} : { url: planned.url }),
+        };
   return {
     ...(presentation === undefined ? {} : { presentation }),
     ...(hasResolved ? { resolvedVariables } : {}),
     ...(hasDeps ? { dependencyLabels } : {}),
     ...(timeline === undefined ? {} : { timeline }),
+    ...(failure === undefined ? {} : { failure }),
+    ...(requestInfo === undefined ? {} : { requestInfo }),
   };
+}
+
+/** Projects recorded failure diagnostics — never derives new conclusions. */
+function buildFailureDetails(
+  result: RequestRunResult,
+): CollectionRunReportFailure | undefined {
+  const diagnostics = result.failureDiagnostics;
+  if (diagnostics === undefined) {
+    return undefined;
+  }
+  const facts: string[] = [];
+  if (
+    result.resolvedVariables !== undefined &&
+    result.resolvedVariables.length > 0
+  ) {
+    facts.push('Variables resolved');
+  }
+  facts.push(
+    diagnostics.httpRequestSent ? 'HTTP request sent' : 'HTTP request not sent',
+  );
+  const stageLabel =
+    diagnostics.failedAtStage === undefined
+      ? undefined
+      : describeFailureStage(diagnostics.failedAtStage);
+  return {
+    statusLabel: describeFailureCategory(diagnostics.category),
+    reason: diagnostics.reason,
+    httpRequestSent: diagnostics.httpRequestSent,
+    ...(stageLabel === undefined ? {} : { stageLabel }),
+    facts,
+  };
+}
+
+const FAILURE_STAGE_LABELS: Readonly<Record<string, string>> = Object.freeze({
+  parse: 'Parsing',
+  validate: 'Validation',
+  variables: 'Variable resolution',
+  authentication: 'Authentication',
+  build: 'Request build',
+  transport: 'HTTP transport',
+  assertions: 'Assertions',
+  extraction: 'Extraction',
+});
+
+function describeFailureStage(stage: string): string {
+  return FAILURE_STAGE_LABELS[stage] ?? stage;
 }
 
 /**
@@ -902,7 +1025,15 @@ td.assertions-fail { color: var(--vscode-testing-iconFailed, var(--vscode-errorF
 .message {
   color: var(--vscode-descriptionForeground);
   font-size: .88em; overflow-wrap: anywhere; margin-top: var(--ah-space-1);
+  /* Failure summaries are two lines (category then reason) — keep the break. */
+  white-space: pre-line;
 }
+.message .message-title {
+  display: block; font-weight: 600;
+  color: var(--vscode-errorForeground);
+}
+.failure-facts { margin: 8px 0 0; padding: 0 0 0 1.1em; }
+.failure-facts li { padding: 1px 0; color: var(--vscode-descriptionForeground); }
 .message.skip-reason { color: var(--vscode-editorWarning-foreground); }
 .vars-produced {
   color: var(--vscode-charts-green, var(--vscode-terminal-ansiGreen, #89d185));
@@ -996,22 +1127,26 @@ tr.detail-row td {
   margin: 0; padding: 0; list-style: none;
 }
 .assert-item, .extract-item, .resolved-item, .dep-list li {
-  padding: 4px 0; border-bottom: 1px solid var(--vscode-panel-border);
+  padding: 6px 0; border-bottom: 1px solid var(--vscode-panel-border);
 }
 .assert-item:last-child, .extract-item:last-child,
 .resolved-item:last-child, .dep-list li:last-child { border-bottom: none; }
-.assert-outcome {
-  display: inline-block; min-width: 4.5rem;
-  font-size: .8em; font-weight: 600; text-transform: uppercase;
-  margin-right: 6px;
+.assert-heading {
+  display: flex; align-items: baseline; gap: 6px;
+  overflow-wrap: anywhere;
 }
-.assert-pass .assert-outcome { color: var(--vscode-testing-iconPassed, #89d185); }
-.assert-fail .assert-outcome { color: var(--vscode-testing-iconFailed, var(--vscode-errorForeground)); }
-.assert-skip .assert-outcome { color: var(--vscode-descriptionForeground); }
-.assert-detail { margin-top: 4px; color: var(--vscode-descriptionForeground); }
-.assert-detail dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; margin: 4px 0 0; }
-.assert-detail dt { margin: 0; }
-.assert-detail dd { margin: 0; }
+.assert-marker { flex-shrink: 0; line-height: 1.2; }
+.assert-pass .assert-marker { color: var(--vscode-testing-iconPassed, #89d185); }
+.assert-fail .assert-marker { color: var(--vscode-testing-iconFailed, var(--vscode-errorForeground)); }
+.assert-skip .assert-marker { color: var(--vscode-descriptionForeground); }
+.assert-status { margin: 4px 0 0; font-size: .9em; }
+.assert-detail {
+  display: grid; grid-template-columns: auto 1fr; gap: 2px 8px;
+  margin: 4px 0 0; color: var(--vscode-descriptionForeground);
+}
+.assert-detail > div { display: contents; }
+.assert-detail dt { margin: 0; font-weight: 600; }
+.assert-detail dd { margin: 0; overflow-wrap: anywhere; }
 .failure-block {
   padding: 8px; border-radius: 3px;
   border: 1px solid var(--vscode-inputValidation-errorBorder, var(--vscode-errorForeground));
@@ -1134,6 +1269,16 @@ const REPORT_SCRIPT = `
       '</ul>';
   }
 
+  /** Bound Expected/Actual in Details so auto-open Assertions cannot dump huge bodies. */
+  var ASSERTION_DETAIL_VALUE_MAX_CHARS = 500;
+
+  function truncateAssertionDetailValue(value) {
+    if (typeof value !== 'string' || value.length <= ASSERTION_DETAIL_VALUE_MAX_CHARS) {
+      return value;
+    }
+    return value.slice(0, ASSERTION_DETAIL_VALUE_MAX_CHARS - 1) + '…';
+  }
+
   function renderAssertionsSection(presentation) {
     if (!presentation.assertions) {
       return '<p class="muted-inline">No assertions</p>';
@@ -1146,24 +1291,41 @@ const REPORT_SCRIPT = `
       items.map(function (item) {
         const icon = item.outcome === 'passed' ? 'pass'
           : item.outcome === 'skipped' ? 'skip' : 'fail';
-        let failure = '';
+        const marker = item.outcome === 'passed' ? '✅'
+          : item.outcome === 'skipped' ? '⊘' : '❌';
+        let detail = '';
         if (item.failure) {
-          failure = '<details class="assert-detail"><summary>Details</summary><dl>' +
-            '<div><dt>Reason</dt><dd>' + escapeHtml(item.failure.reason) + '</dd></div>' +
-            (item.failure.expected !== undefined
-              ? '<div><dt>Expected</dt><dd><code>' + escapeHtml(item.failure.expected) + '</code></dd></div>'
-              : '') +
-            (item.failure.actual !== undefined
-              ? '<div><dt>Actual</dt><dd><code>' + escapeHtml(item.failure.actual) + '</code></dd></div>'
-              : '') +
-            (item.failure.context !== undefined
-              ? '<div><dt>Context</dt><dd>' + escapeHtml(item.failure.context) + '</dd></div>'
-              : '') +
-            '</dl></details>';
+          let rows = '';
+          if (item.failure.expected !== undefined) {
+            rows += '<div><dt>Expected</dt><dd><code>' +
+              escapeHtml(truncateAssertionDetailValue(item.failure.expected)) +
+              '</code></dd></div>';
+          }
+          if (item.failure.actual !== undefined) {
+            rows += '<div><dt>Actual</dt><dd><code>' +
+              escapeHtml(truncateAssertionDetailValue(item.failure.actual)) +
+              '</code></dd></div>';
+          }
+          if (item.failure.reason !== undefined) {
+            rows += '<div><dt>Reason</dt><dd>' +
+              escapeHtml(item.failure.reason) + '</dd></div>';
+          }
+          if (item.failure.context !== undefined) {
+            rows += '<div><dt>Context</dt><dd>' +
+              escapeHtml(item.failure.context) + '</dd></div>';
+          }
+          detail = rows.length > 0
+            ? '<dl class="assert-detail">' + rows + '</dl>'
+            : '';
+        } else if (item.outcome === 'passed') {
+          detail = '<p class="assert-status muted-inline">Passed</p>';
+        } else if (item.outcome === 'skipped') {
+          detail = '<p class="assert-status muted-inline">Skipped</p>';
         }
         return '<li class="assert-item assert-' + icon + '">' +
-          '<span class="assert-outcome">' + escapeHtml(item.outcome) + '</span>' +
-          '<code>' + escapeHtml(item.text) + '</code>' + failure + '</li>';
+          '<div class="assert-heading"><span class="assert-marker" aria-hidden="true">' +
+          marker + '</span><code>' + escapeHtml(item.text) + '</code></div>' +
+          detail + '</li>';
       }).join('') +
       '</ul>';
   }
@@ -1220,18 +1382,92 @@ const REPORT_SCRIPT = `
       '</dl>';
   }
 
+  function renderRowMessage(row) {
+    if (row.skipReason) {
+      return '<div class="message skip-reason">' + escapeHtml(row.skipReason) + '</div>';
+    }
+    if (!row.message) {
+      return '';
+    }
+    const breakAt = row.message.indexOf('\\n');
+    if (breakAt < 0) {
+      return '<div class="message">' + escapeHtml(row.message) + '</div>';
+    }
+    return '<div class="message"><span class="message-title">' +
+      escapeHtml(row.message.slice(0, breakAt)) + '</span>' +
+      escapeHtml(row.message.slice(breakAt + 1)) + '</div>';
+  }
+
+  function renderFailureSection(failure) {
+    let html = '<dl class="exec-grid">' +
+      '<dt>Execution Status</dt><dd>' + escapeHtml(failure.statusLabel) + '</dd>' +
+      '<dt>Failure Reason</dt><dd>' + escapeHtml(failure.reason) + '</dd>' +
+      (failure.stageLabel
+        ? '<dt>Execution Stage</dt><dd>' + escapeHtml(failure.stageLabel) + '</dd>'
+        : '') +
+      '</dl>';
+    const facts = failure.facts || [];
+    if (facts.length > 0) {
+      html += '<ul class="failure-facts">' +
+        facts.map(function (fact) {
+          return '<li>' + escapeHtml(fact) + '</li>';
+        }).join('') +
+        '</ul>';
+    }
+    return html;
+  }
+
+  function renderHttpNotSentSection() {
+    return '<p>API Hero did not send an HTTP request for this row.</p>';
+  }
+
+  function renderRequestInfoSection(info) {
+    return '<dl class="exec-grid">' +
+      '<dt>Request</dt><dd>' + escapeHtml(info.label) + '</dd>' +
+      (info.method ? '<dt>Method</dt><dd>' + escapeHtml(info.method) + '</dd>' : '') +
+      (info.url ? '<dt>URL</dt><dd><code>' + escapeHtml(info.url) + '</code></dd>' : '') +
+      '</dl>';
+  }
+
   function renderDetailPanel(details) {
     if (!details) {
       return '<p class="muted-inline">No debugger details for this request.</p>';
     }
     const presentation = details.presentation;
+    const failure = details.failure;
     const sections = [];
-    sections.push({
-      id: 'timeline',
-      label: 'Timeline',
-      body: renderTimelineSection(details),
-      open: false,
-    });
+    if (failure) {
+      sections.push({
+        id: 'failure',
+        label: failure.statusLabel,
+        body: renderFailureSection(failure),
+        open: true,
+      });
+    }
+    if (details.requestInfo) {
+      sections.push({
+        id: 'request-info',
+        label: 'Request Information',
+        body: renderRequestInfoSection(details.requestInfo),
+        open: !presentation,
+      });
+    }
+    if (failure && !failure.httpRequestSent) {
+      sections.push({
+        id: 'http-not-sent',
+        label: 'HTTP Request — Not Sent',
+        body: renderHttpNotSentSection(),
+        open: false,
+      });
+    }
+    if (details.timeline) {
+      sections.push({
+        id: 'timeline',
+        label: 'Timeline',
+        body: renderTimelineSection(details),
+        open: false,
+      });
+    }
     if (presentation) {
       sections.push({
         id: 'response',
@@ -1259,11 +1495,18 @@ const REPORT_SCRIPT = `
         body: renderExtractionSection(presentation),
         open: false,
       });
+      const assertionSummary = presentation.assertions &&
+        presentation.assertions.summary;
+      const openAssertions = !!(
+        assertionSummary &&
+        ((assertionSummary.failed || 0) +
+          (assertionSummary.malformed || 0) > 0)
+      );
       sections.push({
         id: 'assertions',
         label: 'Assertions',
         body: renderAssertionsSection(presentation),
-        open: false,
+        open: openAssertions,
       });
     }
     sections.push({
@@ -1291,14 +1534,24 @@ const REPORT_SCRIPT = `
     if (!model) {
       return;
     }
+    const categoryChip = function (label, count) {
+      return (count || 0) > 0 ? [statChip(label, String(count), true)] : [];
+    };
     const chips = [
       statChip('Passed', String(model.passed), model.failed === 0),
       statChip('Failed', String(model.failed), model.failed > 0),
-      statChip('Skipped', String(model.skipped), false),
-      statChip('Duration', model.durationLabel, false),
-      statChip('Average', model.averageDurationLabel, false),
-      statChip('Assertions', model.assertionsLabel, false),
-    ].join('');
+    ].concat(
+      categoryChip('Validation Failures', model.preconditionFailures),
+      categoryChip('HTTP/Network Failures', model.transportFailures),
+      categoryChip('Assertion Failures', model.assertionFailures),
+      categoryChip('Extraction Failures', model.extractionFailures),
+      [
+        statChip('Skipped', String(model.skipped), false),
+        statChip('Duration', model.durationLabel, false),
+        statChip('Average', model.averageDurationLabel, false),
+        statChip('Assertions', model.assertionsLabel, false),
+      ],
+    ).join('');
 
     const rows = visibleRows();
     const orderBadge = model.reordered
@@ -1326,11 +1579,7 @@ const REPORT_SCRIPT = `
             ? '<div class="meta"><span class="' + escapeAttribute(row.methodBadgeClass) + '">' +
               escapeHtml(row.method) + '</span> ' + escapeHtml(row.url) + '</div>'
             : '';
-          const message = row.skipReason
-            ? '<div class="message skip-reason">' + escapeHtml(row.skipReason) + '</div>'
-            : row.message
-              ? '<div class="message">' + escapeHtml(row.message) + '</div>'
-              : '';
+          const message = renderRowMessage(row);
           const producedVariables = row.producedVariablesLabel
             ? '<div class="vars-produced">' + escapeHtml(row.producedVariablesLabel) + '</div>'
             : '';

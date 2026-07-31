@@ -83,6 +83,14 @@ paths; `mapOrchestratorResult` builds `RequestRunResult.presentation` once via
 Expandable per-request Details (Response / Headers / Cookies / Extracted /
 Assertions / Execution Details / Dependencies / Timeline) and report-level
 Variable Trace are derived from that presentation plus plan dependency edges.
+Non-passing rows additionally project `RequestRunResult.failureDiagnostics`
+(category, secret-free reason, `httpRequestSent`, single recorded stage) —
+derived once in `mapOrchestratorResult` from the orchestrator's precondition
+`message` / `preconditionStage`, the presented transport failure, the first
+presented assertion failure, or the blocking extract outcome. The panel shows
+Execution Status / Failure Reason / Execution Stage and an
+`HTTP Request — Not Sent` section instead of a misleading empty response; it
+never fabricates a timestamped stage timeline.
 There is **no** run persistence, retention, or history DB for debugger state —
 data lives only in the finished `RunSummary` held by the report panel.
 

@@ -34,7 +34,7 @@ flowchart TB
   OAPI --> SRC
 ```
 
-Activity Bar hosts **Collections**, **Execution**, and **History**. Environment Manager, Auth Manager, Overview, History Detail, Collection Run Report, OpenAPI wizard, and Response viewer are panels/editors opened on demand. Environments are **not** an Activity Bar view.
+Activity Bar hosts **Collections**, **Execution**, and **History** by default. **Scenarios** (`apiHero.explorer`) is progressively disclosed after a successful load or create, then sticky for the workspace. Environment Manager, Auth Manager, Overview, History Detail, Collection Run Report, OpenAPI wizard, and Response viewer are panels/editors opened on demand. Environments are **not** an Activity Bar view.
 
 ## Request lifecycle
 

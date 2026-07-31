@@ -13,7 +13,10 @@ export interface CollectionFilesystem {
   createDirectory(path: string): Promise<void>;
   readText(path: string): Promise<string>;
   writeText(path: string, content: string): Promise<void>;
-  delete(path: string, options?: { recursive?: boolean }): Promise<void>;
+  delete(
+    path: string,
+    options?: { recursive?: boolean; useTrash?: boolean },
+  ): Promise<void>;
   rename(oldPath: string, newPath: string): Promise<void>;
   copy(oldPath: string, newPath: string): Promise<void>;
   readDirectory(path: string): Promise<readonly CollectionDirectoryEntry[]>;

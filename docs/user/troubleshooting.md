@@ -28,6 +28,10 @@ History skips runs that never reached transport (parse/validate/variables/auth f
 - **Manage Environments** / **Manage Authentication** open webviews — not Activity Bar views.
 - Secret values never appear cleartext in managers after save; re-enter secrets when rotating.
 
+## Reset workspace data
+
+Use **API Hero: Reset Workspace...** from the Command Palette (no Explorer or Settings UI). Confirm the modal carefully: it permanently removes `.apihero` data (auth profiles, environments, workspace/local variables, scenarios, project config), request history (extension-wide), and related workspace state for the **primary** workspace folder. **Collections**, `.api` request files, collection variables (`api-hero.variables.json`), and project source code are preserved. Workspace settings (`apiHero.*`) are not cleared.
+
 ## Stubs
 
 **Run File**, **Account Login**, and **Account Logout** are not available and are

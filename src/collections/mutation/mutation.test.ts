@@ -60,7 +60,7 @@ class MemoryFs implements CollectionFilesystem {
 
   public async delete(
     path: string,
-    options?: { recursive?: boolean },
+    options?: { recursive?: boolean; useTrash?: boolean },
   ): Promise<void> {
     if (this.files.has(path)) {
       this.files.delete(path);

@@ -22,17 +22,19 @@ These are **account / file stubs**, not Authentication Login API.
 
 ## Environments and authentication
 
-| ID | Title |
-| --- | --- |
-| `apiHero.switchEnvironment` | Switch Environment |
-| `apiHero.manageEnvironments` | Manage Environments |
-| `apiHero.manageAuthProfiles` | Manage Authentication |
-| `apiHero.selectAuthentication` | Select Authentication |
-| `apiHero.testAuthentication` | Test Authentication |
-| `apiHero.runAuthenticationLogin` | Run Authentication Login |
-| `apiHero.saveAsAuthentication` | Save as Authentication |
-| `apiHero.useResponseAsAuthentication` | Use Response Token as Authentication |
-| `apiHero.setCollectionDefaultAuthentication` | Set Collection Default Authentication |
+| ID | Title | Notes |
+| --- | --- | --- |
+| `apiHero.switchEnvironment` | Switch Environment | |
+| `apiHero.manageEnvironments` | Manage Environments | |
+| `apiHero.manageAuthProfiles` | Manage Authentication | |
+| `apiHero.selectAuthentication` | Select Authentication | |
+| `apiHero.testAuthentication` | Test Authentication | |
+| `apiHero.runAuthenticationLogin` | Run Authentication Login | |
+| `apiHero.saveAsAuthentication` | Save as Authentication | |
+| `apiHero.useResponseAsAuthentication` | Use Response Token as Authentication | |
+| `apiHero.setCollectionDefaultAuthentication` | Set Collection Default Authentication | |
+| `apiHero.initializeProjectStore` | Initialize Project Store | |
+| `apiHero.resetWorkspace` | Reset Workspace... | Command Palette only; destructive confirm. Removes `.apihero` (auth, environments, workspace/local variables, scenarios, project config), request history (extension-wide / globalStorage), and related workspace state. Does **not** remove Collections, `.api` files, collection variables, or project source. Primary workspace folder only. |
 
 ## Collections
 
@@ -72,7 +74,7 @@ These are **account / file stubs**, not Authentication Login API.
 
 | ID | Title |
 | --- | --- |
-| `apiHero.focusScenarios` | Focus Scenarios |
+| `apiHero.focusScenarios` | Focus Scenarios (only when already visible; does not unlock the view) |
 | `apiHero.refreshScenarios` | Refresh Scenarios |
 | `apiHero.createScenario` | New Scenario |
 | `apiHero.openScenarioEditor` | Open Scenario Editor |

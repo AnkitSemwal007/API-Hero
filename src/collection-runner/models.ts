@@ -36,6 +36,41 @@ export const RequestRunOutcomeKind = {
 export type RequestRunOutcomeKind =
   (typeof RequestRunOutcomeKind)[keyof typeof RequestRunOutcomeKind];
 
+/**
+ * Closed taxonomy for why a request did not pass. Derived once in
+ * `mapOrchestratorResult` from data the pipeline already produced — never
+ * re-validated or re-classified downstream.
+ */
+export const RequestFailureCategory = {
+  Precondition: 'precondition',
+  Transport: 'transport',
+  Assertion: 'assertion',
+  Extraction: 'extraction',
+  Unread: 'unread',
+  Cancelled: 'cancelled',
+} as const;
+
+export type RequestFailureCategory =
+  (typeof RequestFailureCategory)[keyof typeof RequestFailureCategory];
+
+/**
+ * Secret-free diagnostics for a non-passing request. `reason` is the single
+ * source of truth; {@link RequestRunResult.message} is a concise summary
+ * derived from it and must never contradict it.
+ */
+export interface RequestFailureDiagnostics {
+  readonly category: RequestFailureCategory;
+  /** Secret-free human reason (SSoT for all failure text). */
+  readonly reason: string;
+  /** True when the orchestrator attached `execution` (a network attempt ran). */
+  readonly httpRequestSent: boolean;
+  /**
+   * Single recorded stage the request stopped at — the orchestrator's
+   * `preconditionStage` or a derived label. Never a synthetic stage timeline.
+   */
+  readonly failedAtStage?: string;
+}
+
 /** Terminal status of an entire collection run. */
 export const CollectionRunStatus = {
   Completed: 'completed',
@@ -174,6 +209,12 @@ export interface RequestRunResult {
   readonly statusCode?: number;
   /** Secret-free message for UI / summary. */
   readonly message?: string;
+  /**
+   * Typed failure facts for the Run Report Details panel. Omitted for passed
+   * requests and for policy skips that are not failures (dependency skips
+   * keep {@link skipReason} instead).
+   */
+  readonly failureDiagnostics?: RequestFailureDiagnostics;
   /** Assertion counts when the orchestrator evaluated expects for this attempt. */
   readonly assertionsPassed?: number;
   readonly assertionsFailed?: number;
@@ -224,6 +265,15 @@ export interface RunStatistics {
   readonly assertionsFailed: number;
   /** Sum of per-request assertion totals. */
   readonly assertionsTotal: number;
+  /**
+   * Categorized failure counts derived from
+   * {@link RequestRunResult.failureDiagnostics}. Additive breakdown of the
+   * existing `failed` / `skipped` totals — never a replacement for them.
+   */
+  readonly preconditionFailures: number;
+  readonly transportFailures: number;
+  readonly assertionFailures: number;
+  readonly extractionFailures: number;
 }
 
 /** Immutable summary produced when a run finishes, stops, or is cancelled. */
@@ -267,6 +317,29 @@ export interface RunProgressEvent {
   readonly lastResult?: RequestRunResult;
 }
 
+/**
+ * Human label for a failure category. Single source for the concise row
+ * summary (`message` first line) and the report's Execution Status section.
+ */
+export function describeFailureCategory(
+  category: RequestFailureCategory,
+): string {
+  switch (category) {
+    case RequestFailureCategory.Precondition:
+      return 'Validation Failed';
+    case RequestFailureCategory.Transport:
+      return 'Network Error';
+    case RequestFailureCategory.Assertion:
+      return 'Assertion Failed';
+    case RequestFailureCategory.Extraction:
+      return 'Extraction Failed';
+    case RequestFailureCategory.Unread:
+      return 'Request Unavailable';
+    case RequestFailureCategory.Cancelled:
+      return 'Cancelled';
+  }
+}
+
 /** Creates a new opaque run identifier. */
 export function createRunIdentifier(
   nowMs: number = Date.now(),
@@ -302,6 +375,10 @@ export function buildRunStatistics(
   let assertionsPassed = 0;
   let assertionsFailed = 0;
   let assertionsTotal = 0;
+  let preconditionFailures = 0;
+  let transportFailures = 0;
+  let assertionFailures = 0;
+  let extractionFailures = 0;
 
   for (const result of results) {
     switch (result.outcome) {
@@ -325,6 +402,22 @@ export function buildRunStatistics(
     assertionsPassed += result.assertionsPassed ?? 0;
     assertionsFailed += result.assertionsFailed ?? 0;
     assertionsTotal += result.assertionsTotal ?? 0;
+    switch (result.failureDiagnostics?.category) {
+      case RequestFailureCategory.Precondition:
+        preconditionFailures += 1;
+        break;
+      case RequestFailureCategory.Transport:
+        transportFailures += 1;
+        break;
+      case RequestFailureCategory.Assertion:
+        assertionFailures += 1;
+        break;
+      case RequestFailureCategory.Extraction:
+        extractionFailures += 1;
+        break;
+      default:
+        break;
+    }
   }
 
   return {
@@ -339,5 +432,9 @@ export function buildRunStatistics(
     assertionsPassed,
     assertionsFailed,
     assertionsTotal,
+    preconditionFailures,
+    transportFailures,
+    assertionFailures,
+    extractionFailures,
   };
 }

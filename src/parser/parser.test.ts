@@ -48,6 +48,88 @@ test('parses requests, headers, directives, comments, and variables', () => {
   );
 });
 
+test('treats @description free-text values as opaque through parseApiDocument', () => {
+  const cases = [
+    {
+      value: 'List products with the default page size (30).',
+      variables: [] as string[],
+    },
+    {
+      value: 'API version 2',
+      variables: [] as string[],
+    },
+    {
+      value: 'Uses {{baseUrl}}',
+      variables: ['baseUrl'],
+    },
+    {
+      value: '"Quoted text"',
+      variables: [] as string[],
+    },
+    {
+      value: 'https://dummyjson.com/products',
+      variables: [] as string[],
+    },
+    {
+      value: 'GET /products?page=1&limit=30',
+      variables: [] as string[],
+    },
+  ];
+
+  for (const testCase of cases) {
+    const result = parseSource(
+      [`@description ${testCase.value}`, 'GET /products'].join('\n'),
+    );
+
+    assert.equal(
+      result.diagnostics.length,
+      0,
+      `expected no diagnostics for: ${testCase.value}`,
+    );
+    assert.equal(
+      result.diagnostics.some((diagnostic) => diagnostic.severity === 'error'),
+      false,
+    );
+    assert.equal(result.ast.directives[0]?.knownName, 'description');
+    assert.equal(result.ast.directives[0]?.value, testCase.value);
+    assert.deepEqual(
+      result.ast.directives[0]?.variables.map((variable) => variable.name),
+      testCase.variables,
+    );
+    assert.equal(result.ast.requests[0]?.method, 'GET');
+    assert.equal(result.ast.requests[0]?.url, '/products');
+  }
+
+  const combined = parseSource(
+    [
+      '@description List products with the default page size (30).',
+      '@description API version 2',
+      '@description Uses {{baseUrl}}',
+      '@description "Quoted text"',
+      '@description https://dummyjson.com/products',
+      '@description GET /products?page=1&limit=30',
+      'GET /products',
+    ].join('\n'),
+  );
+
+  assert.equal(combined.diagnostics.length, 0);
+  assert.deepEqual(
+    combined.ast.directives.map((directive) => directive.value),
+    [
+      'List products with the default page size (30).',
+      'API version 2',
+      'Uses {{baseUrl}}',
+      '"Quoted text"',
+      'https://dummyjson.com/products',
+      'GET /products?page=1&limit=30',
+    ],
+  );
+  assert.deepEqual(
+    combined.ast.directives[2]?.variables.map((variable) => variable.name),
+    ['baseUrl'],
+  );
+});
+
 test('parses nested JSON literals and JSON variable placeholders', () => {
   const result = parseSource(
     [

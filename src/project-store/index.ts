@@ -15,6 +15,7 @@ export {
   MIGRATION_BACKUP_FILENAME,
   PROJECT_STORE_GITIGNORE_LINES,
   PROJECT_STORE_SCHEMA_VERSION,
+  SCENARIOS_DIRECTORY_NAME,
   VARIABLES_LOCAL_FILENAME,
   WORKSPACE_RELATIVE_PATH,
 } from './constants';
@@ -36,6 +37,7 @@ export {
   migrationBackupPath,
   projectStoreRootPath,
   sanitizeEnvironmentFileStem,
+  scenariosDirectoryPath,
   variablesLocalPath,
   workspaceDocumentPath,
 } from './paths';
@@ -57,6 +59,14 @@ export {
   ProjectStoreService,
 } from './project-store-service';
 export type { ProjectStoreServiceOptions } from './project-store-service';
+export {
+  resetWorkspaceStore,
+} from './reset-workspace';
+export type {
+  ResetWorkspaceFailure,
+  ResetWorkspaceStoreComponent,
+  ResetWorkspaceStoreResult,
+} from './reset-workspace';
 export type {
   AuthProfilesDocument,
   ConfigDocument,

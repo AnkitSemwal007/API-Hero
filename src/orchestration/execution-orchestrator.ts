@@ -184,6 +184,17 @@ export type RunRequestOutcome =
   | 'precondition-failed';
 
 /**
+ * Pipeline phase that rejected a request before `execute` was reached.
+ * Recorded as a single fact — the orchestrator keeps no stage timeline.
+ */
+export type PreconditionStage =
+  | 'parse'
+  | 'validate'
+  | 'variables'
+  | 'authentication'
+  | 'build';
+
+/**
  * Options for {@link ExecutionOrchestrator.runAtSourceLocation}.
  * Collection Runner uses this port with viewer/progress/notifications suppressed.
  */
@@ -239,6 +250,14 @@ export interface RunAtSourceLocationResult {
    * after successful variable resolve. Absent when resolve failed or never ran.
    */
   readonly resolvedVariables?: readonly ResolvedVariableSnapshot[];
+  /**
+   * Secret-free text explaining why the attempt could not proceed — the same
+   * string shown in the precondition notification. Callers that suppress
+   * notifications (Collection Runner) read it from here instead.
+   */
+  readonly message?: string;
+  /** Pipeline phase that produced {@link message} for precondition failures. */
+  readonly preconditionStage?: PreconditionStage;
 }
 
 const DEFAULT_PIPELINE: RequestExecutionPipeline = Object.freeze({
@@ -335,10 +354,11 @@ export class ExecutionOrchestrator {
     const showNotifications = options.showNotifications !== false;
 
     if (this.disposed) {
+      const message = 'API Hero is no longer active.';
       if (showNotifications) {
-        this.notifications.error('API Hero is no longer active.');
+        this.notifications.error(message);
       }
-      return { outcome: 'precondition-failed' };
+      return { outcome: 'precondition-failed', message };
     }
 
     this.active?.controller.abort('replaced');
@@ -393,6 +413,7 @@ export class ExecutionOrchestrator {
               run.id,
               `The selected request has a syntax error: ${syntaxErrors[0]!.message}`,
               showNotifications,
+              'parse',
             );
           }
 
@@ -409,6 +430,7 @@ export class ExecutionOrchestrator {
               run.id,
               `The selected request is invalid: ${semanticError.message}`,
               showNotifications,
+              'validate',
             );
           }
           if (run.controller.signal.aborted) {
@@ -434,6 +456,7 @@ export class ExecutionOrchestrator {
               run.id,
               `The selected request has unresolved variables: ${names}.`,
               showNotifications,
+              'variables',
             );
           }
           const resolvedVariables = buildResolvedVariableSnapshots(
@@ -472,6 +495,7 @@ export class ExecutionOrchestrator {
                 run.id,
                 error.message,
                 showNotifications,
+                'authentication',
               );
             }
             throw error;
@@ -681,10 +705,15 @@ export class ExecutionOrchestrator {
         return this.finishCancellationResult(run.id);
       }
       this.status.update({ kind: 'failed' });
+      const message = friendlyUnexpectedError(error);
       if (showNotifications) {
-        this.notifications.error(friendlyUnexpectedError(error));
+        this.notifications.error(message);
       }
-      return { outcome: 'precondition-failed' };
+      return {
+        outcome: 'precondition-failed',
+        message,
+        ...(isRequestBuildError(error) ? { preconditionStage: 'build' as const } : {}),
+      };
     } finally {
       if (this.isCurrent(run.id)) {
         this.active = undefined;
@@ -706,6 +735,7 @@ export class ExecutionOrchestrator {
     runId: number,
     message: string,
     showNotifications: boolean,
+    stage?: PreconditionStage,
   ): RunAtSourceLocationResult {
     if (!this.isCurrent(runId)) {
       return { outcome: 'replaced' };
@@ -714,7 +744,11 @@ export class ExecutionOrchestrator {
     if (showNotifications) {
       this.notifications.error(message);
     }
-    return { outcome: 'precondition-failed' };
+    return {
+      outcome: 'precondition-failed',
+      message,
+      ...(stage === undefined ? {} : { preconditionStage: stage }),
+    };
   }
 
   private finishCancellationResult(runId: number): RunAtSourceLocationResult {

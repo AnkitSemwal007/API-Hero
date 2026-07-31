@@ -1,6 +1,15 @@
 # Roadmap
 
-Honest near-term plan for **API Hero** after **2.5.0** (Authentication Premium UX + Scenario Experience; Scenarios Phase 1 foundation shipped in **2.4.0**). Product features through **2.3.x** already ship — Execution Center, Collection Runner / Run Report polish, dependency workflow, Collection Run Debugger, Managers (Environments, Auth), Overview, History Detail, OpenAPI wizard, Response copy/save/search, response variable extraction, and collection chaining (`@depends-on`, per-run store, collection variables). Those are not roadmap gaps.
+Honest near-term plan for **API Hero** after **2.6.0** (Scenarios progressive disclosure, project-store scenario paths, Reset Workspace, Run Report failure diagnostics; Authentication Premium UX + Scenario Experience shipped in **2.5.0**; Scenarios Phase 1 foundation in **2.4.0**). Product features through **2.3.x** already ship — Execution Center, Collection Runner / Run Report polish, dependency workflow, Collection Run Debugger, Managers (Environments, Auth), Overview, History Detail, OpenAPI wizard, Response copy/save/search, response variable extraction, and collection chaining (`@depends-on`, per-run store, collection variables). Those are not roadmap gaps.
+
+## Shipped in 2.6.0
+
+| Item | Notes |
+| --- | --- |
+| Scenarios progressive disclosure | Activity Bar Scenarios hidden until load/create; sticky per workspace |
+| Scenario storage consolidation | Canonical `.apihero/scenarios/` with legacy `.api-hero/scenarios` migration |
+| Reset Workspace | Command Palette–only destructive reset of API Hero workspace data |
+| Run Report failure diagnostics | Categorized failure details in Collection Run Report |
 
 ## Shipped in 2.5.0
 
@@ -13,7 +22,7 @@ Honest near-term plan for **API Hero** after **2.5.0** (Authentication Premium U
 
 | Item | Notes |
 | --- | --- |
-| Scenarios Phase 1 | `.api-hero/scenarios/*.scenario.json`, Scenario Editor, Run Reports, `apiHero.explorer` view |
+| Scenarios Phase 1 | `.apihero/scenarios/*.scenario.json`, Scenario Editor, Run Reports, `apiHero.explorer` view |
 
 ## Near term
 

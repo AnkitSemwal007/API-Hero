@@ -23,6 +23,9 @@ export const ENVIRONMENTS_DIRECTORY_NAME = 'environments';
 /** Relative directory for auth metadata. */
 export const AUTH_DIRECTORY_NAME = 'auth';
 
+/** Relative directory for scenario documents under the project store. */
+export const SCENARIOS_DIRECTORY_NAME = 'scenarios';
+
 /** Auth profiles metadata filename under `auth/`. */
 export const AUTH_PROFILES_FILENAME = 'profiles.json';
 
