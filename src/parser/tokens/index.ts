@@ -5,6 +5,8 @@ export enum TokenKind {
   HttpMethod = 'HttpMethod',
   Identifier = 'Identifier',
   Directive = 'Directive',
+  /** Opaque free-text chunk after a valid `@directive` until EOL (not structured syntax). */
+  DirectiveValue = 'DirectiveValue',
   HeaderName = 'HeaderName',
   HeaderValue = 'HeaderValue',
   Variable = 'Variable',

@@ -41,7 +41,10 @@ import { runSetCollectionDefaultAuthenticationCommand } from './set-collection-d
 /** Matches language-support `authentication.missing-secret` diagnostics. */
 const MISSING_SECRET_DIAGNOSTIC_CODE = 'authentication.missing-secret';
 const API_LANGUAGE_ID = 'api';
-const SESSIONS_STATE_KEY = 'apiHero.authentication.sessions';
+
+/** WorkspaceState key for persisted authentication sessions. */
+export const AUTHENTICATION_SESSIONS_STATE_KEY =
+  'apiHero.authentication.sessions';
 
 export interface RegisterAuthOptions {
   readonly context: ExtensionContext;
@@ -79,7 +82,7 @@ export function registerAuth(options: RegisterAuthOptions): AuthRegistration {
 
   const persistSessions = sessions.onDidChange(() => {
     void context.workspaceState.update(
-      SESSIONS_STATE_KEY,
+      AUTHENTICATION_SESSIONS_STATE_KEY,
       sessions.list().map((session) => ({ ...session })),
     );
   });
@@ -182,7 +185,9 @@ export function registerAuth(options: RegisterAuthOptions): AuthRegistration {
 
 function loadSessionStore(context: ExtensionContext): AuthenticationSessionStore {
   const store = new AuthenticationSessionStore();
-  const raw = context.workspaceState.get<unknown>(SESSIONS_STATE_KEY);
+  const raw = context.workspaceState.get<unknown>(
+    AUTHENTICATION_SESSIONS_STATE_KEY,
+  );
   if (Array.isArray(raw)) {
     const sessions: AuthenticationSession[] = [];
     for (const entry of raw) {

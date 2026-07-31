@@ -20,6 +20,8 @@ import {
   ScenarioEngine,
   ScenarioEventEmitter,
   ScenarioStorageService,
+  ensureScenariosRoot,
+  discoverScenariosInDiscoveryRoots,
   scenariosRootPath,
   buildScenarioFromTemplate,
   listScenarioTemplates,
@@ -47,6 +49,12 @@ import {
   findUnboundRequestSteps,
   formatUnboundRequestGuidance,
 } from './scenario-request-binding';
+import {
+  SCENARIOS_VISIBLE_CONTEXT_KEY,
+  SCENARIOS_VIEW_REVEALED_STATE_KEY,
+  resolveScenariosViewVisibility,
+  shouldApplyScenariosVisibleContext,
+} from './scenario-view-visibility';
 
 export interface RegisterScenariosOptions {
   readonly context: ExtensionContext;
@@ -225,16 +233,101 @@ export function registerScenarios(
     await context.workspaceState.update(SCENARIO_LAST_RUNS_STATE_KEY, next);
   };
 
+  /** Last applied `apiHero.scenariosVisible` value; skip redundant setContext. */
+  let lastScenariosVisible: boolean | undefined;
+
+  const applyScenariosVisibleContext = async (
+    visible: boolean,
+  ): Promise<void> => {
+    if (!shouldApplyScenariosVisibleContext(lastScenariosVisible, visible)) {
+      return;
+    }
+    lastScenariosVisible = visible;
+    await commands.executeCommand(
+      'setContext',
+      SCENARIOS_VISIBLE_CONTEXT_KEY,
+      visible,
+    );
+  };
+
+  const syncScenariosVisibility = async (
+    hasLoadedScenarios: boolean,
+  ): Promise<void> => {
+    const wasRevealed =
+      context.workspaceState.get<boolean>(SCENARIOS_VIEW_REVEALED_STATE_KEY) ===
+      true;
+    const { visible, shouldPersistReveal } = resolveScenariosViewVisibility({
+      hasLoadedScenarios,
+      wasRevealed,
+    });
+    if (shouldPersistReveal) {
+      await context.workspaceState.update(
+        SCENARIOS_VIEW_REVEALED_STATE_KEY,
+        true,
+      );
+    }
+    await applyScenariosVisibleContext(visible);
+  };
+
+  /** Persistently show Scenarios for this workspace (successful create only). */
+  const revealScenariosView = async (): Promise<void> => {
+    // Same resolve → persist → apply path as load sync (hasLoadedScenarios: true).
+    await syncScenariosVisibility(true);
+  };
+
+  const isScenariosViewVisible = (): boolean => {
+    const wasRevealed =
+      context.workspaceState.get<boolean>(SCENARIOS_VIEW_REVEALED_STATE_KEY) ===
+      true;
+    const hasLoadedScenarios = treeProvider.getChildren().length > 0;
+    return resolveScenariosViewVisibility({
+      hasLoadedScenarios,
+      wasRevealed,
+    }).visible;
+  };
+
+  // Restore sticky reveal before async discovery so returning workspaces do not
+  // briefly hide Scenarios. Never push false here — that can race past a
+  // successful refreshTree sync for workspaces that already have scenario files.
+  if (
+    context.workspaceState.get<boolean>(SCENARIOS_VIEW_REVEALED_STATE_KEY) ===
+    true
+  ) {
+    void applyScenariosVisibleContext(true);
+  }
+
   const refreshTree = async (): Promise<void> => {
     const folder = workspace.workspaceFolders?.[0];
     if (folder === undefined) {
       treeProvider.setScenarios([]);
+      await syncScenariosVisibility(false);
       return;
     }
-    const root = scenariosRootPath(folder.uri.fsPath);
-    const discovered = await storage.discover(root);
+    const { migration } = await ensureScenariosRoot(folder.uri.fsPath);
+    if (
+      migration.status === 'MigrationFailed' ||
+      migration.status === 'MigrationPartiallySucceeded'
+    ) {
+      logger.warning('Scenario storage migration incomplete', {
+        status: migration.status,
+        failed: migration.failedFiles,
+      });
+      void window.showWarningMessage(
+        'API Hero: Could not fully migrate scenarios from .api-hero/scenarios. Some scenarios remain in the legacy folder.',
+      );
+    } else if (migration.status === 'MigrationSucceededWithConflicts') {
+      logger.warning(
+        'Scenario storage migration kept conflicting legacy files',
+        { conflicts: migration.conflictFiles },
+      );
+    }
+    const discovered = await discoverScenariosInDiscoveryRoots(
+      migration,
+      storage,
+    );
     if (!discovered.ok) {
       treeProvider.setScenarios([]);
+      // Leave visibility unchanged: failure means unknown, not "no files".
       return;
     }
     const lastRuns = readLastRuns();
@@ -255,6 +348,7 @@ export function registerScenarios(
       });
     }
     treeProvider.setScenarios(loadedNodes);
+    await syncScenariosVisibility(loadedNodes.length > 0);
   };
 
   const runScenario = async (
@@ -505,6 +599,9 @@ export function registerScenarios(
     treeView,
     editorPanel,
     reportPanel,
+    workspace.onDidChangeWorkspaceFolders(() => {
+      void refreshTree();
+    }),
     registerCommandWithLegacyAlias(COMMAND_IDS.refreshScenarios, async () => {
       await refreshTree();
     }),
@@ -602,7 +699,24 @@ export function registerScenarios(
       });
       if (name === undefined || name.trim().length === 0) return;
 
-      const root = scenariosRootPath(folder.uri.fsPath);
+      const { root, migration } = await ensureScenariosRoot(folder.uri.fsPath);
+      if (
+        migration.status === 'MigrationFailed' ||
+        migration.status === 'MigrationPartiallySucceeded'
+      ) {
+        logger.warning('Scenario storage migration incomplete', {
+          status: migration.status,
+          failed: migration.failedFiles,
+        });
+        void window.showWarningMessage(
+          'API Hero: Could not fully migrate scenarios from .api-hero/scenarios. Some scenarios remain in the legacy folder.',
+        );
+      } else if (migration.status === 'MigrationSucceededWithConflicts') {
+        logger.warning(
+          'Scenario storage migration kept conflicting legacy files',
+          { conflicts: migration.conflictFiles },
+        );
+      }
       const slug =
         name
           .trim()
@@ -619,10 +733,18 @@ export function registerScenarios(
         void window.showErrorMessage(saved.error.message);
         return;
       }
+      await revealScenariosView();
       await refreshTree();
       editorPanel.show(scenario, filePath, buildRequestCatalog(discovery));
     }),
     registerCommandWithLegacyAlias(COMMAND_IDS.focusScenarios, async () => {
+      // Focus must never sticky-reveal; only create / loaded-scenario sync persist.
+      if (!isScenariosViewVisible()) {
+        void window.showInformationMessage(
+          'Scenarios appear after you create a scenario, or when the workspace already has scenarios.',
+        );
+        return;
+      }
       const first = treeProvider.getChildren()[0];
       if (first === undefined) {
         await commands.executeCommand(`${VIEW_IDS.explorer}.focus`);

@@ -62,6 +62,43 @@ test('recognizes known directives and preserves unknown directives', () => {
   assert.equal(result.diagnostics.length, 0);
 });
 
+test('treats free-text directive values as opaque without parenthesis or number diagnostics', () => {
+  const result = lex(
+    [
+      '@description List products with the default page size (30).',
+      '@description API version 2',
+      '@description Uses {{baseUrl}}',
+      '@description "Quoted text"',
+      '@description https://dummyjson.com/products',
+      '@description GET /products?page=1&limit=30',
+      'GET /products',
+    ].join('\n'),
+  );
+  const codes = new Set(result.diagnostics.map((diagnostic) => diagnostic.code));
+
+  assert.equal(result.diagnostics.length, 0);
+  assert.equal(codes.has('invalid-token-sequence'), false);
+  assert.equal(codes.has('invalid-literal'), false);
+  assert.ok(
+    result.tokens.some(
+      (token) => token.kind === 'HeaderValue' && token.value === '(30).',
+    ),
+  );
+  assert.ok(
+    result.tokens.some(
+      (token) => token.kind === 'Variable' && token.value === 'baseUrl',
+    ),
+  );
+  assert.equal(
+    result.tokens.some(
+      (token) =>
+        token.kind === 'Unknown' &&
+        (token.raw === '(' || token.raw === ')'),
+    ),
+    false,
+  );
+});
+
 test('keeps header names and values as separate normalized tokens', () => {
   const result = lex(
     [
@@ -222,10 +259,15 @@ test('reports malformed input and continues lexing later requests', () => {
 
 test('handles Unicode content with UTF-16 source locations', () => {
   const result = lex('@description "München 🚀"\nGET /员工/{{employeeId}}');
-  const string = result.tokens.find((token) => token.kind === 'String');
+  const descriptionChunks = result.tokens.filter(
+    (token) => token.kind === 'HeaderValue',
+  );
   const variable = result.tokens.find((token) => token.kind === 'Variable');
 
-  assert.equal(string?.value, 'München 🚀');
+  assert.deepEqual(
+    descriptionChunks.map((token) => token.value),
+    ['"München', '🚀"'],
+  );
   assert.equal(variable?.value, 'employeeId');
   assert.equal(variable?.location.sourceId, 'test.api');
   assert.equal(variable?.location.range.start.line, 1);

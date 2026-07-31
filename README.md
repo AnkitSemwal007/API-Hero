@@ -4,7 +4,7 @@
 
 Author `.api` requests beside your code, run them with assertions, and keep collections in Git — without leaving the editor.
 
-> Extension ID: **`ankitsemwal.api-hero`** · Version: **2.5.0** · License: [MIT](LICENSE)
+> Extension ID: **`ankitsemwal.api-hero`** · Version: **2.6.0** · License: [MIT](LICENSE)
 
 [Documentation](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/README.md) · [Changelog](CHANGELOG.md) · [Support](SUPPORT.md)
 
@@ -45,7 +45,7 @@ No context switching. No binary collections. Same workflow as the rest of your c
 ```bash
 npm install
 npm run package
-code --install-extension release/api-hero-2.5.0.vsix
+code --install-extension release/api-hero-2.6.0.vsix
 ```
 
 Requires VS Code **1.90+**.
@@ -119,7 +119,7 @@ History stores metadata-safe summaries of past **runs** (masked presentation URL
 
 ### Scenarios *(flagship)*
 
-Automate one API workflow with branches and shared data — distinct from Collection Runner (many requests). Definitions live under `.api-hero/scenarios/*.scenario.json`.
+Automate one API workflow with branches and shared data — distinct from Collection Runner (many requests). Definitions live under `.apihero/scenarios/*.scenario.json`.
 
 - **Starter templates** when you create a scenario (login + token reuse, health-check branch, CRUD, …)
 - **Scenario Editor** with step palette, request binding, and guided properties
@@ -192,7 +192,7 @@ Manual `@depends-on` picker plus Auto / Unknown / Ambiguous projections from the
 
 **Overview** is a command-opened home for recent runs, collections, and quick actions. The `.api` language adds highlighting, snippets, hover, outline, diagnostics, and CodeLens.
 
-**Not in this release:** Run File (all requests in one editor), OAuth2 / OIDC account Login/Logout, cookie jar, GraphQL/gRPC/WebSocket, Variable Manager UI, persistent Collection Run Report storage, Scenarios Phase 2+ (advanced step types beyond the Scenario Experience in **2.5.0**). Authentication Login API (session login against *your* API) **is** included — that is separate from palette-hidden Account Login stubs.
+**Not in this release:** Run File (all requests in one editor), OAuth2 / OIDC account Login/Logout, cookie jar, GraphQL/gRPC/WebSocket, Variable Manager UI, persistent Collection Run Report storage, Scenarios Phase 2+ (advanced step types beyond the Scenario Experience in **2.5.0** / **2.6.0**). Authentication Login API (session login against *your* API) **is** included — that is separate from palette-hidden Account Login stubs.
 
 ---
 

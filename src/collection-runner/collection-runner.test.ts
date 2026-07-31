@@ -402,7 +402,17 @@ test('success with required extraction failure maps to Failed and stop-on-first-
   assert.equal(executor.calls.length, 1);
   assert.equal(summary.status, 'stopped');
   assert.equal(summary.results[0]?.outcome, RequestRunOutcomeKinds.Failed);
-  assert.equal(summary.results[0]?.message, 'Extraction failed.');
+  assert.equal(
+    summary.results[0]?.message,
+    'Extraction Failed\nCould not extract "token": path not found',
+  );
+  assert.deepEqual(summary.results[0]?.failureDiagnostics, {
+    category: 'extraction',
+    reason: 'Could not extract "token": path not found',
+    httpRequestSent: false,
+    failedAtStage: 'extraction',
+  });
+  assert.equal(summary.statistics.extractionFailures, 1);
   assert.equal(summary.results[0]?.extractionFailed, true);
   assert.equal(summary.results[1]?.outcome, RequestRunOutcomeKinds.Skipped);
   assert.equal(summary.statistics.failed, 1);
@@ -598,7 +608,16 @@ test('mapOrchestratorResult retains presentation, extraction values, and asserti
   const summary = await runner.execute({ plan });
   const result = summary.results[0];
   assert.equal(result?.outcome, RequestRunOutcomeKinds.Failed);
-  assert.equal(result?.message, 'Assertions failed.');
+  assert.equal(
+    result?.message,
+    'Assertion Failed\nExpected 201 but received 200',
+  );
+  assert.deepEqual(result?.failureDiagnostics, {
+    category: 'assertion',
+    reason: 'Expected 201 but received 200',
+    httpRequestSent: true,
+    failedAtStage: 'assertions',
+  });
   assert.equal(result?.assertionsPassed, 1);
   assert.equal(result?.assertionsFailed, 1);
   assert.equal(result?.assertionsTotal, 2);
@@ -883,7 +902,11 @@ test('treats assertion failures as failures and stops on first error', async () 
   assert.equal(summary.statistics.assertionsTotal, 2);
   assert.equal(summary.statistics.assertionsPassed, 1);
   assert.equal(summary.statistics.assertionsFailed, 1);
-  assert.equal(summary.results[0]?.message, 'Assertions failed.');
+  assert.equal(
+    summary.results[0]?.message,
+    'Assertion Failed\nOne or more assertions failed.',
+  );
+  assert.equal(summary.statistics.assertionFailures, 1);
 });
 
 test('prefers transport failure message when HTTP did not succeed', async () => {
@@ -930,5 +953,199 @@ test('prefers transport failure message when HTTP did not succeed', async () => 
   });
 
   const summary = await runner.execute({ plan });
-  assert.equal(summary.results[0]?.message, 'Request failed.');
+  assert.equal(
+    summary.results[0]?.message,
+    'Network Error\nThe request did not complete (TIMEOUT).',
+  );
+  assert.deepEqual(summary.results[0]?.failureDiagnostics, {
+    category: 'transport',
+    reason: 'The request did not complete (TIMEOUT).',
+    httpRequestSent: false,
+    failedAtStage: 'transport',
+  });
+  assert.equal(summary.statistics.transportFailures, 1);
+});
+
+test('transport failures prefer the presented failure title and message', async () => {
+  const timing = Object.freeze({
+    startedAt: '2026-07-27T10:00:00.000Z',
+    completedAt: '2026-07-27T10:00:00.010Z',
+    durationMs: 10,
+  });
+  const executor = new FakeExecutor();
+  executor.outcomes = [
+    {
+      outcome: 'failed',
+      durationMs: 10,
+      execution: {
+        success: false,
+        requestId: 'req-1',
+        request: { method: 'GET', url: 'https://example.test/users' },
+        error: {
+          code: 'CONNECTION_REFUSED',
+          message: 'ECONNREFUSED 127.0.0.1:8080',
+          retryable: true,
+        },
+        timing,
+      },
+    },
+  ];
+  const runner = new CollectionRunnerService({
+    executor,
+    sourceReader: new FakeSourceReader(),
+  });
+  const plan = buildRunPlan({
+    aggregate: sampleAggregate(),
+    target: {
+      mode: CollectionRunModes.SelectedRequests,
+      collectionId: 'collection:ws',
+      requestIds: ['r1'],
+    },
+    failurePolicy: FailurePolicyKinds.ContinueOnError,
+  });
+
+  const summary = await runner.execute({ plan });
+
+  assert.deepEqual(summary.results[0]?.failureDiagnostics, {
+    category: 'transport',
+    reason: 'Connection refused: ECONNREFUSED 127.0.0.1:8080',
+    httpRequestSent: true,
+    failedAtStage: 'transport',
+  });
+  assert.equal(
+    summary.results[0]?.message,
+    'Network Error\nConnection refused: ECONNREFUSED 127.0.0.1:8080',
+  );
+});
+
+test('precondition failures surface the orchestrator message, stage, and category', async () => {
+  const executor = new FakeExecutor();
+  executor.outcomes = [
+    {
+      outcome: 'precondition-failed',
+      message: 'The selected request has unresolved variables: productId.',
+      preconditionStage: 'variables',
+    },
+  ];
+  const runner = new CollectionRunnerService({
+    executor,
+    sourceReader: new FakeSourceReader(),
+  });
+  const plan = buildRunPlan({
+    aggregate: sampleAggregate(),
+    target: {
+      mode: CollectionRunModes.SelectedRequests,
+      collectionId: 'collection:ws',
+      requestIds: ['r1'],
+    },
+    failurePolicy: FailurePolicyKinds.ContinueOnError,
+  });
+
+  const summary = await runner.execute({ plan });
+
+  const result = summary.results[0];
+  assert.equal(result?.outcome, RequestRunOutcomeKinds.Failed);
+  assert.equal(
+    result?.message,
+    'Validation Failed\nThe selected request has unresolved variables: productId.',
+  );
+  assert.deepEqual(result?.failureDiagnostics, {
+    category: 'precondition',
+    reason: 'The selected request has unresolved variables: productId.',
+    httpRequestSent: false,
+    failedAtStage: 'variables',
+  });
+  assert.equal(summary.statistics.preconditionFailures, 1);
+});
+
+test('skipped invalid requests keep precondition diagnostics', async () => {
+  const executor = new FakeExecutor();
+  executor.outcomes = [
+    {
+      outcome: 'precondition-failed',
+      message: 'The selected request is invalid: missing URL.',
+      preconditionStage: 'validate',
+    },
+  ];
+  const runner = new CollectionRunnerService({
+    executor,
+    sourceReader: new FakeSourceReader(),
+  });
+  const plan = buildRunPlan({
+    aggregate: sampleAggregate(),
+    target: {
+      mode: CollectionRunModes.SelectedRequests,
+      collectionId: 'collection:ws',
+      requestIds: ['r1'],
+    },
+    failurePolicy: FailurePolicyKinds.SkipInvalidRequests,
+  });
+
+  const summary = await runner.execute({ plan });
+
+  const result = summary.results[0];
+  assert.equal(result?.outcome, RequestRunOutcomeKinds.Skipped);
+  assert.equal(result?.failureDiagnostics?.category, 'precondition');
+  assert.equal(result?.failureDiagnostics?.failedAtStage, 'validate');
+  assert.equal(summary.statistics.preconditionFailures, 1);
+  assert.equal(summary.statistics.skipped, 1);
+});
+
+test('unreadable request files report the unread category without an HTTP attempt', async () => {
+  const executor = new FakeExecutor();
+  const reader = new FakeSourceReader();
+  reader.failPaths.add('file:///a/one.api');
+  const runner = new CollectionRunnerService({
+    executor,
+    sourceReader: reader,
+  });
+  const plan = buildRunPlan({
+    aggregate: sampleAggregate(),
+    target: {
+      mode: CollectionRunModes.SelectedRequests,
+      collectionId: 'collection:ws',
+      requestIds: ['r1'],
+    },
+    failurePolicy: FailurePolicyKinds.ContinueOnError,
+  });
+
+  const summary = await runner.execute({ plan });
+
+  assert.equal(
+    summary.results[0]?.message,
+    'Request Unavailable\nUnable to read the request file.',
+  );
+  assert.deepEqual(summary.results[0]?.failureDiagnostics, {
+    category: 'unread',
+    reason: 'Unable to read the request file.',
+    httpRequestSent: false,
+  });
+});
+
+test('passed requests carry no failure diagnostics', async () => {
+  const executor = new FakeExecutor();
+  executor.outcomes = [{ outcome: 'success', durationMs: 4, statusCode: 200 }];
+  const runner = new CollectionRunnerService({
+    executor,
+    sourceReader: new FakeSourceReader(),
+  });
+  const plan = buildRunPlan({
+    aggregate: sampleAggregate(),
+    target: {
+      mode: CollectionRunModes.SelectedRequests,
+      collectionId: 'collection:ws',
+      requestIds: ['r1'],
+    },
+    failurePolicy: FailurePolicyKinds.ContinueOnError,
+  });
+
+  const summary = await runner.execute({ plan });
+
+  assert.equal(summary.results[0]?.outcome, RequestRunOutcomeKinds.Passed);
+  assert.equal(summary.results[0]?.failureDiagnostics, undefined);
+  assert.equal(summary.results[0]?.message, undefined);
+  assert.equal(summary.statistics.preconditionFailures, 0);
+  assert.equal(summary.statistics.transportFailures, 0);
+  assert.equal(summary.statistics.assertionFailures, 0);
+  assert.equal(summary.statistics.extractionFailures, 0);
 });

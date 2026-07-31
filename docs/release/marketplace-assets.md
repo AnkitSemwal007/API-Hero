@@ -1,6 +1,6 @@
-# Marketplace assets — 2.5.0
+# Marketplace assets — 2.6.0
 
-Guidance for listing media for **API Hero 2.5.0**.
+Guidance for listing media for **API Hero 2.6.0**.
 
 **Strategy:** README screenshots, banner, social preview, and workflow GIF are hosted on **Cloudinary** (absolute HTTPS URLs). That keeps the VSIX small. Only in-extension chrome icons ship inside the package (`images/icon.png`, `images/api-*.svg`, `images/execution-*.svg`).
 

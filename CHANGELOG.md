@@ -5,6 +5,29 @@ All notable changes to API Hero are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [2.6.0] - 2026-07-31
+
+Workspace hygiene and Scenarios UX — progressive disclosure, project-store scenario paths, Reset Workspace, and richer Collection Run Report failure details. Backward compatible with **2.5.0** (`.api` files, collections, and settings continue to work). Scenario files under legacy `.api-hero/scenarios/` migrate automatically into `.apihero/scenarios/`.
+
+### Added
+
+- **Scenarios progressive disclosure** — the Scenarios Activity Bar view stays hidden until a workspace successfully loads scenarios or you create one; once revealed it stays visible for that workspace (sticky). Focus Scenarios does not unlock a hidden view.
+- **Reset Workspace...** (`apiHero.resetWorkspace`) — Command Palette–only command that permanently clears API Hero workspace data (`.apihero`, legacy `.api-hero/scenarios`, extension-wide request history, auth secrets for discovered profiles, and related workspace state) after a modal confirm. Collections, `.api` files, collection variables, and project source are preserved. Operates on the primary workspace folder only.
+- **Collection Run Report failure diagnostics** — categorized failure reasons (precondition, transport, assertion, extraction, …) with clearer Details panel copy derived from a single diagnostics model.
+
+### Changed
+
+- Canonical scenario storage moved from `.api-hero/scenarios/` to `.apihero/scenarios/`. Existing legacy folders migrate automatically on discover/create (byte-preserving, idempotent; never overwrites differing canonical files). Migration does not by itself reveal the Scenarios view.
+- `SCENARIOS_DIRECTORY_NAME` is now the project-store relative segment `scenarios` (was the full legacy path `.api-hero/scenarios`). Use `scenariosRootPath` / `scenariosDirectoryPath` for the absolute root.
+- Parser / tokenizer hardening for collection-runner and scenario-related request parsing edge cases covered by expanded unit tests.
+
+### Docs & Marketplace
+
+- User and architecture docs updated for progressive disclosure, Reset Workspace, and `.apihero/scenarios` paths
+- Release readiness pinned to **2.6.0**
+
 ## [2.5.0] - 2026-07-30
 
 Authentication Premium UX and Scenario Experience — flagship workflows for secure auth and multi-step API automation. Backward compatible with **2.4.0** (`.api` files, collections, scenarios, and settings continue to work).
@@ -59,7 +82,7 @@ Authentication Premium UX and Scenario Experience — flagship workflows for sec
 
 ### New
 
-- **Scenario Engine (Phase 1)** — multi-step orchestration via `.api-hero/scenarios/*.scenario.json` (request steps, conditions, variables)
+- **Scenario Engine (Phase 1)** — multi-step orchestration via `.apihero/scenarios/*.scenario.json` (request steps, conditions, variables)
 - **Scenario Editor** — webview editor to create and edit scenarios
 - **Scenario Run Reports** — review results after a scenario run
 - **Scenarios** Activity Bar view (`apiHero.explorer`) — browse, create, open, and run scenarios alongside Collections, Execution, and History

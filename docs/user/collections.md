@@ -1,6 +1,6 @@
 # Collections
 
-Collections organize `.api` requests under your workspace. The **Collections** view is one of four Activity Bar views (with **Scenarios**, **Execution**, and **History**).
+Collections organize `.api` requests under your workspace. The primary Activity Bar views are **Collections**, **Execution**, and **History**. **Scenarios** is progressively disclosed after a successful load or first create (then stays visible for the workspace).
 
 ## Browse and filter
 

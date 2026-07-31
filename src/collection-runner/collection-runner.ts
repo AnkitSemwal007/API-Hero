@@ -4,16 +4,22 @@ import type {
   RunAtSourceLocationResult,
   RunRequestSource,
 } from '../orchestration';
-import { presentExecutionResult } from '../response/presentation';
+import {
+  presentExecutionResult,
+  type ResponsePresentation,
+} from '../response/presentation';
 import type { RunVariableStore } from '../variables';
 import { resolveFailurePolicy, type FailurePolicy } from './failure-policies';
 import {
   CollectionRunStatus,
+  RequestFailureCategory,
   RequestRunOutcomeKind,
   buildRunStatistics,
+  describeFailureCategory,
   freezeRunSummary,
   type DependencyEdge,
   type PlannedRequest,
+  type RequestFailureDiagnostics,
   type RequestRunResult,
   type RunPlan,
   type RunProgressEvent,
@@ -231,12 +237,17 @@ export class CollectionRunnerService {
       text = await this.options.sourceReader.readText(planned.filePath);
     } catch {
       const outcome = policy.classifyInvalid();
+      const reason = 'Unable to read the request file.';
       return {
         requestId: planned.requestId,
         ordinal: planned.ordinal,
         label: planned.label,
         outcome,
-        message: 'Unable to read the request file.',
+        ...buildFailureFields({
+          category: RequestFailureCategory.Unread,
+          reason,
+          httpRequestSent: false,
+        }),
       };
     }
 
@@ -264,13 +275,18 @@ export class CollectionRunnerService {
         },
       );
     } catch {
+      const reason = 'The request could not be executed.';
       return {
         requestId: planned.requestId,
         ordinal: planned.ordinal,
         label: planned.label,
         outcome: RequestRunOutcomeKind.Failed,
         durationMs: this.now() - started,
-        message: 'The request could not be executed.',
+        ...buildFailureFields({
+          category: RequestFailureCategory.Transport,
+          reason,
+          httpRequestSent: false,
+        }),
       };
     }
 
@@ -401,6 +417,8 @@ function mapOrchestratorResult(
       : { resolvedVariables: runResult.resolvedVariables }),
   };
 
+  const httpRequestSent = runResult.execution !== undefined;
+
   // Orchestrator contract: assertion failures return outcome 'failed' with
   // assertionFailed: true (never 'success' + assertionFailed).
   // Required/malformed extraction failures may still arrive as 'success'
@@ -411,7 +429,12 @@ function mapOrchestratorResult(
         return {
           ...base,
           outcome: RequestRunOutcomeKind.Failed,
-          message: 'Extraction failed.',
+          ...buildFailureFields({
+            category: RequestFailureCategory.Extraction,
+            reason: describeExtractionFailure(runResult.extraction),
+            httpRequestSent,
+            failedAtStage: 'extraction',
+          }),
         };
       }
       return {
@@ -422,36 +445,187 @@ function mapOrchestratorResult(
       return {
         ...base,
         outcome: RequestRunOutcomeKind.Failed,
-        message:
-          runResult.assertionFailed === true &&
-          runResult.statusCode !== undefined
-            ? 'Assertions failed.'
-            : 'Request failed.',
+        ...buildFailureFields(
+          describeExecutionFailure(runResult, presentation, httpRequestSent),
+        ),
       };
     case 'cancelled':
       return {
         ...base,
         outcome: RequestRunOutcomeKind.Cancelled,
-        message: 'Request cancelled.',
+        ...buildFailureFields({
+          category: RequestFailureCategory.Cancelled,
+          reason: 'Request cancelled.',
+          httpRequestSent,
+        }),
       };
     case 'replaced':
       return {
         ...base,
         outcome: RequestRunOutcomeKind.Cancelled,
-        message: 'Request replaced by another run.',
+        ...buildFailureFields({
+          category: RequestFailureCategory.Cancelled,
+          reason: 'Request replaced by another run.',
+          httpRequestSent,
+        }),
       };
     case 'precondition-failed': {
       const outcome = policy.classifyInvalid();
       return {
         ...base,
         outcome,
-        message:
-          outcome === RequestRunOutcomeKind.Skipped
-            ? 'Invalid request skipped.'
-            : 'Request is invalid.',
+        ...buildFailureFields({
+          category: RequestFailureCategory.Precondition,
+          reason:
+            runResult.message ?? 'The request could not be prepared for execution.',
+          httpRequestSent,
+          ...(runResult.preconditionStage === undefined
+            ? {}
+            : { failedAtStage: runResult.preconditionStage }),
+        }),
       };
     }
   }
+}
+
+/** Concise `message` + typed diagnostics built from one already-known failure. */
+function buildFailureFields(input: {
+  readonly category: RequestFailureCategory;
+  readonly reason: string;
+  readonly httpRequestSent: boolean;
+  readonly failedAtStage?: string;
+}): Pick<RequestRunResult, 'message' | 'failureDiagnostics'> {
+  const failureDiagnostics: RequestFailureDiagnostics = {
+    category: input.category,
+    reason: input.reason,
+    httpRequestSent: input.httpRequestSent,
+    ...(input.failedAtStage === undefined
+      ? {}
+      : { failedAtStage: input.failedAtStage }),
+  };
+  return {
+    message: `${describeFailureCategory(input.category)}\n${input.reason}`,
+    failureDiagnostics,
+  };
+}
+
+/**
+ * Classifies an orchestrator `failed` outcome from data already produced by
+ * the pipeline. Transport wins over assertions: when the HTTP attempt itself
+ * did not complete, assertion outcomes only restate the transport error.
+ */
+function describeExecutionFailure(
+  runResult: RunAtSourceLocationResult,
+  presentation: ResponsePresentation | undefined,
+  httpRequestSent: boolean,
+): {
+  readonly category: RequestFailureCategory;
+  readonly reason: string;
+  readonly httpRequestSent: boolean;
+  readonly failedAtStage?: string;
+} {
+  const httpCompleted =
+    runResult.execution?.success === true || runResult.statusCode !== undefined;
+  if (httpCompleted) {
+    if (runResult.assertionFailed === true) {
+      return {
+        category: RequestFailureCategory.Assertion,
+        reason: describeAssertionFailure(presentation),
+        httpRequestSent,
+        failedAtStage: 'assertions',
+      };
+    }
+    if (hasBlockingExtractionFailure(runResult.extraction)) {
+      return {
+        category: RequestFailureCategory.Extraction,
+        reason: describeExtractionFailure(runResult.extraction),
+        httpRequestSent,
+        failedAtStage: 'extraction',
+      };
+    }
+  }
+  return {
+    category: RequestFailureCategory.Transport,
+    reason: describeTransportFailure(runResult, presentation),
+    httpRequestSent,
+    failedAtStage: 'transport',
+  };
+}
+
+function describeTransportFailure(
+  runResult: RunAtSourceLocationResult,
+  presentation: ResponsePresentation | undefined,
+): string {
+  const failure = presentation?.failure;
+  if (failure !== undefined) {
+    return failure.message.length > 0
+      ? `${failure.title}: ${failure.message}`
+      : failure.title;
+  }
+  const errorCode = runResult.assertions?.context.errorCode;
+  if (errorCode !== undefined) {
+    return `The request did not complete (${errorCode}).`;
+  }
+  return 'The request did not complete.';
+}
+
+/** Max chars for expected/actual in the execution-table row message. */
+const ASSERTION_ROW_VALUE_MAX_CHARS = 100;
+
+/**
+ * First failed/malformed assertion diagnostic from presentation.
+ * Prefers Expected/Actual (engine-masked failure fields, truncated for the
+ * row), then assertion text, then `failure.reason`. Does not re-evaluate or
+ * re-parse assertions.
+ */
+function describeAssertionFailure(
+  presentation: ResponsePresentation | undefined,
+): string {
+  const failedAssertion = presentation?.assertions?.assertions.find(
+    (assertion) => assertion.failure !== undefined,
+  );
+  if (failedAssertion?.failure === undefined) {
+    return 'One or more assertions failed.';
+  }
+  const failure = failedAssertion.failure;
+  if (failure.expected !== undefined && failure.actual !== undefined) {
+    return (
+      `Expected ${truncateAssertionRowValue(failure.expected)}` +
+      ` but received ${truncateAssertionRowValue(failure.actual)}`
+    );
+  }
+  const assertionText =
+    failure.assertionText.length > 0
+      ? failure.assertionText
+      : failedAssertion.text;
+  if (assertionText.length > 0) {
+    return assertionText;
+  }
+  return failure.reason;
+}
+
+function truncateAssertionRowValue(value: string): string {
+  if (value.length <= ASSERTION_ROW_VALUE_MAX_CHARS) {
+    return value;
+  }
+  return `${value.slice(0, ASSERTION_ROW_VALUE_MAX_CHARS - 1)}…`;
+}
+
+function describeExtractionFailure(
+  report: RunAtSourceLocationResult['extraction'],
+): string {
+  const outcome = report?.outcomes.find(
+    (candidate) =>
+      candidate.kind === 'malformed' ||
+      (candidate.kind === 'failed' && candidate.rule.required === true),
+  );
+  if (outcome === undefined) {
+    return 'One or more extract rules failed.';
+  }
+  const name = outcome.rule.variableName;
+  return outcome.reason === undefined
+    ? `Could not extract "${name}".`
+    : `Could not extract "${name}": ${outcome.reason}`;
 }
 
 function assertionFieldsFrom(
@@ -514,6 +688,10 @@ function cancelledResult(
     ordinal: planned.ordinal,
     label: planned.label,
     outcome: RequestRunOutcomeKind.Cancelled,
-    message,
+    ...buildFailureFields({
+      category: RequestFailureCategory.Cancelled,
+      reason: message,
+      httpRequestSent: false,
+    }),
   };
 }

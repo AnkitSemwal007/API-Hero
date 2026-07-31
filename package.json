@@ -2,7 +2,7 @@
   "name": "api-hero",
   "displayName": "API Hero",
   "description": "Git-first REST/HTTP client for VS Code. Edit .api requests in a UI Request Editor, run with assertions, orchestrate Scenarios, manage Authentication (profiles, Login API sessions, Secret Storage), collections, and environments, import OpenAPI, and inspect Execution, History, and Run Reports.",
-  "version": "2.5.0",
+  "version": "2.6.0",
   "publisher": "ankitsemwal",
   "license": "MIT",
   "homepage": "https://github.com/AnkitSemwal007/API-Hero",
@@ -129,6 +129,11 @@
       {
         "command": "apiHero.initializeProjectStore",
         "title": "Initialize Project Store",
+        "category": "API Hero"
+      },
+      {
+        "command": "apiHero.resetWorkspace",
+        "title": "Reset Workspace...",
         "category": "API Hero"
       },
       {
@@ -507,6 +512,11 @@
         "category": "API Hero"
       },
       {
+        "command": "apiRunner.resetWorkspace",
+        "title": "Reset Workspace... (legacy)",
+        "category": "API Hero"
+      },
+      {
         "command": "apiRunner.selectAuthentication",
         "title": "Select Authentication (legacy)",
         "category": "API Hero"
@@ -864,6 +874,10 @@
           "when": "false"
         },
         {
+          "command": "apiRunner.resetWorkspace",
+          "when": "false"
+        },
+        {
           "command": "apiRunner.selectAuthentication",
           "when": "false"
         },
@@ -1159,6 +1173,12 @@
           "group": "1_new@3"
         },
         {
+          "command": "apiHero.createScenario",
+          "when": "view == apiHero.collections",
+          "group": "1_new@4",
+          "title": "New Scenario..."
+        },
+        {
           "command": "apiHero.revealActiveRequest",
           "when": "view == apiHero.collections",
           "group": "3_more@1"
@@ -1311,6 +1331,12 @@
           "group": "3_new@2"
         },
         {
+          "command": "apiHero.createScenario",
+          "when": "view == apiHero.collections && viewItem == collection",
+          "group": "3_new@3",
+          "title": "New Scenario..."
+        },
+        {
           "command": "apiHero.createRequest",
           "when": "view == apiHero.collections && viewItem == folder",
           "group": "3_new@1"
@@ -1319,6 +1345,18 @@
           "command": "apiHero.createFolder",
           "when": "view == apiHero.collections && viewItem == folder",
           "group": "3_new@2"
+        },
+        {
+          "command": "apiHero.createScenario",
+          "when": "view == apiHero.collections && viewItem == folder",
+          "group": "3_new@3",
+          "title": "New Scenario..."
+        },
+        {
+          "command": "apiHero.createScenario",
+          "when": "view == apiHero.collections && viewItem =~ /^request/",
+          "group": "3_new@1",
+          "title": "Create Scenario from Request..."
         },
         {
           "command": "apiHero.renameCollection",
@@ -1464,7 +1502,8 @@
         },
         {
           "id": "apiHero.explorer",
-          "name": "Scenarios"
+          "name": "Scenarios",
+          "when": "apiHero.scenariosVisible"
         },
         {
           "id": "apiHero.execution",
@@ -1484,7 +1523,7 @@
       },
       {
         "view": "apiHero.explorer",
-        "contents": "No scenarios yet.\nCollection Runner executes many requests. A Scenario automates one API workflow with branches and shared data.\nCreate one under `.api-hero/scenarios/` or pick a starter template.\n\n[New Scenario](command:apiHero.createScenario)\n[Open Overview](command:apiHero.openOverview)"
+        "contents": "No scenarios yet.\nCollection Runner executes many requests. A Scenario automates one API workflow with branches and shared data.\nCreate one under `.apihero/scenarios/` or pick a starter template.\n\n[New Scenario](command:apiHero.createScenario)\n[Open Overview](command:apiHero.openOverview)"
       },
       {
         "view": "apiHero.execution",

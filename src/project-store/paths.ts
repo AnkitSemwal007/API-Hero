@@ -14,6 +14,7 @@ import {
   HISTORY_DIRECTORY_NAME,
   LOCAL_DIRECTORY_NAME,
   MIGRATION_BACKUP_FILENAME,
+  SCENARIOS_DIRECTORY_NAME,
   VARIABLES_LOCAL_FILENAME,
   WORKSPACE_RELATIVE_PATH,
 } from './constants';
@@ -53,6 +54,14 @@ export function environmentDocumentPath(
 
 export function authDirectoryPath(workspaceRootPath: string): string {
   return joinPathKey(projectStoreRootPath(workspaceRootPath), AUTH_DIRECTORY_NAME);
+}
+
+/** Absolute (or URI) path to `.apihero/scenarios` under a workspace folder. */
+export function scenariosDirectoryPath(workspaceRootPath: string): string {
+  return joinPathKey(
+    projectStoreRootPath(workspaceRootPath),
+    SCENARIOS_DIRECTORY_NAME,
+  );
 }
 
 export function authProfilesPath(workspaceRootPath: string): string {

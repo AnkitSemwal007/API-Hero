@@ -209,6 +209,10 @@ export class Lexer {
           kind: 'Directive',
           value: (token.normalized ?? token.raw.slice(1)).toLowerCase(),
         };
+      // Tokenizer keeps DirectiveValue distinct; lexical layer reuses HeaderValue
+      // as the opaque free-text chunk kind so parseDirective/joinTokens stay unchanged.
+      case TokenKind.DirectiveValue:
+        return { ...base, kind: 'HeaderValue', value: token.raw };
       case TokenKind.HeaderName:
         return {
           ...base,

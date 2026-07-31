@@ -32,6 +32,7 @@ All contributed command IDs use the `apiHero.*` prefix. At runtime every public 
 - `apiHero.manageAuthProfiles`
 - `apiHero.selectAuthentication`
 - `apiHero.initializeProjectStore`
+- `apiHero.resetWorkspace`
 - `apiHero.setAuthSecret` (internal; not listed in `package.json` contributes; alias `apiRunner.setAuthSecret`)
 
 ### Collections and CRUD

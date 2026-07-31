@@ -94,7 +94,11 @@ import {
 } from './variables/vscode';
 import { registerAuth } from './auth/vscode';
 import { registerOverview } from './overview/vscode';
-import { registerProjectStore } from './project-store/vscode';
+import {
+  registerProjectStore,
+  registerResetWorkspace,
+} from './project-store/vscode';
+import { VsCodeCollectionFilesystem } from './collections/vscode/mutation-filesystem';
 import {
   createVsCodeNamespaceMigrationPorts,
   migrateConfigurationNamespace,
@@ -372,6 +376,23 @@ export async function activate(context: ExtensionContext): Promise<void> {
     ),
     logger,
   );
+  registerResetWorkspace({
+    context,
+    logger,
+    filesystem: new VsCodeCollectionFilesystem(),
+    secrets: authenticationSecrets,
+    clearHistory: async () => {
+      const entries = await historyInfrastructure.repository.list({ limit: 1 });
+      if (entries.length === 0) {
+        return false;
+      }
+      await historyInfrastructure.repository.clear();
+      return true;
+    },
+    projectStoreCoordinator: projectStoreRegistration.coordinator,
+    authenticationSessions,
+    environmentManager,
+  });
   /**
    * Single capture-context provider for history. Filled after
    * {@link registerHistory}; orchestrator invokes it only at commit time.
