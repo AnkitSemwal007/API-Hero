@@ -1,0 +1,7 @@
+@name Categories
+@description List all product categories with slug, name, and URL.
+
+GET {{baseUrl}}/products/categories
+Accept: application/json
+
+expect status == 200

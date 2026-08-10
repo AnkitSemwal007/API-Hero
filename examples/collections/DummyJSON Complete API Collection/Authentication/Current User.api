@@ -1,0 +1,10 @@
+@name Current User
+@description Return the authenticated user for the Bearer token from Login.
+@depends-on Authentication/Login
+
+GET {{baseUrl}}/auth/me
+Accept: application/json
+Authorization: Bearer {{token}}
+
+expect status == 200
+expect body.id exists

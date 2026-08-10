@@ -1,0 +1,8 @@
+@name Search Recipes
+@description Search recipes by query string.
+
+GET {{baseUrl}}/recipes/search?q=Margherita
+Accept: application/json
+
+expect status == 200
+expect body.recipes exists

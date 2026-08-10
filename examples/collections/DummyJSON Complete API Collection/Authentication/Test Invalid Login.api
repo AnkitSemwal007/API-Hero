@@ -1,0 +1,14 @@
+@name Test Invalid Login
+@description Verify DummyJSON rejects invalid credentials with HTTP 400.
+
+POST {{baseUrl}}/auth/login
+Accept: application/json
+Content-Type: application/json
+
+{
+  "username": "{{username}}",
+  "password": "not-the-real-password",
+  "expiresInMins": 30
+}
+expect status == 400
+expect body.message contains Invalid

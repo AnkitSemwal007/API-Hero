@@ -1,0 +1,8 @@
+@name Cart By ID
+@description Fetch a single cart by id.
+
+GET {{baseUrl}}/carts/1
+Accept: application/json
+
+expect status == 200
+expect body.id == 1

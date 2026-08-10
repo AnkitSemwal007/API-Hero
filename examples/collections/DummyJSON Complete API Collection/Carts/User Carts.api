@@ -1,0 +1,8 @@
+@name User Carts
+@description List carts for user id 5.
+
+GET {{baseUrl}}/carts/user/5
+Accept: application/json
+
+expect status == 200
+expect body.carts exists

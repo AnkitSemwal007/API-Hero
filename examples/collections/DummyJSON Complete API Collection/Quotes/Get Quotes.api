@@ -1,0 +1,8 @@
+@name Get Quotes
+@description List quotes with the default page size.
+
+GET {{baseUrl}}/quotes
+Accept: application/json
+
+expect status == 200
+expect body.quotes exists

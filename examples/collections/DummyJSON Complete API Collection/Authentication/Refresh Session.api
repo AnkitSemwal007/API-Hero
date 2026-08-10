@@ -1,0 +1,16 @@
+@name Refresh Session
+@description Exchange a refresh token for a new access token without re-entering credentials.
+@extract token from body.accessToken scope=collection
+@extract refreshToken from body.refreshToken scope=collection
+@depends-on Authentication/Login
+
+POST {{baseUrl}}/auth/refresh
+Accept: application/json
+Content-Type: application/json
+
+{
+  "refreshToken": "{{refreshToken}}",
+  "expiresInMins": 30
+}
+expect status == 200
+expect body.accessToken exists

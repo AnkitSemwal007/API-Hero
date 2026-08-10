@@ -1,0 +1,8 @@
+@name Pagination
+@description Paginate users with limit, skip, and selected fields.
+
+GET {{baseUrl}}/users?limit=5&skip=10&select=firstName%2Cage
+Accept: application/json
+
+expect status == 200
+expect body.skip == 10

@@ -107,7 +107,7 @@ export class ApiHeroMcpService {
     if (emptyWorkspaceHint(aggregate)) {
       return mcpError(
         'EMPTY_WORKSPACE',
-        'No collections found. Open a workspace that contains Collections/<Name>/ (set APIHERO_WORKSPACE or cwd).',
+        'No collections found. Open a workspace that contains Collections/<Name>/ (pass --workspace, set APIHERO_WORKSPACE, or use cwd).',
       );
     }
     const collections = Object.values(aggregate.collections).map(
@@ -438,7 +438,7 @@ export class ApiHeroMcpService {
     if (emptyWorkspaceHint(aggregate)) {
       return mcpError(
         'EMPTY_WORKSPACE',
-        'No collections found. Open a workspace that contains Collections/<Name>/ (set APIHERO_WORKSPACE or cwd).',
+        'No collections found. Open a workspace that contains Collections/<Name>/ (pass --workspace, set APIHERO_WORKSPACE, or use cwd).',
       );
     }
     const trimmed = nameOrId.trim();

@@ -1,0 +1,8 @@
+@name Delete Cart
+@description Simulate deleting cart id 1.
+
+DELETE {{baseUrl}}/carts/1
+Accept: application/json
+
+expect status == 200
+expect body.isDeleted == true

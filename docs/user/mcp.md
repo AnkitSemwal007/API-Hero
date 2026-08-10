@@ -2,7 +2,11 @@
 
 Use API Hero collections from AI agents (Cursor, Claude Code, Codex, Gemini CLI, and other MCP clients) **without the VS Code UI**.
 
-The MCP server is a **standalone Node stdio process**. It reuses the same discovery, Collection Runner, and execution orchestrator as the extension — it does **not** invent a parallel HTTP client or collection format.
+The MCP server is a **standalone Node stdio process**. It is **client-independent** — not hosted inside VS Code. It reuses the same discovery, Collection Runner, and execution orchestrator as the extension — it does **not** invent a parallel HTTP client or collection format.
+
+## Client-owned configuration
+
+Each AI client owns how MCP servers are registered (its own settings file, TOML, or CLI). **API Hero does not silently modify client configs** when you install the VS Code extension or build from source. You (or the client’s own UI) must add the server entry.
 
 ## Requirements
 
@@ -10,10 +14,17 @@ The MCP server is a **standalone Node stdio process**. It reuses the same discov
 - A workspace folder that contains `Collections/<Name>/` (standard API Hero layout)
 - Built extension output: `npm run compile` (produces `dist/mcp/server.js`)
 
-Set the workspace with either:
+## Workspace configuration priority
 
-- Environment variable `APIHERO_WORKSPACE` → absolute path to the folder that contains `Collections/`, or
-- Process current working directory (cwd) when the client spawns the server
+Resolve the workspace root in this order (first wins):
+
+1. CLI: `--workspace "<path>"` or `--workspace=<path>`
+2. Environment: `APIHERO_WORKSPACE`
+3. Process current working directory (`cwd`) when the client spawns the server
+
+Prefer `--workspace` in client args. `APIHERO_WORKSPACE` remains supported for backward compatibility.
+
+If `--workspace` is present without a value, the process exits immediately with a non-zero status and a clear stderr message. An empty or non-collection path still starts the server; tools return `EMPTY_WORKSPACE` when no `Collections/<Name>/` trees are found (same discovery semantics as before).
 
 ## Install / build
 
@@ -24,6 +35,10 @@ npm install
 npm run compile
 ```
 
+`npm run compile` is required before clients can spawn `dist/mcp/server.js`.
+
+## Starting the server
+
 Optional npm script (compile + run server on stdio — usually the client spawns this for you):
 
 ```bash
@@ -33,12 +48,14 @@ npm run mcp
 Bin entry after install/link:
 
 ```bash
-npx api-hero-mcp
+npx api-hero-mcp --workspace "/absolute/path/to/your-api-workspace"
 # or
-node ./bin/api-hero-mcp.js
+node ./bin/api-hero-mcp.js --workspace "/absolute/path/to/your-api-workspace"
 # or
-node ./dist/mcp/server.js
+node ./dist/mcp/server.js --workspace "/absolute/path/to/your-api-workspace"
 ```
+
+Without `--workspace`, set `APIHERO_WORKSPACE` or run with cwd at the workspace root.
 
 ## Tools
 
@@ -55,18 +72,35 @@ node ./dist/mcp/server.js
 
 Agents should prefer **collection display names** (case-insensitive). Ids from list/get responses can be reused on later calls.
 
-## Cursor
+## Generic MCP configuration
 
-Add to `.cursor/mcp.json` (project) or Cursor MCP settings:
+Most clients that use a JSON `mcpServers` map share this shape. Prefer `--workspace` in `args`; use `env.APIHERO_WORKSPACE` only as a fallback:
 
 ```json
 {
   "mcpServers": {
     "api-hero": {
       "command": "node",
-      "args": ["D:/path/to/api-hero/dist/mcp/server.js"],
+      "args": [
+        "/absolute/path/to/api-hero/dist/mcp/server.js",
+        "--workspace",
+        "/absolute/path/to/your-api-workspace"
+      ]
+    }
+  }
+}
+```
+
+Equivalent env-based fallback:
+
+```json
+{
+  "mcpServers": {
+    "api-hero": {
+      "command": "node",
+      "args": ["/absolute/path/to/api-hero/dist/mcp/server.js"],
       "env": {
-        "APIHERO_WORKSPACE": "D:/path/to/your-api-workspace"
+        "APIHERO_WORKSPACE": "/absolute/path/to/your-api-workspace"
       }
     }
   }
@@ -75,45 +109,109 @@ Add to `.cursor/mcp.json` (project) or Cursor MCP settings:
 
 Use absolute paths. After changing collections on disk, tools re-scan on each call.
 
-## Claude Code / Claude Desktop
+Gemini CLI and similar stdio MCP clients use the same pattern (command `node`, args including `dist/mcp/server.js` and `--workspace`).
 
-Claude Desktop style (`claude_desktop_config.json`):
+## Codex (VS Code extension)
+
+Codex owns MCP registration via its own config. **Installing the API Hero VS Code extension does not automatically register MCP with Codex.**
+
+### Config location
+
+Official Codex config:
+
+- `~/.codex/config.toml`
+- Windows: `%USERPROFILE%\.codex\config.toml`
+
+Optional project config: `.codex/config.toml` in the project root — only when the project is trusted by Codex.
+
+### TOML example (installed extension)
+
+Use absolute paths. The extension version folder changes when you update API Hero:
+
+```toml
+[mcp_servers.api-hero]
+command = "node"
+args = [
+  "C:/Users/<you>/.vscode/extensions/ankitsemwal.api-hero-2.8.0/dist/mcp/server.js",
+  "--workspace",
+  "D:/path/to/your-api-workspace"
+]
+```
+
+Replace `<you>` and the version folder with your actual install path. On macOS/Linux:
+
+`~/.vscode/extensions/ankitsemwal.api-hero-<version>/dist/mcp/server.js`
+
+### Repo-dev alternative
+
+When developing from the API Hero clone (after `npm run compile`):
+
+```toml
+[mcp_servers.api-hero]
+command = "node"
+args = [
+  "/absolute/path/to/api-hero/dist/mcp/server.js",
+  "--workspace",
+  "/absolute/path/to/your-api-workspace"
+]
+```
+
+Prefer `--workspace` in `args` over `APIHERO_WORKSPACE`.
+
+### Edit from Codex IDE
+
+Per OpenAI Codex docs:
+
+1. Open the Codex gear → **Codex Settings** → **Open config.toml**
+2. Or use the MCP settings panel (**MCP servers**) in Codex Settings to review registered servers
+
+After editing, **restart or reload Codex** so tools load.
+
+### Codex-bundled executable (optional)
+
+The Codex VS Code extension bundles a `codex.exe` (or platform equivalent). If you use that bundled executable by full path, it can run `mcp add` / `mcp list`. Durable configuration is still the TOML above — do **not** install a separate Codex CLI package solely for API Hero MCP.
+
+## Cursor
+
+Add to `.cursor/mcp.json` (project) or Cursor MCP settings. Prefer `--workspace` in args:
 
 ```json
 {
   "mcpServers": {
     "api-hero": {
       "command": "node",
-      "args": ["/absolute/path/to/api-hero/dist/mcp/server.js"],
-      "env": {
-        "APIHERO_WORKSPACE": "/absolute/path/to/your-api-workspace"
-      }
+      "args": [
+        "/absolute/path/to/api-hero/dist/mcp/server.js",
+        "--workspace",
+        "/absolute/path/to/your-api-workspace"
+      ]
     }
   }
 }
 ```
 
-Claude Code: use `claude mcp add` (or the product’s MCP add flow) with the same command, args, and `APIHERO_WORKSPACE`.
+Env fallback (`APIHERO_WORKSPACE`) remains valid if you omit `--workspace`.
 
-## Codex / other MCP clients
+## Claude / Claude Code / Claude Desktop
 
-Any client that can spawn a stdio MCP server:
+Claude Desktop style (`claude_desktop_config.json`) — prefer `--workspace` in args:
 
 ```json
 {
   "mcpServers": {
     "api-hero": {
       "command": "node",
-      "args": ["/absolute/path/to/api-hero/dist/mcp/server.js"],
-      "env": {
-        "APIHERO_WORKSPACE": "/absolute/path/to/your-api-workspace"
-      }
+      "args": [
+        "/absolute/path/to/api-hero/dist/mcp/server.js",
+        "--workspace",
+        "/absolute/path/to/your-api-workspace"
+      ]
     }
   }
 }
 ```
 
-Gemini CLI and similar tools follow the same pattern: command `node`, args pointing at `dist/mcp/server.js`, env `APIHERO_WORKSPACE`.
+Claude Code: use `claude mcp add` (or the product’s MCP add flow) with the same command and args (include `--workspace`). `APIHERO_WORKSPACE` remains an optional fallback.
 
 ## Example workspace (DummyJSON)
 
@@ -121,9 +219,47 @@ The repo ships a full sample under [`examples/collections/`](../../examples/coll
 
 1. Create (or open) a workspace folder with a `Collections/` directory.
 2. Copy or symlink `examples/collections/DummyJSON Complete API Collection` into `Collections/`.
-3. Point `APIHERO_WORKSPACE` at that workspace root.
+3. Point the server at that workspace root with `--workspace` (preferred), or `APIHERO_WORKSPACE`.
+
+Example:
+
+```bash
+node ./dist/mcp/server.js --workspace "/absolute/path/to/your-dummyjson-workspace"
+```
 
 Optional live smoke (not unit tests): `node ./scripts/mcp-e2e-smoke.mjs` — documents how to exercise list → run against DummyJSON; network calls are gated and not part of `npm test`.
+
+## Troubleshooting
+
+### Codex does not show `apihero_*` tools
+
+1. **Extension installed ≠ MCP registered** — installing API Hero does not add an entry to Codex config. You must configure Codex yourself (see [Codex (VS Code extension)](#codex-vs-code-extension)).
+2. Open **Codex Settings → MCP servers** and confirm `api-hero` is listed.
+3. Check `~/.codex/config.toml` (Windows: `%USERPROFILE%\.codex\config.toml`) for a `[mcp_servers.api-hero]` section.
+4. Verify `command` and `args` paths exist:
+   - `node` is on PATH (or use an absolute path to Node)
+   - `.../dist/mcp/server.js` exists (installed extension version folder or repo `dist/` after compile)
+   - `--workspace` points at a real folder
+5. Restart or reload Codex after editing config.
+6. Confirm these tools appear when MCP is healthy:
+   - `apihero_list_collections`
+   - `apihero_get_collection`
+   - `apihero_list_requests`
+   - `apihero_get_request`
+   - `apihero_run_request`
+   - `apihero_run_collection`
+   - `apihero_get_run`
+   - `apihero_get_request_result`
+
+### Tools return `EMPTY_WORKSPACE`
+
+Usually wrong `--workspace` (or missing `APIHERO_WORKSPACE` / cwd) — the path must be the workspace **root** that contains `Collections/<Name>/`, not a single collection folder. Fix the path and retry.
+
+## Future (not implemented)
+
+**Planned convenience:** a Command Palette action **"API Hero: Configure MCP for Codex"** that would help write or open the official Codex config **with user consent**.
+
+This command is **not available yet** — do not look for it in the Command Palette today.
 
 ## Security
 

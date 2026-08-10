@@ -1,0 +1,8 @@
+@name Delete Product
+@description Simulate deleting product id 1 (returns isDeleted).
+
+DELETE {{baseUrl}}/products/1
+Accept: application/json
+
+expect status == 200
+expect body.isDeleted == true

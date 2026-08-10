@@ -1,0 +1,12 @@
+@name Update Post
+@description Simulate updating the title of post id 1.
+
+PUT {{baseUrl}}/posts/1
+Accept: application/json
+Content-Type: application/json
+
+{
+  "title": "Updated post title from API Hero"
+}
+expect status == 200
+expect body.id == 1

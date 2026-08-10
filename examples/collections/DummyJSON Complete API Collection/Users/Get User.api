@@ -1,0 +1,8 @@
+@name Get User
+@description Fetch a single user by id.
+
+GET {{baseUrl}}/users/1
+Accept: application/json
+
+expect status == 200
+expect body.username exists

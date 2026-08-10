@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.8.0] - 2026-08-11
+
+Universal MCP workspace configuration and client-owned Codex/Cursor/Claude documentation. Backward compatible with **2.7.0**.
+
+### Added
+
+- MCP CLI `--workspace` / `--workspace=<path>` (preferred over `APIHERO_WORKSPACE`) with clear fail-fast when the flag has no value
+- Unit tests for workspace CLI parsing and resolve priority (`--workspace` → env → cwd)
+
+### Changed
+
+- `resolveMcpWorkspaceRoot` takes an options bag (`cliWorkspace` / `env` / `cwd`); relative paths resolve against the injectable `cwd`
+- EMPTY_WORKSPACE agent hint mentions `--workspace`
+
+### Docs & Marketplace
+
+- [MCP user guide](docs/user/mcp.md) — client-owned configuration; Codex VS Code `~/.codex/config.toml` / `[mcp_servers.api-hero]`; troubleshooting; installing the extension does **not** auto-register MCP with Codex
+- Future convenience **"API Hero: Configure MCP for Codex"** documented as **not implemented**
+- Release readiness pinned to **2.8.0**
+
 ## [2.7.0] - 2026-08-10
 
 MCP server for AI coding agents — discover and run API Hero collections from Cursor, Claude Code, Codex, and other MCP-compatible clients without the VS Code UI. Reuses the existing Collection Runner and Execution Orchestrator (no parallel HTTP client). Backward compatible with **2.6.0**.

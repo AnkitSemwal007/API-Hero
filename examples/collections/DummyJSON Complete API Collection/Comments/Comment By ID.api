@@ -1,0 +1,8 @@
+@name Comment By ID
+@description Fetch a single comment by id.
+
+GET {{baseUrl}}/comments/1
+Accept: application/json
+
+expect status == 200
+expect body.id == 1

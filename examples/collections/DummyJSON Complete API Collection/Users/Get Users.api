@@ -1,0 +1,8 @@
+@name Get Users
+@description List users with the default page size.
+
+GET {{baseUrl}}/users
+Accept: application/json
+
+expect status == 200
+expect body.users exists

@@ -1,0 +1,8 @@
+@name Get Post
+@description Fetch a single post by id.
+
+GET {{baseUrl}}/posts/1
+Accept: application/json
+
+expect status == 200
+expect body.id == 1

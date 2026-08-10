@@ -1,0 +1,8 @@
+@name Get Carts
+@description List carts with the default page size.
+
+GET {{baseUrl}}/carts
+Accept: application/json
+
+expect status == 200
+expect body.carts exists

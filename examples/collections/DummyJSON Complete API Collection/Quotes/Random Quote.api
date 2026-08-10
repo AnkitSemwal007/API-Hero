@@ -1,0 +1,8 @@
+@name Random Quote
+@description Return a random quote (changes each call).
+
+GET {{baseUrl}}/quotes/random
+Accept: application/json
+
+expect status == 200
+expect body.quote exists

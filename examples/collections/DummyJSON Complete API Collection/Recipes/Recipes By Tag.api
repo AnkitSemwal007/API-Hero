@@ -1,0 +1,8 @@
+@name Recipes By Tag
+@description List recipes tagged Pakistani.
+
+GET {{baseUrl}}/recipes/tag/Pakistani
+Accept: application/json
+
+expect status == 200
+expect body.recipes exists

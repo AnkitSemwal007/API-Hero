@@ -1,0 +1,8 @@
+@name Get Todos
+@description List todos with the default page size.
+
+GET {{baseUrl}}/todos
+Accept: application/json
+
+expect status == 200
+expect body.todos exists

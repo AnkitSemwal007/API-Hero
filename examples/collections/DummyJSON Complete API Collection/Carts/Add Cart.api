@@ -1,0 +1,22 @@
+@name Add Cart
+@description Simulate creating a cart with product line items.
+
+POST {{baseUrl}}/carts/add
+Accept: application/json
+Content-Type: application/json
+
+{
+  "userId": 1,
+  "products": [
+    {
+      "id": 144,
+      "quantity": 4
+    },
+    {
+      "id": 98,
+      "quantity": 1
+    }
+  ]
+}
+expect status == 200
+expect body.id exists

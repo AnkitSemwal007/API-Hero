@@ -10,6 +10,10 @@
  * Usage (from repo root, after compile):
  *   node ./scripts/mcp-e2e-smoke.mjs
  *   APIHERO_MCP_LIVE=1 node ./scripts/mcp-e2e-smoke.mjs
+ *
+ * Note: this script calls createHeadlessApiHeroRuntime directly (not the
+ * stdio CLI). For the spawned server, prefer:
+ *   node ./dist/mcp/server.js --workspace "<path>"
  */
 
 import { cpSync, existsSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs';

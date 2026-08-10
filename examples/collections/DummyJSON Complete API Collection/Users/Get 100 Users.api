@@ -1,0 +1,8 @@
+@name Get 100 Users
+@description Request up to 100 users in one response.
+
+GET {{baseUrl}}/users?limit=100
+Accept: application/json
+
+expect status == 200
+expect body.limit == 100

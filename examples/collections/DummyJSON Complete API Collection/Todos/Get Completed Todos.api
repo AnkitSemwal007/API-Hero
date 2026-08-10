@@ -1,0 +1,8 @@
+@name Get Completed Todos
+@description DummyJSON has no completed-status filter; this loads todo id 2, a completed example.
+
+GET {{baseUrl}}/todos/2
+Accept: application/json
+
+expect status == 200
+expect body.completed == true

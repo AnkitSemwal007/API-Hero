@@ -1,0 +1,8 @@
+@name Get 100 Products
+@description Request up to 100 products in one response.
+
+GET {{baseUrl}}/products?limit=100
+Accept: application/json
+
+expect status == 200
+expect body.limit == 100

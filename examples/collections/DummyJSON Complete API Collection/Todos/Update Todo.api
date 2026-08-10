@@ -1,0 +1,12 @@
+@name Update Todo
+@description Simulate updating the completed flag on todo id 1.
+
+PUT {{baseUrl}}/todos/1
+Accept: application/json
+Content-Type: application/json
+
+{
+  "completed": false
+}
+expect status == 200
+expect body.completed == false

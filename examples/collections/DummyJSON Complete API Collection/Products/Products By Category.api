@@ -1,0 +1,8 @@
+@name Products By Category
+@description List products in the smartphones category.
+
+GET {{baseUrl}}/products/category/smartphones
+Accept: application/json
+
+expect status == 200
+expect body.products exists

@@ -1,0 +1,8 @@
+@name Pagination Example
+@description Paginate products with limit, skip, and field selection.
+
+GET {{baseUrl}}/products?limit=10&skip=10&select=title%2Cprice
+Accept: application/json
+
+expect status == 200
+expect body.skip == 10

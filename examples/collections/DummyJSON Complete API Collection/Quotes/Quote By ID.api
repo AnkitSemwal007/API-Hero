@@ -1,0 +1,8 @@
+@name Quote By ID
+@description Fetch a single quote by id.
+
+GET {{baseUrl}}/quotes/1
+Accept: application/json
+
+expect status == 200
+expect body.id == 1

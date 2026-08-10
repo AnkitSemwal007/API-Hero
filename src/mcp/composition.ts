@@ -585,14 +585,31 @@ class DirectProgressRunner implements ExecutionProgressRunner {
   }
 }
 
-/** Resolve workspace root from env or cwd. */
+/** Injectable inputs for {@link resolveMcpWorkspaceRoot}. */
+export type ResolveMcpWorkspaceRootOptions = {
+  readonly cliWorkspace?: string;
+  readonly env?: NodeJS.ProcessEnv;
+  readonly cwd?: string;
+};
+
+/**
+ * Resolve MCP workspace root.
+ * Priority: CLI `--workspace` → `APIHERO_WORKSPACE` env → cwd.
+ * Injectable for tests; does not invent filesystem discovery.
+ * Relative CLI/env paths resolve against the injectable `cwd`.
+ */
 export function resolveMcpWorkspaceRoot(
-  env: NodeJS.ProcessEnv = process.env,
-  cwd: string = process.cwd(),
+  options: ResolveMcpWorkspaceRootOptions = {},
 ): string {
+  const env = options.env ?? process.env;
+  const cwd = options.cwd ?? process.cwd();
+  const fromCli = options.cliWorkspace?.trim();
+  if (fromCli !== undefined && fromCli.length > 0) {
+    return path.resolve(cwd, fromCli);
+  }
   const fromEnv = env.APIHERO_WORKSPACE?.trim();
   if (fromEnv !== undefined && fromEnv.length > 0) {
-    return path.resolve(fromEnv);
+    return path.resolve(cwd, fromEnv);
   }
   return path.resolve(cwd);
 }

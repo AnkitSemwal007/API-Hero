@@ -1,0 +1,17 @@
+@name Add Product
+@description Simulate creating a product (server does not persist).
+
+POST {{baseUrl}}/products/add
+Accept: application/json
+Content-Type: application/json
+
+{
+  "title": "API Hero Demo Pencil",
+  "description": "Sample product created from the DummyJSON collection.",
+  "category": "stationery",
+  "price": 4.99,
+  "brand": "API Hero",
+  "stock": 120
+}
+expect status == 200
+expect body.id exists

@@ -1,0 +1,8 @@
+@name Posts By User
+@description List posts authored by user id 5.
+
+GET {{baseUrl}}/posts/user/5
+Accept: application/json
+
+expect status == 200
+expect body.posts exists

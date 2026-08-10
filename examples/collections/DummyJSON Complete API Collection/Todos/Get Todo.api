@@ -1,0 +1,8 @@
+@name Get Todo
+@description Fetch a single todo by id.
+
+GET {{baseUrl}}/todos/1
+Accept: application/json
+
+expect status == 200
+expect body.id == 1

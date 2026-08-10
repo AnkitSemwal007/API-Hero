@@ -1,0 +1,8 @@
+@name Search Products
+@description Full-text search products by query string.
+
+GET {{baseUrl}}/products/search?q=phone
+Accept: application/json
+
+expect status == 200
+expect body.products exists

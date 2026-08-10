@@ -1,0 +1,8 @@
+@name Get Posts
+@description List posts with the default page size.
+
+GET {{baseUrl}}/posts
+Accept: application/json
+
+expect status == 200
+expect body.posts exists

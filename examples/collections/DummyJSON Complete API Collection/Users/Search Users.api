@@ -1,0 +1,8 @@
+@name Search Users
+@description Search users by name query.
+
+GET {{baseUrl}}/users/search?q=John
+Accept: application/json
+
+expect status == 200
+expect body.users exists

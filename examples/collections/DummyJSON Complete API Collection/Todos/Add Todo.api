@@ -1,0 +1,14 @@
+@name Add Todo
+@description Simulate creating a todo (server does not persist).
+
+POST {{baseUrl}}/todos/add
+Accept: application/json
+Content-Type: application/json
+
+{
+  "todo": "Try the API Hero DummyJSON collection",
+  "completed": false,
+  "userId": 5
+}
+expect status == 200
+expect body.id exists

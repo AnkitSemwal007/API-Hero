@@ -1,0 +1,6 @@
+@name Custom Image Size
+@description Generate a custom-sized image with background, text color, and caption.
+
+GET {{baseUrl}}/image/400x200/008080/ffffff?text=API+Hero
+
+expect status == 200

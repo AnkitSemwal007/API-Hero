@@ -1,0 +1,8 @@
+@name Delete Post
+@description Simulate deleting post id 1.
+
+DELETE {{baseUrl}}/posts/1
+Accept: application/json
+
+expect status == 200
+expect body.isDeleted == true

@@ -1,0 +1,8 @@
+@name Cuisine
+@description DummyJSON has no /cuisine route; Italian cuisine recipes are filtered via the Italian tag.
+
+GET {{baseUrl}}/recipes/tag/Italian
+Accept: application/json
+
+expect status == 200
+expect body.recipes exists

@@ -1,0 +1,14 @@
+@name Update Product
+@description Simulate a full update of product id 1.
+
+PUT {{baseUrl}}/products/1
+Accept: application/json
+Content-Type: application/json
+
+{
+  "title": "Updated Essence Mascara",
+  "price": 12.5,
+  "stock": 40
+}
+expect status == 200
+expect body.id == 1

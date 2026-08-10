@@ -1,0 +1,8 @@
+@name Get Comments
+@description List comments with the default page size.
+
+GET {{baseUrl}}/comments
+Accept: application/json
+
+expect status == 200
+expect body.comments exists

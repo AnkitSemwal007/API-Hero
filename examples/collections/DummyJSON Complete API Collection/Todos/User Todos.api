@@ -1,0 +1,8 @@
+@name User Todos
+@description List todos belonging to user id 5.
+
+GET {{baseUrl}}/todos/user/5
+Accept: application/json
+
+expect status == 200
+expect body.todos exists

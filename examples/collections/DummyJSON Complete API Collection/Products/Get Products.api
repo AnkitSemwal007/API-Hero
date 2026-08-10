@@ -1,0 +1,8 @@
+@name Get Products
+@description List products with the default page size (30).
+
+GET {{baseUrl}}/products
+Accept: application/json
+
+expect status == 200
+expect body.products exists

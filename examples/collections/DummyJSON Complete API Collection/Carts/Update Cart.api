@@ -1,0 +1,18 @@
+@name Update Cart
+@description Simulate merging products into cart id 1.
+
+PUT {{baseUrl}}/carts/1
+Accept: application/json
+Content-Type: application/json
+
+{
+  "merge": true,
+  "products": [
+    {
+      "id": 1,
+      "quantity": 1
+    }
+  ]
+}
+expect status == 200
+expect body.id == 1

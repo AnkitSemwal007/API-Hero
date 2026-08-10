@@ -1,0 +1,8 @@
+@name Search Posts
+@description Search posts by query string.
+
+GET {{baseUrl}}/posts/search?q=love
+Accept: application/json
+
+expect status == 200
+expect body.posts exists

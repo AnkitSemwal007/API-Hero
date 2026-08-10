@@ -1,0 +1,8 @@
+@name Meal Type
+@description List recipes for meal type snack.
+
+GET {{baseUrl}}/recipes/meal-type/snack
+Accept: application/json
+
+expect status == 200
+expect body.recipes exists

@@ -1,0 +1,8 @@
+@name Filter Users
+@description Filter users by nested key/value (hair.color = Brown).
+
+GET {{baseUrl}}/users/filter?key=hair.color&value=Brown
+Accept: application/json
+
+expect status == 200
+expect body.users exists

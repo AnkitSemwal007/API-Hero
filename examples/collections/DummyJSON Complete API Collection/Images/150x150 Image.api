@@ -1,0 +1,6 @@
+@name 150x150 Image
+@description Generate a 150×150 placeholder PNG.
+
+GET {{baseUrl}}/image/150
+
+expect status == 200

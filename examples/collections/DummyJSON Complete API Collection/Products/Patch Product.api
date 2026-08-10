@@ -1,0 +1,12 @@
+@name Patch Product
+@description Simulate a partial update of product id 1.
+
+PATCH {{baseUrl}}/products/1
+Accept: application/json
+Content-Type: application/json
+
+{
+  "title": "Patched Product Title"
+}
+expect status == 200
+expect body.title exists

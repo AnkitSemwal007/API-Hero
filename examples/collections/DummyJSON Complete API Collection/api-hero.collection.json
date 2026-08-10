@@ -1,0 +1,95 @@
+{
+  "name": "DummyJSON Complete API Collection",
+  "description": "A comprehensive sample collection demonstrating all major DummyJSON endpoints, including authentication, CRUD operations, search, pagination, filtering, request bodies, variables, and headers.",
+  "folderOrder": [
+    "Authentication",
+    "Products",
+    "Users",
+    "Todos",
+    "Posts",
+    "Comments",
+    "Recipes",
+    "Quotes",
+    "Carts",
+    "Images"
+  ],
+  "requestOrder": {
+    "Authentication": [
+      "Login.api",
+      "Current User.api",
+      "Refresh Session.api",
+      "Test Invalid Login.api"
+    ],
+    "Products": [
+      "Get Products.api",
+      "Get Product.api",
+      "Get 100 Products.api",
+      "Pagination Example.api",
+      "Search Products.api",
+      "Categories.api",
+      "Products By Category.api",
+      "Add Product.api",
+      "Update Product.api",
+      "Patch Product.api",
+      "Delete Product.api"
+    ],
+    "Users": [
+      "Get Users.api",
+      "Get User.api",
+      "Get 100 Users.api",
+      "Pagination.api",
+      "Search Users.api",
+      "Filter Users.api"
+    ],
+    "Todos": [
+      "Get Todos.api",
+      "Get Todo.api",
+      "User Todos.api",
+      "Get Completed Todos.api",
+      "Add Todo.api",
+      "Update Todo.api",
+      "Delete Todo.api"
+    ],
+    "Posts": [
+      "Get Posts.api",
+      "Get Post.api",
+      "Search Posts.api",
+      "Posts By User.api",
+      "Add Post.api",
+      "Update Post.api",
+      "Delete Post.api"
+    ],
+    "Comments": [
+      "Get Comments.api",
+      "Comment By ID.api",
+      "Comments By Post.api"
+    ],
+    "Recipes": [
+      "Get Recipes.api",
+      "Recipe By ID.api",
+      "Search Recipes.api",
+      "Recipes By Tag.api",
+      "Meal Type.api",
+      "Cuisine.api"
+    ],
+    "Quotes": [
+      "Get Quotes.api",
+      "Quote By ID.api",
+      "Random Quote.api"
+    ],
+    "Carts": [
+      "Get Carts.api",
+      "Cart By ID.api",
+      "User Carts.api",
+      "Add Cart.api",
+      "Update Cart.api",
+      "Delete Cart.api"
+    ],
+    "Images": [
+      "150x150 Image.api",
+      "300x300 Image.api",
+      "600x400 Image.api",
+      "Custom Image Size.api"
+    ]
+  }
+}

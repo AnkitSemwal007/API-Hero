@@ -1,0 +1,8 @@
+@name Get Recipes
+@description List recipes with the default page size.
+
+GET {{baseUrl}}/recipes
+Accept: application/json
+
+expect status == 200
+expect body.recipes exists

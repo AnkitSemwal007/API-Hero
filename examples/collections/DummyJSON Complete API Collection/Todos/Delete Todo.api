@@ -1,0 +1,8 @@
+@name Delete Todo
+@description Simulate deleting todo id 1.
+
+DELETE {{baseUrl}}/todos/1
+Accept: application/json
+
+expect status == 200
+expect body.isDeleted == true

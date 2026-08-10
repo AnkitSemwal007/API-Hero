@@ -1,6 +1,12 @@
 # Roadmap
 
-Honest near-term plan for **API Hero** after **2.7.0** (MCP server for AI agents; **2.6.0** Scenarios progressive disclosure, project-store scenario paths, Reset Workspace, Run Report failure diagnostics; Authentication Premium UX + Scenario Experience shipped in **2.5.0**; Scenarios Phase 1 foundation in **2.4.0**). Product features through **2.3.x** already ship — Execution Center, Collection Runner / Run Report polish, dependency workflow, Collection Run Debugger, Managers (Environments, Auth), Overview, History Detail, OpenAPI wizard, Response copy/save/search, response variable extraction, and collection chaining (`@depends-on`, per-run store, collection variables). Those are not roadmap gaps.
+Honest near-term plan for **API Hero** after **2.8.0** (universal MCP `--workspace` + client-owned MCP docs; **2.7.0** MCP server for AI agents; **2.6.0** Scenarios progressive disclosure, project-store scenario paths, Reset Workspace, Run Report failure diagnostics; Authentication Premium UX + Scenario Experience shipped in **2.5.0**; Scenarios Phase 1 foundation in **2.4.0**). Product features through **2.3.x** already ship — Execution Center, Collection Runner / Run Report polish, dependency workflow, Collection Run Debugger, Managers (Environments, Auth), Overview, History Detail, OpenAPI wizard, Response copy/save/search, response variable extraction, and collection chaining (`@depends-on`, per-run store, collection variables). Those are not roadmap gaps.
+
+## Shipped in 2.8.0
+
+| Item | Notes |
+| --- | --- |
+| Universal MCP `--workspace` | CLI workspace flag preferred over `APIHERO_WORKSPACE`; client-owned Codex/Cursor/Claude docs; no auto-registration |
 
 ## Shipped in 2.7.0
 
@@ -39,6 +45,7 @@ Honest near-term plan for **API Hero** after **2.7.0** (MCP server for AI agents
 | Run File | Implement multi-request file execution (today: stub, palette-hidden) |
 | Examples pack | Curated `.api` samples including extract flows; optional scenario samples |
 | Docs drift checks | Keep user/architecture docs matched to `package.json` |
+| Configure MCP for Codex | Convenience command to write/open official Codex config with user consent (**not implemented**) |
 
 ## Later
 

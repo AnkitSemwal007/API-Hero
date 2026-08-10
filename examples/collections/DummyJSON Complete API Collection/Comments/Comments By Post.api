@@ -1,0 +1,8 @@
+@name Comments By Post
+@description List comments for post id 6.
+
+GET {{baseUrl}}/comments/post/6
+Accept: application/json
+
+expect status == 200
+expect body.comments exists

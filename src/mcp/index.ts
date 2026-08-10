@@ -11,7 +11,11 @@ export {
 export type {
   CreateHeadlessApiHeroRuntimeOptions,
   HeadlessApiHeroRuntime,
+  ResolveMcpWorkspaceRootOptions,
 } from './composition';
+
+export { parseWorkspaceCliArg } from './workspace-cli';
+export type { ParseWorkspaceCliArgResult } from './workspace-cli';
 
 export { ApiHeroMcpService } from './service';
 export type { ApiHeroMcpServiceDeps } from './service';
