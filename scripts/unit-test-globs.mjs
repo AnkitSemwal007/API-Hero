@@ -58,4 +58,5 @@ export const UNIT_TEST_GLOBS = Object.freeze([
   'dist/shared/*.test.js',
   'dist/ui/webview/*.test.js',
   'dist/ui/webview/icons/*.test.js',
+  'dist/mcp/*.test.js',
 ]);

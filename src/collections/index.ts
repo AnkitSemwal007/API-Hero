@@ -43,6 +43,13 @@ export type {
   WorkspaceScanner,
 } from './scanner';
 
+export {
+  NodeApiFileReader,
+  NodeWorkspaceScanner,
+  toFsPath,
+} from './node-workspace-scanner';
+export type { NodeWorkspaceScannerOptions } from './node-workspace-scanner';
+
 export type { CollectionRepository } from './repository';
 export { InMemoryCollectionRepository } from './repository';
 

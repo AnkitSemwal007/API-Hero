@@ -4,7 +4,7 @@
 
 Author `.api` requests beside your code, run them with assertions, and keep collections in Git — without leaving the editor.
 
-> Extension ID: **`ankitsemwal.api-hero`** · Version: **2.6.0** · License: [MIT](LICENSE)
+> Extension ID: **`ankitsemwal.api-hero`** · Version: **2.7.0** · License: [MIT](LICENSE)
 
 [Documentation](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/README.md) · [Changelog](CHANGELOG.md) · [Support](SUPPORT.md)
 
@@ -13,6 +13,7 @@ Author `.api` requests beside your code, run them with assertions, and keep coll
 **Why developers use API Hero**
 
 - **Stay in VS Code** — Request Editor, Response Viewer, Collections, Scenarios, Execution, and History live in the editor
+- **MCP for AI agents** — discover and run collections from Cursor, Claude Code, Codex, and other MCP clients ([docs](docs/user/mcp.md))
 - **Authentication that stays secret** — profiles, Login API sessions, one-shot Bearer, and collection defaults — secrets in VS Code Secret Storage
 - **Scenarios for real workflows** — multi-step orchestration with templates, request binding, live step status, and Scenario Reports
 - **Git-native collections** — folders and human-readable `.api` files you can diff and review in PRs

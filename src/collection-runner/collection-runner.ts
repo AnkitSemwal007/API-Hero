@@ -379,7 +379,12 @@ function describeProducerState(result: RequestRunResult | undefined): string {
   }
 }
 
-function mapOrchestratorResult(
+/**
+ * Maps an orchestrator attempt onto {@link RequestRunResult}.
+ * Shared by CollectionRunnerService and headless hosts (MCP) so single-request
+ * and collection-run outcomes stay aligned (including blocking extraction).
+ */
+export function mapOrchestratorResult(
   planned: PlannedRequest,
   runResult: RunAtSourceLocationResult,
   policy: FailurePolicy,

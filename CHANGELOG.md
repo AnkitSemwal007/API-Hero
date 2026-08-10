@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.7.0] - 2026-08-10
+
+MCP server for AI coding agents — discover and run API Hero collections from Cursor, Claude Code, Codex, and other MCP-compatible clients without the VS Code UI. Reuses the existing Collection Runner and Execution Orchestrator (no parallel HTTP client). Backward compatible with **2.6.0**.
+
+### Added
+
+- **Standalone MCP stdio server** (`api-hero-mcp` / `dist/mcp/server.js`) — workspace via `APIHERO_WORKSPACE` or cwd (`Collections/<Name>/` layout)
+- **MCP tools** — `apihero_list_collections`, `apihero_get_collection`, `apihero_list_requests`, `apihero_get_request`, `apihero_run_request`, `apihero_run_collection`, `apihero_get_run`, `apihero_get_request_result`
+- **Headless composition** — Node workspace scanner, Collection Discovery, Collection Runner, and Execution Orchestrator with no-op UI sinks
+- **Secret-safe agent payloads** — JSON body / JWT / password redaction, masked assertion expected/actual heuristics, auth metadata without secret values
+- **Structured failure diagnostics** for agents — existing `RequestFailureDiagnostics` categories (precondition, transport, assertion, extraction, unread, cancelled) with Expected/Actual where available
+- Unit tests for MCP service/redaction and optional live DummyJSON smoke script (`scripts/mcp-e2e-smoke.mjs`)
+
+### Changed
+
+- Exported `mapOrchestratorResult` from the collection-runner domain so single-request MCP results stay aligned with collection-run mapping (including blocking extraction failures)
+
+### Docs & Marketplace
+
+- [MCP user guide](docs/user/mcp.md) — Cursor / Claude Code / Codex configuration
+- README positions MCP for AI agents
+- Release readiness pinned to **2.7.0**
+
 ## [2.6.0] - 2026-07-31
 
 Workspace hygiene and Scenarios UX — progressive disclosure, project-store scenario paths, Reset Workspace, and richer Collection Run Report failure details. Backward compatible with **2.5.0** (`.api` files, collections, and settings continue to work). Scenario files under legacy `.api-hero/scenarios/` migrate automatically into `.apihero/scenarios/`.

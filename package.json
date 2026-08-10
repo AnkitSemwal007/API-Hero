@@ -1,8 +1,8 @@
 {
   "name": "api-hero",
   "displayName": "API Hero",
-  "description": "Git-first REST/HTTP client for VS Code. Edit .api requests in a UI Request Editor, run with assertions, orchestrate Scenarios, manage Authentication (profiles, Login API sessions, Secret Storage), collections, and environments, import OpenAPI, and inspect Execution, History, and Run Reports.",
-  "version": "2.6.0",
+  "description": "Git-first REST/HTTP client for VS Code. Edit .api requests in a UI Request Editor, run with assertions, orchestrate Scenarios, manage Authentication (profiles, Login API sessions, Secret Storage), collections, and environments, import OpenAPI, inspect Execution, History, and Run Reports, and expose collections to AI agents via MCP.",
+  "version": "2.7.0",
   "publisher": "ankitsemwal",
   "license": "MIT",
   "homepage": "https://github.com/AnkitSemwal007/API-Hero",
@@ -32,6 +32,8 @@
     "collection runner",
     "scenarios",
     "api scenarios",
+    "mcp",
+    "model context protocol",
     "authentication",
     "http requests",
     "http file",
@@ -49,6 +51,9 @@
   },
   "icon": "images/icon.png",
   "main": "./dist/extension.js",
+  "bin": {
+    "api-hero-mcp": "./bin/api-hero-mcp.js"
+  },
   "contributes": {
     "languages": [
       {
@@ -2074,12 +2079,15 @@
     "test": "npm run compile && node ./scripts/run-unit-tests.mjs",
     "test:unit": "npm test",
     "test:coverage": "npm run compile && c8 --reporter=text-summary --reporter=text node ./scripts/run-unit-tests.mjs",
+    "mcp": "npm run compile && node ./dist/mcp/server.js",
     "package": "npm run clean && npm run build && npm test && node ./scripts/package-vsix.mjs",
     "package:fast": "npm run build && node ./scripts/package-vsix.mjs",
     "vscode:prepublish": "npm run compile"
   },
   "dependencies": {
-    "yaml": "^2.9.0"
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "yaml": "^2.9.0",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

@@ -50,7 +50,10 @@ export type {
   CollectionRunnerOptions,
   ExecuteRunOptions,
 } from './collection-runner';
-export { CollectionRunnerService } from './collection-runner';
+export {
+  CollectionRunnerService,
+  mapOrchestratorResult,
+} from './collection-runner';
 
 export type {
   CollectionRunVariableContext,
