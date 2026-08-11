@@ -653,6 +653,7 @@ describe('TC026–TC028 — graph enrich / cycle / mixed topo', () => {
     assert.equal(result.ok, false);
     if (result.ok) return;
     assert.equal(result.code, 'DEPENDENCY_CYCLE');
+    assert.match(result.message, /A → B → A|B → A → B/);
   });
 
   test('TC028 — mixed manual+auto topo still valid', () => {

@@ -1,3 +1,4 @@
+export { createCopyAsCurlCommand } from './copy-as-curl-command';
 export type { CommandDefinition } from './command-definition';
 export { CommandRegistrar } from './command-registrar';
 export { createPlaceholderCommands } from './placeholder-commands';

@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.8.3] - 2026-08-11
+
+Headless CLI / CI runner, Copy as cURL, and MCP scenario execution. Backward compatible with **2.8.2**.
+
+### Added
+
+- **Copy as cURL** — resolve the selected request (variables + auth) without executing HTTP, then copy a POSIX-safe cURL command with secrets redacted by default
+- MCP tool `apihero_run_scenario` — run Scenarios via existing ScenarioEngine (same path as UI Run Scenario); optional `inputs` overrides; secret-safe report projection
+- Headless CLI `apihero` for CI — run request / collection / scenario via the same Orchestrator / CollectionRunner / ScenarioEngine (no VS Code); ProjectStore environments + process-env secrets; `--version` / `-V`; exit codes for CI
+- Shared headless composition (`createHeadlessApiHeroRuntime`) loads ProjectStore environments / auth profiles; secrets via process env (exact Secret Storage key or `APIHERO_SECRET_*` alias)
+
+### Docs & Marketplace
+
+- Complete README rewrite as Marketplace landing page + developer reference (requests, collections, variables, auth, assertions, runner, history, scenarios, OpenAPI, MCP, CLI)
+- [CLI user guide](docs/user/cli.md) — install, commands, environments, secrets, exit codes, CI examples
+- Document client-owned MCP configuration, `--workspace` priority, and that installing the VS Code extension does **not** auto-register MCP with Codex/Cursor/Claude
+- Correct storage documentation: request history uses VS Code globalStorageUri (`request-history.json`); scenarios live under `.apihero/scenarios/`
+- Release readiness pinned to **2.8.3**
+
 ## [2.8.2] - 2026-08-11
 
 Import OpenAPI/Swagger definitions directly from a URL. Backward compatible with **2.8.0**.

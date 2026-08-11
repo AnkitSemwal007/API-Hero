@@ -164,6 +164,26 @@ export function registerApiHeroMcpTools(
   );
 
   server.registerTool(
+    'apihero_run_scenario',
+    {
+      title: 'Run Scenario',
+      description:
+        'Run an API Hero Scenario via ScenarioEngine (same engine as UI Run Scenario). Identify by scenario name, id, or .scenario.json path. Optional inputs override scenario variable defaultValues for this run only. Returns step statuses (completed/failed/skipped), masked variables, and statistics. Domain failure (status=failed) still returns ok:true with the report.',
+      inputSchema: {
+        scenario: z
+          .string()
+          .describe('Scenario name, id, or path under .apihero/scenarios/'),
+        inputs: z
+          .record(z.string())
+          .optional()
+          .describe('Optional run input overrides for scenario variables'),
+      },
+    },
+    async ({ scenario, inputs }) =>
+      safeTool(() => service.runScenario({ scenario, inputs })),
+  );
+
+  server.registerTool(
     'apihero_get_run',
     {
       title: 'Get Run',

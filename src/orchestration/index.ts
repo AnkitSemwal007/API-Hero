@@ -15,6 +15,8 @@ export type {
   PostExecutionObserver,
   PreconditionStage,
   RequestExecutionPipeline,
+  ResolveAtSourceLocationOptions,
+  ResolveAtSourceLocationResult,
   RunAtSourceLocationOptions,
   RunAtSourceLocationResult,
   RunRequestOutcome,

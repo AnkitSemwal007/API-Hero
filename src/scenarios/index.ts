@@ -2,6 +2,8 @@ export * from './models';
 
 export * from './condition-expression';
 export * from './request-depend-ref';
+export * from './request-catalog';
+export * from './scenario-request-binding';
 export * from './schema';
 
 export * from './graph';

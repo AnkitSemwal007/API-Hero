@@ -1,6 +1,26 @@
 # Roadmap
 
-Honest near-term plan for **API Hero** after **2.8.0** (universal MCP `--workspace` + client-owned MCP docs; **2.7.0** MCP server for AI agents; **2.6.0** Scenarios progressive disclosure, project-store scenario paths, Reset Workspace, Run Report failure diagnostics; Authentication Premium UX + Scenario Experience shipped in **2.5.0**; Scenarios Phase 1 foundation in **2.4.0**). Product features through **2.3.x** already ship — Execution Center, Collection Runner / Run Report polish, dependency workflow, Collection Run Debugger, Managers (Environments, Auth), Overview, History Detail, OpenAPI wizard, Response copy/save/search, response variable extraction, and collection chaining (`@depends-on`, per-run store, collection variables). Those are not roadmap gaps.
+Honest near-term plan for **API Hero** after **2.8.3** (headless CLI / CI runner, Copy as cURL, MCP `apihero_run_scenario`; **2.8.2** OpenAPI URL import; **2.8.1** complete README + Marketplace documentation; **2.8.0** universal MCP `--workspace` + client-owned MCP docs; **2.7.0** MCP server for AI agents; **2.6.0** Scenarios progressive disclosure, project-store scenario paths, Reset Workspace, Run Report failure diagnostics; Authentication Premium UX + Scenario Experience shipped in **2.5.0**; Scenarios Phase 1 foundation in **2.4.0**). Product features through **2.3.x** already ship — Execution Center, Collection Runner / Run Report polish, dependency workflow, Collection Run Debugger, Managers (Environments, Auth), Overview, History Detail, OpenAPI wizard, Response copy/save/search, response variable extraction, and collection chaining (`@depends-on`, per-run store, collection variables). Those are not roadmap gaps.
+
+## Shipped in 2.8.3
+
+| Item | Notes |
+| --- | --- |
+| Headless CLI / CI runner (`apihero`) | Same Orchestrator / CollectionRunner / ScenarioEngine as UI + MCP; ProjectStore env/auth + process-env secrets; exit codes for CI |
+| Copy as cURL | Resolve without HTTP; secrets redacted by default |
+| MCP `apihero_run_scenario` | Existing ScenarioEngine (same path as UI Run Scenario) |
+
+## Shipped in 2.8.2
+
+| Item | Notes |
+| --- | --- |
+| OpenAPI URL import | Fetch OpenAPI 3.0/3.1 from HTTP(S) URL into the existing importer |
+
+## Shipped in 2.8.1
+
+| Item | Notes |
+| --- | --- |
+| Complete public README / docs pin | Marketplace landing + developer reference; storage paths corrected; release readiness pinned to **2.8.1** |
 
 ## Shipped in 2.8.0
 
@@ -55,7 +75,6 @@ Honest near-term plan for **API Hero** after **2.8.0** (universal MCP `--workspa
 | Cookie jar | Explicit product + security design required |
 | Code Actions | Optional language assist (not shipped) |
 | Import Hub extras | Swagger 2 / Postman / Insomnia only if provider model stays thin |
-| CLI / CI runner | Separate distribution concern |
 
 ## Explicitly not claiming
 
@@ -67,4 +86,5 @@ Do not schedule "build Env Manager / Auth Manager / Overview / Extraction / coll
 - [Vision](./vision.md)
 - [User guide](../user/getting-started.md)
 - [Scenarios](../user/scenarios.md)
+- [CLI](../user/cli.md)
 - [ADR-0001](../architecture/adr/0001-variables-extraction-auth-dependencies.md)

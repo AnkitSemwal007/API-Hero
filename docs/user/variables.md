@@ -57,6 +57,15 @@ GET https://example.test/login
 Sensitive extracts are masked in the Response Viewer **Extracted** tab. Sensitive
 environment / workspace / collection values use the existing local overlay path.
 
+## Passing values between requests
+
+During a **collection run**, extract in one request and consume with `{{name}}`
+in a later one. For example: Login `@extract`s `token` → Get User uses
+`{{token}}` and `@extract`s `userId` → Get Orders uses `{{userId}}`. The
+Collection Runner reorders by produces/consumes (and optional `@depends-on`) so
+producers run first. Details, failure skip behavior, and how this differs from
+Scenarios: [Request Dependencies & Data Flow](./collection-runner.md#request-dependencies--data-flow).
+
 ## Resolution rules
 
 - Highest scope wins when names collide (Run > Request > Environment > Collection > Workspace > Global).
@@ -74,6 +83,7 @@ environment / workspace / collection values use the existing local overlay path.
 
 ## Related
 
+- [Collection Runner](./collection-runner.md) (Request Dependencies & Data Flow)
 - [Environments](./environments.md)
 - [Authentication](./authentication.md)
 - [Troubleshooting](./troubleshooting.md)

@@ -34,7 +34,13 @@ Common directives:
 | `@name` | Display name in Collections / Outline |
 | `@variable name=value` | Document-scoped variable |
 | `@sensitive-variable name=value` | Document variable marked sensitive |
+| `@extract name from …` | Capture a response value into a variable (default Run scope) |
+| `@sensitive-extract name from …` | Same as `@extract`, marked sensitive |
+| `@depends-on Name` | Explicit dependency on another request (Collection Runner) |
 | `@auth profileId` | Authentication profile for the request |
+
+For how `@extract` and `@depends-on` chain requests during a collection run, see
+[Request Dependencies & Data Flow](./collection-runner.md#request-dependencies--data-flow).
 
 Snippets (`get`, `post`, `separator`, and others) are available in the `api` language.
 
@@ -44,7 +50,10 @@ Snippets (`get`, `post`, `separator`, and others) are available in the `api` lan
 | --- | --- |
 | Run Request | Editor title, context menu, CodeLens, or `Ctrl+Alt+R` / `Cmd+Alt+R` |
 | Run with assertions | **API Hero: Run Request with Assertions** |
+| Copy as cURL | Context menu or **API Hero: Copy as cURL** — copies a resolved, secret-redacted cURL command (does not execute the request) |
 | Open Request Editor | **API Hero: Open Request Editor** (when using the text editor) |
+
+**Copy as cURL** resolves variables and authentication the same way Run Request does, then writes a POSIX-shell-safe `curl` command to the clipboard. Secrets are redacted by default (presentation URL, sensitive headers, sensitive variable values in the body, Basic `-u` credentials). The request is **not** sent over the network.
 
 **Run File** is a stub (Coming Soon) and is hidden from the Command Palette.
 

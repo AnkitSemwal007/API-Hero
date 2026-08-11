@@ -6,7 +6,10 @@
 export {
   createHeadlessApiHeroRuntime,
   createNodeCollectionVariableStorePorts,
+  resolveEnvironmentSelector,
   resolveMcpWorkspaceRoot,
+  ProcessEnvSecretStore,
+  toApiHeroSecretEnvName,
 } from './composition';
 export type {
   CreateHeadlessApiHeroRuntimeOptions,
@@ -28,6 +31,7 @@ export {
   projectCollectionSummary,
   projectRequestRunResult,
   projectRunSummary,
+  projectScenarioReport,
 } from './dto';
 export type {
   McpAuthMetadata,
@@ -40,6 +44,7 @@ export type {
   McpRequestSummary,
   McpResult,
   McpRunSummaryDto,
+  McpScenarioRunDto,
 } from './dto';
 
 export {

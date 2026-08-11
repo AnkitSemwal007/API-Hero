@@ -28,7 +28,11 @@ import {
   buildSelectedRequest,
   type RequestBuildError,
 } from '../request';
-import type { AuthenticatedRequest, RuntimeRequest } from '../models';
+import type {
+  AuthenticatedRequest,
+  RuntimeRequest,
+  VariableValue,
+} from '../models';
 import {
   ApiKeyAuthenticationProvider,
   AuthenticationAbortError,
@@ -260,6 +264,56 @@ export interface RunAtSourceLocationResult {
   readonly preconditionStage?: PreconditionStage;
 }
 
+/**
+ * Options for {@link ExecutionOrchestrator.resolveAtSourceLocation}.
+ * Resolve-only: never calls the HTTP executor or transport.
+ */
+export interface ResolveAtSourceLocationOptions {
+  /** Optional cancellation for authentication secret reads. */
+  readonly signal?: AbortSignal;
+}
+
+/**
+ * Authenticated request produced by the shared resolve pipeline without execute.
+ * Callers such as Copy as cURL use this instead of inventing a second resolver.
+ */
+export type ResolveAtSourceLocationResult =
+  | {
+      readonly success: true;
+      readonly request: AuthenticatedRequest;
+      /**
+       * Variable values from resolution (may include secrets). Used only to
+       * redact export surfaces; never persist or log this map.
+       */
+      readonly values: ReadonlyMap<string, VariableValue>;
+      readonly resolvedVariables: readonly ResolvedVariableSnapshot[];
+    }
+  | {
+      readonly success: false;
+      readonly message: string;
+      readonly preconditionStage?: PreconditionStage;
+    };
+
+/**
+ * Internal resolve outcome shared by execute and resolve-only callers.
+ */
+type AuthenticatedSourceResolution =
+  | {
+      readonly kind: 'ready';
+      readonly request: AuthenticatedRequest;
+      readonly values: ReadonlyMap<string, VariableValue>;
+      readonly resolvedVariables: readonly ResolvedVariableSnapshot[];
+      readonly selected: SelectedRequest;
+      readonly parsed: ParserResult;
+      readonly requestKey: string;
+    }
+  | {
+      readonly kind: 'precondition';
+      readonly message: string;
+      readonly stage?: PreconditionStage;
+    }
+  | { readonly kind: 'aborted' };
+
 const DEFAULT_PIPELINE: RequestExecutionPipeline = Object.freeze({
   parse: (source: RunRequestSource) =>
     parseApiDocument(source.text, { sourceId: source.sourceId }),
@@ -341,6 +395,64 @@ export class ExecutionOrchestrator {
   }
 
   /**
+   * Resolves one request at a source location through parse → select → validate
+   * → build → variables → authentication, without calling the HTTP executor.
+   * Does not touch the active-run concurrency slot used by execute.
+   */
+  public async resolveAtSourceLocation(
+    source: RunRequestSource,
+    options: ResolveAtSourceLocationOptions = {},
+  ): Promise<ResolveAtSourceLocationResult> {
+    if (this.disposed) {
+      return {
+        success: false,
+        message: 'API Hero is no longer active.',
+      };
+    }
+    try {
+      const resolved = await this.resolveAuthenticatedFromSource(
+        source,
+        options.signal,
+      );
+      if (resolved.kind === 'aborted') {
+        return {
+          success: false,
+          message: 'Request resolution was cancelled.',
+        };
+      }
+      if (resolved.kind === 'precondition') {
+        return {
+          success: false,
+          message: resolved.message,
+          ...(resolved.stage === undefined
+            ? {}
+            : { preconditionStage: resolved.stage }),
+        };
+      }
+      return {
+        success: true,
+        request: resolved.request,
+        values: resolved.values,
+        resolvedVariables: resolved.resolvedVariables,
+      };
+    } catch (error) {
+      if (error instanceof AuthenticationAbortError || options.signal?.aborted) {
+        return {
+          success: false,
+          message: 'Request resolution was cancelled.',
+        };
+      }
+      return {
+        success: false,
+        message: friendlyUnexpectedError(error),
+        ...(isRequestBuildError(error)
+          ? { preconditionStage: 'build' as const }
+          : {}),
+      };
+    }
+  }
+
+  /**
    * Executes one request at a source location. Collection Runner prefers this
    * port so it can suppress the viewer and progress UI while still recording
    * history through the normal capture path.
@@ -400,105 +512,21 @@ export class ExecutionOrchestrator {
           if (run.controller.signal.aborted) {
             return this.finishCancellationResult(run.id);
           }
-          reporter.report('Parsing request');
-          const parsed = this.pipeline.parse(source);
-          const selected = this.pipeline.select(parsed.ast, source.offset);
-          const syntaxErrors = parsed.diagnostics.filter(
-            (diagnostic) =>
-              diagnostic.severity === 'error' &&
-              rangesOverlap(diagnostic.range, selected.blockRange),
+          const resolved = await this.resolveAuthenticatedFromSource(
+            source,
+            run.controller.signal,
+            reporter,
           );
-          if (syntaxErrors.length > 0) {
-            return this.failPreconditionResult(
-              run.id,
-              `The selected request has a syntax error: ${syntaxErrors[0]!.message}`,
-              showNotifications,
-              'parse',
-            );
-          }
-
-          reporter.report('Validating request');
-          const validation = this.pipeline.validate(
-            parsed.ast,
-            selected.request,
-          );
-          const semanticError = validation.diagnostics.find(
-            (diagnostic) => diagnostic.severity === 'error',
-          );
-          if (semanticError !== undefined) {
-            return this.failPreconditionResult(
-              run.id,
-              `The selected request is invalid: ${semanticError.message}`,
-              showNotifications,
-              'validate',
-            );
-          }
-          if (run.controller.signal.aborted) {
+          if (resolved.kind === 'aborted') {
             return this.finishCancellationResult(run.id);
           }
-
-          reporter.report('Building request');
-          const request = this.pipeline.build(
-            parsed.ast,
-            selected.request,
-            validation,
-          );
-          reporter.report('Resolving variables');
-          const requestKey = requestKeyFor(source.sourceId, selected.index);
-          const resolution = this.variableResolver.resolveRequest(
-            request,
-            this.getVariableContext(parsed.ast, requestKey),
-          );
-          if (!resolution.success) {
-            const names = [...new Set(resolution.errors.flatMap((error) => error.chain))]
-              .join(', ');
+          if (resolved.kind === 'precondition') {
             return this.failPreconditionResult(
               run.id,
-              `The selected request has unresolved variables: ${names}.`,
+              resolved.message,
               showNotifications,
-              'variables',
+              resolved.stage,
             );
-          }
-          const resolvedVariables = buildResolvedVariableSnapshots(
-            request,
-            resolution.values,
-          );
-          const resolvedVariableFields =
-            resolvedVariables.length === 0
-              ? {}
-              : { resolvedVariables };
-          if (run.controller.signal.aborted) {
-            return this.finishCancellationResult(run.id);
-          }
-          reporter.report('Resolving authentication');
-          let authenticated;
-          try {
-            authenticated = await this.authenticationResolver.resolve(
-              resolution.request,
-              {
-                ...this.getAuthenticationContext(resolution.values, {
-                  sourceId: source.sourceId,
-                }),
-                variables: resolution.values,
-              },
-              run.controller.signal,
-            );
-          } catch (error) {
-            if (
-              error instanceof AuthenticationAbortError ||
-              run.controller.signal.aborted
-            ) {
-              return this.finishCancellationResult(run.id);
-            }
-            if (error instanceof AuthenticationError) {
-              return this.failPreconditionResult(
-                run.id,
-                error.message,
-                showNotifications,
-                'authentication',
-              );
-            }
-            throw error;
           }
           if (!this.isCurrent(run.id)) {
             return { outcome: 'replaced' };
@@ -506,6 +534,19 @@ export class ExecutionOrchestrator {
           if (run.controller.signal.aborted) {
             return this.finishCancellationResult(run.id);
           }
+
+          const {
+            request: authenticated,
+            resolvedVariables,
+            selected,
+            parsed,
+            requestKey,
+          } = resolved;
+          const resolvedVariableFields =
+            resolvedVariables.length === 0
+              ? {}
+              : { resolvedVariables };
+
           reporter.report('Sending request');
           const result = await this.executor.execute(authenticated, {
             ...this.getExecutionContext(),
@@ -729,6 +770,123 @@ export class ExecutionOrchestrator {
     this.active?.controller.abort('disposed');
     this.active = undefined;
     this.status.dispose();
+  }
+
+  /**
+   * Shared resolve pipeline: parse → select → validate → build → variables →
+   * authentication. Never calls {@link RequestExecutor.execute}.
+   */
+  private async resolveAuthenticatedFromSource(
+    source: RunRequestSource,
+    signal?: AbortSignal,
+    reporter?: ExecutionProgressReporter,
+  ): Promise<AuthenticatedSourceResolution> {
+    const report = (message: string): void => {
+      reporter?.report(message);
+    };
+    const aborted = (): boolean => signal?.aborted === true;
+
+    if (aborted()) {
+      return { kind: 'aborted' };
+    }
+    report('Parsing request');
+    const parsed = this.pipeline.parse(source);
+    const selected = this.pipeline.select(parsed.ast, source.offset);
+    const syntaxErrors = parsed.diagnostics.filter(
+      (diagnostic) =>
+        diagnostic.severity === 'error' &&
+        rangesOverlap(diagnostic.range, selected.blockRange),
+    );
+    if (syntaxErrors.length > 0) {
+      return {
+        kind: 'precondition',
+        message: `The selected request has a syntax error: ${syntaxErrors[0]!.message}`,
+        stage: 'parse',
+      };
+    }
+
+    report('Validating request');
+    const validation = this.pipeline.validate(parsed.ast, selected.request);
+    const semanticError = validation.diagnostics.find(
+      (diagnostic) => diagnostic.severity === 'error',
+    );
+    if (semanticError !== undefined) {
+      return {
+        kind: 'precondition',
+        message: `The selected request is invalid: ${semanticError.message}`,
+        stage: 'validate',
+      };
+    }
+    if (aborted()) {
+      return { kind: 'aborted' };
+    }
+
+    report('Building request');
+    const request = this.pipeline.build(
+      parsed.ast,
+      selected.request,
+      validation,
+    );
+    report('Resolving variables');
+    const requestKey = requestKeyFor(source.sourceId, selected.index);
+    const resolution = this.variableResolver.resolveRequest(
+      request,
+      this.getVariableContext(parsed.ast, requestKey),
+    );
+    if (!resolution.success) {
+      const names = [...new Set(resolution.errors.flatMap((error) => error.chain))]
+        .join(', ');
+      return {
+        kind: 'precondition',
+        message: `The selected request has unresolved variables: ${names}.`,
+        stage: 'variables',
+      };
+    }
+    const resolvedVariables = buildResolvedVariableSnapshots(
+      request,
+      resolution.values,
+    );
+    if (aborted()) {
+      return { kind: 'aborted' };
+    }
+
+    report('Resolving authentication');
+    try {
+      const authenticated = await this.authenticationResolver.resolve(
+        resolution.request,
+        {
+          ...this.getAuthenticationContext(resolution.values, {
+            sourceId: source.sourceId,
+          }),
+          variables: resolution.values,
+        },
+        signal,
+      );
+      if (aborted()) {
+        return { kind: 'aborted' };
+      }
+      return {
+        kind: 'ready',
+        request: authenticated,
+        values: resolution.values,
+        resolvedVariables,
+        selected,
+        parsed,
+        requestKey,
+      };
+    } catch (error) {
+      if (error instanceof AuthenticationAbortError || aborted()) {
+        return { kind: 'aborted' };
+      }
+      if (error instanceof AuthenticationError) {
+        return {
+          kind: 'precondition',
+          message: error.message,
+          stage: 'authentication',
+        };
+      }
+      throw error;
+    }
   }
 
   private failPreconditionResult(

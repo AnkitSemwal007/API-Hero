@@ -16,6 +16,8 @@ import type {
   RunSummary,
 } from '../collection-runner';
 import type { ResponsePresentation } from '../response/presentation';
+import type { ExecutionReport } from '../scenarios/report/execution-report';
+import type { TimelineEntry } from '../scenarios/models';
 import { MASKED_VARIABLE_VALUE } from '../variables';
 import {
   maskVariableIfSensitive,
@@ -120,6 +122,43 @@ export interface McpRunSummaryDto {
     readonly extraction: number;
   };
   readonly requests: readonly McpRequestRunDto[];
+}
+
+export interface McpScenarioRunDto {
+  readonly scenarioId: string;
+  readonly scenarioName: string;
+  readonly runId: string;
+  readonly status: string;
+  readonly startTime: number;
+  readonly endTime: number;
+  readonly durationMs: number;
+  readonly statistics: {
+    readonly total: number;
+    readonly completed: number;
+    readonly failed: number;
+    readonly skipped: number;
+    readonly cancelled: number;
+    readonly durationMs: number;
+  };
+  readonly steps: readonly {
+    readonly stepId: string;
+    readonly stepName: string;
+    readonly status: string;
+    readonly attempt: number;
+    readonly durationMs: number;
+    readonly error?: { readonly message: string };
+    readonly outputs?: readonly {
+      readonly name: string;
+      readonly value: string;
+    }[];
+  }[];
+  readonly variables: readonly {
+    readonly name: string;
+    readonly value: string;
+    readonly sensitive: boolean;
+    readonly displayValue: string;
+  }[];
+  readonly timeline?: readonly TimelineEntry[];
 }
 
 export interface McpErrorResult {
@@ -243,6 +282,52 @@ export function projectRunSummary(summary: RunSummary): McpRunSummaryDto {
     requests: summary.results.map((result) =>
       projectRequestRunResult(result, { includeFullResponse: false }),
     ),
+  };
+}
+
+/**
+ * Project an ExecutionReport for MCP agents.
+ * Does not include raw requestResult / Authorization headers / cleartext secrets.
+ * Sensitive scenario variables are already masked in the report; mcpOk still
+ * applies redactForMcp for defense-in-depth.
+ */
+export function projectScenarioReport(
+  report: ExecutionReport,
+): McpScenarioRunDto {
+  return {
+    scenarioId: report.scenarioId,
+    scenarioName: report.scenarioName,
+    runId: report.runId,
+    status: report.status,
+    startTime: report.startTime,
+    endTime: report.endTime,
+    durationMs: report.durationMs,
+    statistics: {
+      total: report.statistics.total,
+      completed: report.statistics.completed,
+      failed: report.statistics.failed,
+      skipped: report.statistics.skipped,
+      cancelled: report.statistics.cancelled,
+      durationMs: report.statistics.durationMs,
+    },
+    steps: report.stepResults.map((step) => ({
+      stepId: step.stepId,
+      stepName: step.stepName,
+      status: step.status,
+      attempt: step.attempt,
+      durationMs: step.durationMs,
+      ...(step.error === undefined
+        ? {}
+        : { error: { message: step.error.message } }),
+      ...(step.outputs === undefined ? {} : { outputs: [...step.outputs] }),
+    })),
+    variables: report.variables.map((variable) => ({
+      name: variable.name,
+      value: variable.value,
+      sensitive: variable.sensitive,
+      displayValue: variable.displayValue,
+    })),
+    ...(report.timeline.length > 0 ? { timeline: [...report.timeline] } : {}),
   };
 }
 

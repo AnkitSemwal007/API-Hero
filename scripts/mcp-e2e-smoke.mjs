@@ -58,7 +58,9 @@ async function main() {
       cpSync(exampleSrc, target, { recursive: true });
     }
 
-    const runtime = createHeadlessApiHeroRuntime({ workspaceRoot: workspace });
+    const runtime = await createHeadlessApiHeroRuntime({
+      workspaceRoot: workspace,
+    });
     const service = ApiHeroMcpService.fromRuntime(runtime);
 
     const listed = await service.listCollections();

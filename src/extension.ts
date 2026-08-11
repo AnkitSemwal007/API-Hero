@@ -3,6 +3,7 @@ import { languages, window } from 'vscode';
 
 import {
   CommandRegistrar,
+  createCopyAsCurlCommand,
   createPlaceholderCommands,
   createRunRequestCommand,
   createRunRequestWithAssertionsCommand,
@@ -460,6 +461,7 @@ export async function activate(context: ExtensionContext): Promise<void> {
   const registrations = registrar.register([
     createRunRequestCommand(orchestrator),
     createRunRequestWithAssertionsCommand(orchestrator),
+    createCopyAsCurlCommand(orchestrator),
     createSwitchEnvironmentCommand(environmentManager),
     createSelectAuthenticationCommand(authenticationProfiles),
     ...createPlaceholderCommands(),

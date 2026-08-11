@@ -39,6 +39,13 @@ Select a scenario and use **Run Scenario** (toolbar, editor **Run**, or context 
 
 Scenarios reuse the same request execution pipeline as Collections (environments, auth, variables). They do not replace Collection Runner / Execution Center for bulk collection runs.
 
+Scenario step order and data flow come from the scenario graph: **connections**
+between steps and each step’s **`requestRef`** (which Collection request to run).
+Collection `@depends-on` and implicit produces→consumes edges apply to
+**Collection Runner** only — they are not auto-imported into scenario scheduling.
+To pass values across scenario steps, use extracts into shared variable scopes
+(or scenario variables) the same way you would for any request run.
+
 ## Related
 
 - [Collections](./collections.md)

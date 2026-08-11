@@ -2,11 +2,11 @@
  * Pure helpers for detecting unbound scenario request steps (UX bind-before-run).
  */
 
-import { StepType, type RequestStep, type Scenario } from '../models';
+import { StepType, type RequestStep, type Scenario } from './models';
 import {
   resolveScenarioRequestRef,
   type ScenarioRequestCatalogEntry,
-} from '../request-depend-ref';
+} from './request-depend-ref';
 
 export interface UnboundRequestStepInfo {
   readonly stepId: string;
@@ -19,27 +19,43 @@ export interface UnboundRequestStepInfo {
  * before a successful run.
  *
  * Bound when:
- * - concrete `requestFilePath` from a prior pick, or
- * - `requestRef` resolves in the current Collection catalog (runtime resolve).
- * Unbound when `pending:*` ids, missing path with no resolvable ref, or unknown ref.
+ * - concrete `requestFilePath` from a prior pick (non-`pending:*` id), or
+ * - `requestRef` resolves in the current Collection catalog (runtime resolve),
+ *   including template `pending:*` ids that still carry a resolvable ref.
+ * Unbound when missing path with no resolvable ref, unknown/ambiguous ref,
+ * or `pending:*` with no catalog match.
  */
 export function isUnboundRequestStep(
   step: RequestStep,
   catalog: readonly ScenarioRequestCatalogEntry[] = [],
 ): boolean {
   const requestId = String(step.requestId ?? '');
-  if (requestId.startsWith('pending:')) return true;
-
   const filePath = (step.requestFilePath ?? '').trim();
-  if (filePath.length > 0) return false;
+  if (filePath.length > 0 && !requestId.startsWith('pending:')) {
+    return false;
+  }
 
   const requestRef = (step.requestRef ?? '').trim();
-  if (requestRef.length === 0) return true;
+  if (requestRef.length > 0 && catalog.length > 0) {
+    const resolved = resolveScenarioRequestRef(requestRef, catalog);
+    if (resolved.ok) {
+      return false;
+    }
+  }
 
-  if (catalog.length === 0) return true;
-
-  const resolved = resolveScenarioRequestRef(requestRef, catalog);
-  return !resolved.ok;
+  if (requestId.startsWith('pending:')) {
+    return true;
+  }
+  if (filePath.length > 0) {
+    return false;
+  }
+  if (requestRef.length === 0) {
+    return true;
+  }
+  if (catalog.length === 0) {
+    return true;
+  }
+  return true;
 }
 
 export function findUnboundRequestSteps(
@@ -62,13 +78,25 @@ export function findUnboundRequestSteps(
   return out;
 }
 
+export type UnboundGuidanceAudience = 'ui' | 'mcp' | 'cli';
+
 export function formatUnboundRequestGuidance(
   unbound: readonly UnboundRequestStepInfo[],
+  audience: UnboundGuidanceAudience = 'ui',
 ): string {
   const names = unbound.map((s) => s.name).join(', ');
   const n = unbound.length;
+  const prefix = `Bind ${n} request step(s) before this workflow can run: ${names}. `;
+  if (audience === 'mcp' || audience === 'cli') {
+    return (
+      prefix +
+      'Ensure each request step has a concrete Collection binding ' +
+      '(non-pending requestId + requestFilePath) or a requestRef that uniquely ' +
+      'matches a Collection request name / Folder/Name.'
+    );
+  }
   return (
-    `Bind ${n} request step(s) before this workflow can run: ${names}. ` +
+    prefix +
     'Open the Scenario Editor, select each step, and use Choose Request… to link a Collection request.'
   );
 }

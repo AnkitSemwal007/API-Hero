@@ -18,3 +18,4 @@ export type { ParsedParameter } from './parameters';
 export { rangesOverlap } from './ranges';
 export type { OffsetRange } from './ranges';
 export { redactUrlUserinfo } from './url';
+export { readPackageVersion } from './package-version';

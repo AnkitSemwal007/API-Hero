@@ -1087,3 +1087,50 @@ test('stores secret-free assertion counts only in history extensions', async () 
   });
   assert.doesNotMatch(JSON.stringify(entries[0]), /expect status/u);
 });
+
+test('resolveAtSourceLocation returns authenticated request without calling execute', async () => {
+  let executeCalls = 0;
+  const h = harness({
+    async execute(request) {
+      executeCalls += 1;
+      return success(request, 200);
+    },
+  });
+
+  const result = await h.orchestrator.resolveAtSourceLocation(
+    source('GET https://example.test/resolve-only\n', 0),
+  );
+
+  assert.equal(result.success, true);
+  if (!result.success) {
+    return;
+  }
+  assert.equal(result.request.url, 'https://example.test/resolve-only');
+  assert.equal(result.request.authenticationStage, 'authenticated');
+  assert.equal(result.request.authentication.scheme, 'none');
+  assert.equal(executeCalls, 0);
+  assert.equal(h.viewer.results.length, 0);
+  assert.deepEqual(h.status.updates, []);
+});
+
+test('resolveAtSourceLocation reports unresolved variables without execute', async () => {
+  let executeCalls = 0;
+  const h = harness({
+    async execute(request) {
+      executeCalls += 1;
+      return success(request, 200);
+    },
+  });
+
+  const result = await h.orchestrator.resolveAtSourceLocation(
+    source('GET {{missingHost}}/items\n', 0),
+  );
+
+  assert.equal(result.success, false);
+  if (result.success) {
+    return;
+  }
+  assert.match(result.message, /unresolved variables/i);
+  assert.equal(result.preconditionStage, 'variables');
+  assert.equal(executeCalls, 0);
+});

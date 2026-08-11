@@ -6,7 +6,7 @@ import {
   ScenarioVariableScope,
   StepType,
   type Scenario,
-} from '../models';
+} from './models';
 import {
   findUnboundRequestSteps,
   formatUnboundRequestGuidance,
@@ -45,12 +45,30 @@ function requestScenario(
 }
 
 describe('scenario-request-binding', () => {
-  test('pending requestId is unbound', () => {
+  test('pending requestId without catalog is unbound', () => {
     const scenario = requestScenario();
     const step = scenario.steps[0];
     assert.ok(step && step.type === StepType.Request);
     assert.equal(isUnboundRequestStep(step), true);
     assert.equal(findUnboundRequestSteps(scenario).length, 1);
+  });
+
+  test('pending requestId with catalog-resolvable requestRef is bound', () => {
+    const scenario = requestScenario();
+    const step = scenario.steps[0];
+    assert.ok(step && step.type === StepType.Request);
+    assert.equal(
+      isUnboundRequestStep(step, [
+        {
+          requestId: 'req-login',
+          name: 'Login',
+          folderPath: '',
+          filePath: '/a.api',
+          requestOffset: 0,
+        },
+      ]),
+      false,
+    );
   });
 
   test('bound file path clears unbound when catalog empty', () => {
@@ -126,6 +144,15 @@ describe('scenario-request-binding', () => {
     assert.match(msg, /Bind 1 request step/u);
     assert.match(msg, /Login/u);
     assert.match(msg, /Choose Request/u);
+  });
+
+  test('formatUnboundRequestGuidance mcp audience avoids editor UX', () => {
+    const msg = formatUnboundRequestGuidance(
+      [{ stepId: 'R1', name: 'Login', requestRef: 'Login' }],
+      'mcp',
+    );
+    assert.match(msg, /requestRef/u);
+    assert.doesNotMatch(msg, /Scenario Editor/u);
   });
 
   test('non-request steps are ignored', () => {

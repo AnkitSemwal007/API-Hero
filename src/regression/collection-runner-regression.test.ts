@@ -405,3 +405,457 @@ describe('TC018–TC020 — variables parity', () => {
     assert.equal(analysis.values.get('baseUrl')?.scope, 'environment');
   });
 });
+
+// --- A→B→C Login → Get User → Get Orders (TC039–TC041) ---
+
+const LOGIN_PATH = 'file:///collections/checkout/login.api';
+const GET_USER_PATH = 'file:///collections/checkout/get-user.api';
+const GET_ORDERS_PATH = 'file:///collections/checkout/get-orders.api';
+const CHECKOUT_ROOT = 'file:///collections/checkout';
+const CHECKOUT_ID = 'collection:collections/checkout';
+
+const LOGIN_SOURCE = [
+  '@name Login',
+  '@extract token from body.access_token',
+  'POST https://checkout.example/login',
+  '',
+].join('\n');
+
+const GET_USER_SOURCE = [
+  '@name Get User',
+  '@extract userId from body.id',
+  'GET https://checkout.example/me',
+  'Authorization: Bearer {{token}}',
+  '',
+].join('\n');
+
+const GET_ORDERS_SOURCE = [
+  '@name Get Orders',
+  'GET https://checkout.example/users/{{userId}}/orders',
+  '',
+].join('\n');
+
+class CheckoutSourceReader implements CollectionRunSourceReader {
+  public async readText(filePath: string): Promise<string> {
+    if (filePath === LOGIN_PATH) {
+      return LOGIN_SOURCE;
+    }
+    if (filePath === GET_USER_PATH) {
+      return GET_USER_SOURCE;
+    }
+    if (filePath === GET_ORDERS_PATH) {
+      return GET_ORDERS_SOURCE;
+    }
+    return 'GET https://example.test\n';
+  }
+}
+
+/** Membership order C, B, A — enrich must reorder to Login → Get User → Get Orders. */
+function checkoutMembershipPlanCBA(runId: string): RunPlan {
+  const orders: PlannedRequest = {
+    requestId: 'orders',
+    collectionId: CHECKOUT_ID,
+    filePath: GET_ORDERS_PATH,
+    offset: 0,
+    label: 'Get Orders',
+    method: 'GET',
+    url: 'https://checkout.example/users/{{userId}}/orders',
+    ordinal: 0,
+  };
+  const getUser: PlannedRequest = {
+    requestId: 'getUser',
+    collectionId: CHECKOUT_ID,
+    filePath: GET_USER_PATH,
+    offset: 0,
+    label: 'Get User',
+    method: 'GET',
+    url: 'https://checkout.example/me',
+    ordinal: 1,
+  };
+  const login: PlannedRequest = {
+    requestId: 'login',
+    collectionId: CHECKOUT_ID,
+    filePath: LOGIN_PATH,
+    offset: 0,
+    label: 'Login',
+    method: 'POST',
+    url: 'https://checkout.example/login',
+    ordinal: 2,
+  };
+  return freezeRunPlan({
+    runId,
+    mode: 'collection',
+    collectionId: CHECKOUT_ID,
+    collectionName: 'Checkout',
+    failurePolicy: 'continue-on-error',
+    requests: [orders, getUser, login],
+    createdAt: new Date(0).toISOString(),
+  });
+}
+
+/**
+ * Fake transport for Login → Get User → Get Orders. Reads run-store token /
+ * userId the same way FakeStoreExecutor reads productId.
+ */
+class LoginGetUserOrdersExecutor implements CollectionRequestExecutorPort {
+  public readonly executionOrder: string[] = [];
+  public tokenBeforeGetUser: string | undefined;
+  public userIdBeforeOrders: string | undefined;
+  public loginOutcome: 'success' | 'failed';
+
+  public constructor(
+    private readonly writer: VariableWriter,
+    private readonly context: CollectionRunVariableContext,
+    options: { readonly loginOutcome?: 'success' | 'failed' } = {},
+  ) {
+    this.loginOutcome = options.loginOutcome ?? 'success';
+  }
+
+  public async runAtSourceLocation(
+    source: RunRequestSource,
+  ): Promise<RunAtSourceLocationResult> {
+    const engine = new DefaultExtractionEngine();
+
+    if (source.sourceId === LOGIN_PATH) {
+      this.executionOrder.push('login');
+      if (this.loginOutcome === 'failed') {
+        return { outcome: 'failed', durationMs: 4, statusCode: 500 };
+      }
+      const result = {
+        success: true as const,
+        requestId: 'login',
+        response: {
+          requestId: 'login',
+          statusCode: 200,
+          statusText: 'OK',
+          headers: [],
+          body: {
+            bytes: freezeDetachedBytes(new Uint8Array(0)),
+            json: { access_token: 'tok-abc' } as never,
+          },
+          bodySizeBytes: 0,
+          contentType: 'application/json',
+          url: 'https://checkout.example/login',
+          redirected: false,
+          redirectCount: 0,
+          timing: TIMING,
+        },
+        timing: TIMING,
+      };
+      const extraction = await engine.apply(
+        [
+          {
+            id: 'extract_token',
+            variableName: 'token',
+            source: { kind: 'json-path', path: 'body.access_token' },
+            targetScope: 'run',
+            sensitive: false,
+            required: true,
+            enabled: true,
+            when: { kind: 'always' },
+          },
+        ],
+        { result, requestKey: 'request:login#0' },
+        this.writer,
+      );
+      return {
+        outcome: 'success',
+        durationMs: 5,
+        statusCode: 200,
+        extraction,
+      };
+    }
+
+    if (source.sourceId === GET_USER_PATH) {
+      this.executionOrder.push('getUser');
+      const token = this.context
+        .getRunStore()
+        ?.toDefinitions()
+        .find((definition) => definition.name === 'token')?.value;
+      this.tokenBeforeGetUser = token;
+      if (token === undefined) {
+        return { outcome: 'failed', durationMs: 3, statusCode: 401 };
+      }
+      const result = {
+        success: true as const,
+        requestId: 'getUser',
+        response: {
+          requestId: 'getUser',
+          statusCode: 200,
+          statusText: 'OK',
+          headers: [],
+          body: {
+            bytes: freezeDetachedBytes(new Uint8Array(0)),
+            json: { id: 'user-42', name: 'Ada' } as never,
+          },
+          bodySizeBytes: 0,
+          contentType: 'application/json',
+          url: 'https://checkout.example/me',
+          redirected: false,
+          redirectCount: 0,
+          timing: TIMING,
+        },
+        timing: TIMING,
+      };
+      const extraction = await engine.apply(
+        [
+          {
+            id: 'extract_userId',
+            variableName: 'userId',
+            source: { kind: 'json-path', path: 'body.id' },
+            targetScope: 'run',
+            sensitive: false,
+            required: true,
+            enabled: true,
+            when: { kind: 'always' },
+          },
+        ],
+        { result, requestKey: 'request:getUser#0' },
+        this.writer,
+      );
+      return {
+        outcome: 'success',
+        durationMs: 4,
+        statusCode: 200,
+        extraction,
+      };
+    }
+
+    if (source.sourceId === GET_ORDERS_PATH) {
+      this.executionOrder.push('orders');
+      const userId = this.context
+        .getRunStore()
+        ?.toDefinitions()
+        .find((definition) => definition.name === 'userId')?.value;
+      this.userIdBeforeOrders = userId;
+      if (userId === undefined) {
+        return { outcome: 'failed', durationMs: 3, statusCode: 400 };
+      }
+      return { outcome: 'success', durationMs: 3, statusCode: 200 };
+    }
+
+    return { outcome: 'failed' };
+  }
+}
+
+function checkoutAnalyses(): RequestDependencyAnalysis[] {
+  return [
+    analyzeDoc(LOGIN_SOURCE, 'login', LOGIN_PATH),
+    analyzeDoc(GET_USER_SOURCE, 'getUser', GET_USER_PATH),
+    analyzeDoc(GET_ORDERS_SOURCE, 'orders', GET_ORDERS_PATH),
+  ];
+}
+
+describe('TC039–TC041 — A→B→C Login → Get User → Get Orders', () => {
+  test('TC039 — enrich+run: membership C,B,A → Login→GetUser→GetOrders; token and userId flow', async () => {
+    const analyses = checkoutAnalyses();
+    assert.deepEqual(analyses[0]?.produces, ['token']);
+    assert.ok(analyses[1]?.consumes.includes('token'));
+    assert.deepEqual(analyses[1]?.produces, ['userId']);
+    assert.ok(analyses[2]?.consumes.includes('userId'));
+
+    const enriched = enrichRunPlanWithDependencies({
+      membershipPlan: checkoutMembershipPlanCBA('run_abc_happy'),
+      analyses,
+    });
+    assert.equal(enriched.ok, true);
+    if (!enriched.ok) return;
+    assert.deepEqual(
+      enriched.plan.requests.map((request) => request.requestId),
+      ['login', 'getUser', 'orders'],
+    );
+    assert.equal(enriched.plan.extensions?.dependencies?.reordered, true);
+
+    const collectionRunContext = createCollectionRunVariableContext();
+    const writer = new CompositeVariableWriter({
+      overlay: new InMemoryRuntimeVariableOverlay(),
+      runStore: new InMemoryRunVariableStore(),
+      environment: new NoOpVariableWriter(),
+      resolveRunStore: () => collectionRunContext.getRunStore(),
+    });
+    const runVariableStore = new InMemoryRunVariableStore();
+    const executor = new LoginGetUserOrdersExecutor(writer, collectionRunContext);
+    const runner = new CollectionRunnerService({
+      executor,
+      sourceReader: new CheckoutSourceReader(),
+    });
+
+    collectionRunContext.begin({
+      runId: enriched.plan.runId,
+      collectionId: enriched.plan.collectionId,
+      collectionRootPath: CHECKOUT_ROOT,
+      runStore: runVariableStore,
+    });
+    try {
+      const summary = await runner.execute({
+        plan: enriched.plan,
+        runVariableStore,
+      });
+
+      assert.deepEqual(executor.executionOrder, ['login', 'getUser', 'orders']);
+      assert.equal(summary.results[0]?.outcome, 'passed');
+      assert.deepEqual(summary.results[0]?.producedVariables, ['token']);
+      assert.equal(runVariableStore.get('token')?.value, 'tok-abc');
+      assert.equal(executor.tokenBeforeGetUser, 'tok-abc');
+      assert.equal(summary.results[1]?.outcome, 'passed');
+      assert.deepEqual(summary.results[1]?.producedVariables, ['userId']);
+      assert.equal(runVariableStore.get('userId')?.value, 'user-42');
+      assert.equal(executor.userIdBeforeOrders, 'user-42');
+      assert.equal(summary.results[2]?.outcome, 'passed');
+    } finally {
+      runVariableStore.clear();
+      collectionRunContext.end(enriched.plan.runId);
+    }
+  });
+
+  test('TC040 — Login failure skips Get User and Get Orders with Missing run variable reasons', async () => {
+    const analyses = checkoutAnalyses();
+    const enriched = enrichRunPlanWithDependencies({
+      membershipPlan: checkoutMembershipPlanCBA('run_abc_login_fail'),
+      analyses,
+    });
+    assert.equal(enriched.ok, true);
+    if (!enriched.ok) return;
+
+    const collectionRunContext = createCollectionRunVariableContext();
+    const writer = new CompositeVariableWriter({
+      overlay: new InMemoryRuntimeVariableOverlay(),
+      runStore: new InMemoryRunVariableStore(),
+      environment: new NoOpVariableWriter(),
+      resolveRunStore: () => collectionRunContext.getRunStore(),
+    });
+    const runVariableStore = new InMemoryRunVariableStore();
+    const executor = new LoginGetUserOrdersExecutor(writer, collectionRunContext, {
+      loginOutcome: 'failed',
+    });
+    const runner = new CollectionRunnerService({
+      executor,
+      sourceReader: new CheckoutSourceReader(),
+    });
+
+    collectionRunContext.begin({
+      runId: enriched.plan.runId,
+      collectionId: enriched.plan.collectionId,
+      collectionRootPath: CHECKOUT_ROOT,
+      runStore: runVariableStore,
+    });
+    try {
+      const summary = await runner.execute({
+        plan: enriched.plan,
+        runVariableStore,
+      });
+
+      assert.equal(summary.results[0]?.outcome, 'failed');
+      assert.equal(summary.results[1]?.outcome, 'skipped');
+      assert.equal(
+        summary.results[1]?.skipReason,
+        'Missing run variable: token (producer Login failed)',
+      );
+      assert.equal(summary.results[2]?.outcome, 'skipped');
+      assert.equal(
+        summary.results[2]?.skipReason,
+        'Missing run variable: userId (producer Get User was skipped)',
+      );
+    } finally {
+      runVariableStore.clear();
+      collectionRunContext.end(enriched.plan.runId);
+    }
+  });
+
+  test('TC041 — cycle Login↔Get User → DEPENDENCY_CYCLE with labels; single-request plan has no reorder', () => {
+    const cycleResult = enrichRunPlanWithDependencies({
+      membershipPlan: freezeRunPlan({
+        runId: 'run_login_getuser_cycle',
+        mode: 'collection',
+        collectionId: CHECKOUT_ID,
+        collectionName: 'Checkout',
+        failurePolicy: 'continue-on-error',
+        requests: [
+          {
+            requestId: 'login',
+            collectionId: CHECKOUT_ID,
+            filePath: LOGIN_PATH,
+            offset: 0,
+            label: 'Login',
+            method: 'POST',
+            url: 'https://checkout.example/login',
+            ordinal: 0,
+          },
+          {
+            requestId: 'getUser',
+            collectionId: CHECKOUT_ID,
+            filePath: GET_USER_PATH,
+            offset: 0,
+            label: 'Get User',
+            method: 'GET',
+            url: 'https://checkout.example/me',
+            ordinal: 1,
+          },
+        ],
+        createdAt: new Date(0).toISOString(),
+      }),
+      analyses: [
+        {
+          requestId: 'login',
+          produces: [],
+          consumes: [],
+          dependsOnNames: ['Get User'],
+        },
+        {
+          requestId: 'getUser',
+          produces: [],
+          consumes: [],
+          dependsOnNames: ['Login'],
+        },
+      ],
+    });
+    assert.equal(cycleResult.ok, false);
+    if (cycleResult.ok) return;
+    assert.equal(cycleResult.code, 'DEPENDENCY_CYCLE');
+    assert.match(
+      cycleResult.message,
+      /Login → Get User → Login|Get User → Login → Get User/,
+    );
+
+    // One-request enrich with no dependency edges leaves order unchanged
+    // (`reordered === false`). Editor Run Request does not call enrich at all;
+    // this only locks enrich semantics for a lone membership plan.
+    const single = enrichRunPlanWithDependencies({
+      membershipPlan: freezeRunPlan({
+        runId: 'run_single_login',
+        mode: 'selected-requests',
+        collectionId: CHECKOUT_ID,
+        collectionName: 'Checkout',
+        failurePolicy: 'continue-on-error',
+        requests: [
+          {
+            requestId: 'login',
+            collectionId: CHECKOUT_ID,
+            filePath: LOGIN_PATH,
+            offset: 0,
+            label: 'Login',
+            method: 'POST',
+            url: 'https://checkout.example/login',
+            ordinal: 0,
+          },
+        ],
+        createdAt: new Date(0).toISOString(),
+      }),
+      analyses: [
+        {
+          requestId: 'login',
+          produces: ['token'],
+          consumes: [],
+          dependsOnNames: [],
+        },
+      ],
+    });
+    assert.equal(single.ok, true);
+    if (!single.ok) return;
+    assert.equal(single.plan.extensions?.dependencies?.reordered, false);
+    assert.deepEqual(
+      single.plan.requests.map((request) => request.requestId),
+      ['login'],
+    );
+  });
+});

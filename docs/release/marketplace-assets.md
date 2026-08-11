@@ -1,10 +1,12 @@
-# Marketplace assets — 2.6.0
+# Marketplace assets — 2.8.3
 
-Guidance for listing media for **API Hero 2.6.0**.
+Guidance for listing media for **API Hero 2.8.3**.
 
-**Strategy:** README screenshots, banner, social preview, and workflow GIF are hosted on **Cloudinary** (absolute HTTPS URLs). That keeps the VSIX small. Only in-extension chrome icons ship inside the package (`images/icon.png`, `images/api-*.svg`, `images/execution-*.svg`).
+**Strategy:** README screenshots, banner, social preview, and workflow GIFs are hosted on **Cloudinary** (absolute HTTPS URLs). That keeps the VSIX small. Only in-extension chrome icons ship inside the package (`images/icon.png`, `images/api-*.svg`, `images/execution-*.svg`).
 
 `images/marketplace/**` is listed in `.vscodeignore` and `.gitignore`. Do not commit listing media into the repo; upload to Cloudinary and reference CDN URLs.
+
+Local MCP GIF source can be regenerated with `python scripts/generate-mcp-gif.py` (PIL; Windows Segoe/Consolas fonts by default), then re-uploaded to Cloudinary as `api-hero-mcp_hrx7xa`.
 
 ## Icon (ships in VSIX)
 
@@ -20,7 +22,7 @@ Prefer teal/slate product chrome consistent with gallery banner `#0f766e`. Avoid
 
 Cloud: `iaojzqjd` · Folder: `api-hero` · Base: `https://res.cloudinary.com/iaojzqjd/image/upload/`
 
-All **11/11** delivery URLs verified (public IDs; no folder prefix in the delivery path) — same set as **2.3.4** (no dedicated Auth Manager or Scenarios screenshot yet):
+**12/12** delivery URLs verified (public IDs; no folder prefix required in the delivery path):
 
 | Role | Cloudinary public ID | CDN URL |
 | --- | --- | --- |
@@ -35,6 +37,7 @@ All **11/11** delivery URLs verified (public IDs; no folder prefix in the delive
 | Collections + Editor | `screenshot-collections-editor_idcn2j` | https://res.cloudinary.com/iaojzqjd/image/upload/screenshot-collections-editor_idcn2j.png |
 | Workflow GIF | `workflow_qsb5jj` | https://res.cloudinary.com/iaojzqjd/image/upload/workflow_qsb5jj.gif |
 | Workflow hero | `workflow-hero_jfl821` | https://res.cloudinary.com/iaojzqjd/image/upload/workflow-hero_jfl821.png |
+| MCP workflow GIF | `api-hero-mcp_hrx7xa` | https://res.cloudinary.com/iaojzqjd/image/upload/v1786432275/api-hero-mcp_hrx7xa.gif |
 
 **Name corrections (easy to misread in the UI font):**
 
@@ -44,7 +47,7 @@ All **11/11** delivery URLs verified (public IDs; no folder prefix in the delive
 
 Root `README.md` embeds these CDN URLs beside the sections they describe (hero first; screenshots not stacked in one gallery). Use the same links for Marketplace portal media / GitHub social cards.
 
-**Follow-up for 2.5.0:** capture and host **Auth Manager** and **Scenario Editor** screenshots — README covers both as flagship text sections until then. Existing screenshots remain valid for Collections, Response, History, Execution, Environments, and Run Report.
+**Follow-up:** capture and host **Auth Manager** and **Scenario Editor** screenshots when ready. Existing screenshots remain valid for Collections, Response, History, Execution, Environments, Run Report, and MCP.
 
 ## Banner
 
@@ -53,18 +56,18 @@ See [banner-placeholder.md](../marketplace/banner-placeholder.md). Gallery banne
 ## Checklist
 
 - [x] Screenshots reflect **2.3.3+** product UI (Execution view, Dependencies, Run Report Debugger, Env Manager)
-- [ ] Auth Manager screenshot (recommended for **2.5.0** listing; text coverage in README)
-- [ ] Scenarios / Scenario Editor screenshot (recommended for **2.5.0** listing; text coverage in README)
+- [ ] Auth Manager screenshot (recommended for listing; text coverage in README)
+- [ ] Scenarios / Scenario Editor screenshot (recommended for listing; text coverage in README)
 - [x] No GraphQL / OAuth screenshots implying support
 - [x] Icon and banner contrast well in Marketplace dark/light cards
-- [x] README uses Cloudinary HTTPS URLs (VSIX stays lean)
+- [x] README listing media uses Cloudinary HTTPS URLs (VSIX stays lean)
 - [x] `images/marketplace/**` excluded via `.vscodeignore` and `.gitignore`
-- [x] Cloudinary `api-hero` folder hosts listing media (**11/11** delivery URLs verified for **2.3.4** set)
+- [x] Cloudinary `api-hero` folder hosts listing media (**12/12** delivery URLs verified, including MCP GIF)
 
 ## Related
 
 - [Marketplace readiness review](../marketplace/marketplace-readiness-review.md)
 - [Marketplace readiness](./marketplace-readiness.md)
 - [Product README](../product/README.md)
-- [Release notes — 2.5.0](./v2.5.0-release-notes.md)
-- [Changelog — 2.5.0](../../CHANGELOG.md)
+- [Release notes — 2.8.1](./v2.8.1-release-notes.md)
+- [Changelog — 2.8.1](../../CHANGELOG.md)

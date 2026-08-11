@@ -1,6 +1,6 @@
 # Collection chaining / runner regression suite
 
-Catalog of FakeStore + ADR 0003 bug cases (TC001–TC038). Prefer real engine
+Catalog of FakeStore + ADR 0003 bug cases (TC001–TC041). Prefer real engine
 assertions; Auto edges never serialize.
 
 | TC | File | Notes |
@@ -12,10 +12,11 @@ assertions; Auto edges never serialize.
 | TC015–TC017 | `collection-chaining-regression.test.ts` | Unknown / garbage depends-on |
 | TC018–TC020 | `collection-runner-regression.test.ts` | Variables / static scopes never create Auto edges |
 | TC021–TC025 | `collection-chaining-regression.test.ts` | JSON path accept/reject |
-| TC026–TC028 | `collection-chaining-regression.test.ts` | Graph / cycle / mixed topo |
+| TC026–TC028 | `collection-chaining-regression.test.ts` | Graph / cycle / mixed topo; TC027 asserts cycle path labels |
 | TC029–TC031 | `collection-chaining-regression.test.ts` | Serialize / pin |
 | TC032–TC035 | `collection-chaining-regression.test.ts` | UI HTML smoke only (PARTIAL — not engine proof) |
 | TC036–TC038 | `collection-chaining-regression.test.ts` | Scale smoke / cache (no wall-clock flake gate) |
+| TC039–TC041 | `collection-runner-regression.test.ts` | A→B→C Login→Get User→Get Orders (reorder, failure skip, cycle path + one-request enrich no-reorder) |
 
 ## Intentionally PARTIAL
 

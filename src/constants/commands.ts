@@ -2,6 +2,7 @@
 export const COMMAND_IDS = {
   runRequest: 'apiHero.runRequest',
   runRequestWithAssertions: 'apiHero.runRequestWithAssertions',
+  copyAsCurl: 'apiHero.copyAsCurl',
   runFile: 'apiHero.runFile',
   login: 'apiHero.login',
   logout: 'apiHero.logout',
@@ -85,6 +86,7 @@ export type CommandId = (typeof COMMAND_IDS)[keyof typeof COMMAND_IDS];
 export const LEGACY_COMMAND_IDS = {
   runRequest: 'apiRunner.runRequest',
   runRequestWithAssertions: 'apiRunner.runRequestWithAssertions',
+  copyAsCurl: 'apiRunner.copyAsCurl',
   runFile: 'apiRunner.runFile',
   login: 'apiRunner.login',
   logout: 'apiRunner.logout',

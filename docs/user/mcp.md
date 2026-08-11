@@ -26,6 +26,10 @@ Prefer `--workspace` in client args. `APIHERO_WORKSPACE` remains supported for b
 
 If `--workspace` is present without a value, the process exits immediately with a non-zero status and a clear stderr message. An empty or non-collection path still starts the server; tools return `EMPTY_WORKSPACE` when no `Collections/<Name>/` trees are found (same discovery semantics as before).
 
+## Project Store (environments / auth)
+
+Headless composition (shared with the [`apihero` CLI](./cli.md)) loads **`.apihero` Project Store** environments, workspace variables, and authentication **profiles** when present. VS Code settings-backed globals and VS Code Secret Storage are still unavailable in headless hosts — supply secrets via process env (exact Secret Storage key or `APIHERO_SECRET_*`; see [CLI secrets](./cli.md#secrets-ci)).
+
 ## Install / build
 
 From the API Hero repo root:
@@ -67,10 +71,45 @@ Without `--workspace`, set `APIHERO_WORKSPACE` or run with cwd at the workspace 
 | `apihero_get_request` | Request details + auth metadata + variable refs |
 | `apihero_run_request` | Run one request via `ExecutionOrchestrator` |
 | `apihero_run_collection` | Run a collection via `CollectionRunnerService` (`failurePolicy` optional). Per-request rows are slim (status, diagnostics, assertion expected/actual); use `apihero_get_request_result` for full response bodies |
+| `apihero_run_scenario` | Run a Scenario via `ScenarioEngine` (same engine as UI Run Scenario). Identify by name, id, or `.scenario.json` path; optional `inputs` override variable defaults for this run |
 | `apihero_get_run` | Fetch a run summary / session by `runId` |
 | `apihero_get_request_result` | One request result from a prior run (full secret-redacted response presentation) |
 
 Agents should prefer **collection display names** (case-insensitive). Ids from list/get responses can be reused on later calls.
+
+## Run a Scenario
+
+`apihero_run_scenario` executes an existing Scenario document under `.apihero/scenarios/` through the same `ScenarioEngine` path as the VS Code **Run Scenario** command (no VS Code UI).
+
+Example args:
+
+```json
+{
+  "scenario": "checkout",
+  "inputs": {
+    "apiToken": "override-for-this-run"
+  }
+}
+```
+
+`scenario` may be the scenario **name**, **id**, or a path (absolute, workspace-relative, or under `.apihero/scenarios/`). `inputs` optionally overrides matching scenario variable `defaultValue`s for this run only; unknown keys are ignored.
+
+Result shape (success tool envelope `ok: true`):
+
+- `scenarioId`, `scenarioName`, `runId`, `status` (`completed` | `failed` | `cancelled` | …)
+- `startTime`, `endTime`, `durationMs`
+- `statistics` — `{ total, completed, failed, skipped, cancelled, durationMs }`
+- `steps` — per-step `{ stepId, stepName, status, attempt, durationMs, error?, outputs? }`
+- `variables` — `{ name, value, sensitive, displayValue }` (sensitive values already masked)
+- `timeline` — included when present on the report
+
+**Domain failure vs tool error:** when the scenario finishes with `status: "failed"` (a step failed), the tool still returns `ok: true` with the report. Tool-level errors (`ok: false`) cover missing/ambiguous scenarios, unbound request steps, validation failures, concurrent runs, and engine throws — codes such as `SCENARIO_NOT_FOUND`, `SCENARIO_AMBIGUOUS`, `SCENARIO_UNBOUND`, `SCENARIO_LOAD_FAILED`, `REQUEST_REF_UNRESOLVED`, `SCENARIO_VALIDATION_FAILED`, `RUN_ALREADY_ACTIVE`, `RUN_FAILED`.
+
+**Redaction:** sensitive scenario variables are masked in the execution report; MCP also applies `redactForMcp` before JSON is returned (Bearer tokens, Authorization-like strings, etc.).
+
+**Scenarios vs collection `@depends-on`:** Scenarios use `requestRef` + connections for orchestration. Collection `@depends-on` scheduling is **not** imported into Scenario execution — use Scenarios for multi-step workflows with branching/variables, and collection runs for dependency-ordered collection membership.
+
+Template steps may still use `pending:*` request ids; when `requestRef` uniquely matches a Collection request, MCP resolves the binding at run time (same catalog path as the UI).
 
 ## Generic MCP configuration
 
@@ -132,7 +171,7 @@ Use absolute paths. The extension version folder changes when you update API Her
 [mcp_servers.api-hero]
 command = "node"
 args = [
-  "C:/Users/<you>/.vscode/extensions/ankitsemwal.api-hero-2.8.0/dist/mcp/server.js",
+  "C:/Users/<you>/.vscode/extensions/ankitsemwal.api-hero-2.8.3/dist/mcp/server.js",
   "--workspace",
   "D:/path/to/your-api-workspace"
 ]
@@ -248,6 +287,7 @@ Optional live smoke (not unit tests): `node ./scripts/mcp-e2e-smoke.mjs` — doc
    - `apihero_get_request`
    - `apihero_run_request`
    - `apihero_run_collection`
+   - `apihero_run_scenario`
    - `apihero_get_run`
    - `apihero_get_request_result`
 
@@ -265,14 +305,15 @@ This command is **not available yet** — do not look for it in the Command Pale
 
 - Tool responses **never** dump VS Code Secret Storage or cleartext API keys / passwords / bearer tokens when redaction applies.
 - Response presentation already masks sensitive headers; MCP adds defense-in-depth redaction before JSON is returned.
-- Headless MCP uses an **empty in-memory SecretStore**. Auth that requires Secret Storage fails at the authentication precondition stage (same orchestrator behavior as a missing secret in VS Code). Prefer collection variables / environment variables for agent-driven workspaces.
+- Headless MCP / CLI load **`.apihero` Project Store** environments, workspace variables, and auth profiles when present. VS Code settings globals and VS Code Secret Storage are not available — use process-env secrets (`APIHERO_SECRET_*` or exact Secret Storage keys). See [CLI](./cli.md).
+- Prefer collection variables / environment variables for agent-driven workspaces when secrets are not injected.
 - Do not commit secrets into `api-hero.variables.json`; use `.apihero/local/` overlays locally when needed.
 
 ## Architecture (short)
 
 ```
 AI agent → MCP tool → ApiHeroMcpService
-  → CollectionDiscoveryService / CollectionRunnerService / ExecutionOrchestrator
+  → CollectionDiscoveryService / CollectionRunnerService / ScenarioEngine / ExecutionOrchestrator
   → DefaultRequestExecutor → NodeHttpTransport
-  → RunSummary / RequestRunResult (secret-safe presentation)
+  → RunSummary / RequestRunResult / ExecutionReport (secret-safe presentation)
 ```

@@ -16,6 +16,7 @@ import {
 import { ApiHeroMcpService } from './service';
 import { registerApiHeroMcpTools } from './tools';
 import { parseWorkspaceCliArg } from './workspace-cli';
+import { readPackageVersion } from '../shared/package-version';
 
 async function main(): Promise<void> {
   const parsed = parseWorkspaceCliArg(process.argv.slice(2));
@@ -27,7 +28,7 @@ async function main(): Promise<void> {
   const workspaceRoot = resolveMcpWorkspaceRoot({
     cliWorkspace: parsed.status === 'set' ? parsed.workspace : undefined,
   });
-  const runtime = createHeadlessApiHeroRuntime({
+  const runtime = await createHeadlessApiHeroRuntime({
     workspaceRoot,
     verbose: process.env.APIHERO_MCP_VERBOSE === '1',
   });
@@ -37,7 +38,7 @@ async function main(): Promise<void> {
   const service = ApiHeroMcpService.fromRuntime(runtime);
   const server = new McpServer({
     name: 'api-hero',
-    version: '2.8.2',
+    version: readPackageVersion(),
   });
   registerApiHeroMcpTools(server, service);
 

@@ -25,11 +25,12 @@ import {
   scenariosRootPath,
   buildScenarioFromTemplate,
   listScenarioTemplates,
-  StepType,
   type Scenario,
-  type RequestStep,
   type ScenarioTemplateId,
-  resolveScenarioRequestRef,
+  buildRequestCatalogFromSnapshot,
+  resolveScenarioRequestSteps,
+  findUnboundRequestSteps,
+  formatUnboundRequestGuidance,
   type ScenarioRequestCatalogEntry,
 } from '../index';
 import { ScenarioEditorPanel } from './scenario-editor-panel';
@@ -45,10 +46,6 @@ import {
   type ScenarioLastRunStatus,
   type ScenarioLastRunsMap,
 } from './scenario-last-runs';
-import {
-  findUnboundRequestSteps,
-  formatUnboundRequestGuidance,
-} from './scenario-request-binding';
 import {
   SCENARIOS_VISIBLE_CONTEXT_KEY,
   SCENARIOS_VIEW_REVEALED_STATE_KEY,
@@ -69,60 +66,7 @@ export interface RegisterScenariosOptions {
 function buildRequestCatalog(
   discovery: CollectionDiscoveryService,
 ): readonly ScenarioRequestCatalogEntry[] {
-  const snapshot = discovery.snapshot;
-  if (snapshot === undefined) return [];
-  const entries: ScenarioRequestCatalogEntry[] = [];
-  for (const collection of Object.values(snapshot.collections)) {
-    const foldersById = collection.folders;
-    for (const request of Object.values(collection.requests)) {
-      const folderPath =
-        request.folderId === undefined
-          ? ''
-          : (foldersById[request.folderId]?.relativePath ?? '');
-      entries.push({
-        requestId: request.id,
-        name: request.display.label,
-        folderPath,
-        filePath: request.filePath,
-        requestOffset: request.range.start.offset,
-      });
-    }
-  }
-  return entries;
-}
-
-function resolveRequestSteps(
-  scenario: Scenario,
-  catalog: readonly ScenarioRequestCatalogEntry[],
-): Scenario {
-  const steps = scenario.steps.map((step) => {
-    if (step.type !== StepType.Request) return step;
-    const requestStep = step as RequestStep;
-    const filePath = (requestStep.requestFilePath ?? '').trim();
-    const requestId = String(requestStep.requestId ?? '');
-    // Already bound via Choose Request… — do not re-resolve by display name
-    // (ambiguous/renamed catalog entries would undo a successful pick).
-    if (filePath.length > 0 && !requestId.startsWith('pending:')) {
-      return step;
-    }
-    if (
-      requestStep.requestRef === undefined ||
-      requestStep.requestRef.trim().length === 0
-    ) {
-      return step;
-    }
-    const resolved = resolveScenarioRequestRef(requestStep.requestRef, catalog);
-    if (!resolved.ok) {
-      throw new Error(resolved.message);
-    }
-    return {
-      ...requestStep,
-      requestId: resolved.requestId,
-      requestFilePath: resolved.filePath,
-      requestOffset: resolved.requestOffset,
-    };
-  });
-  return { ...scenario, steps };
+  return buildRequestCatalogFromSnapshot(discovery.snapshot);
 }
 
 /** Picks a free `.scenario.json` path, appending -2, -3, … when the slug exists. */
@@ -393,7 +337,7 @@ export function registerScenarios(
 
       let resolved: Scenario;
       try {
-        resolved = resolveRequestSteps(withInputs, catalog);
+        resolved = resolveScenarioRequestSteps(withInputs, catalog);
       } catch (cause) {
         const message = cause instanceof Error ? cause.message : String(cause);
         if (resolvedPath !== undefined) {

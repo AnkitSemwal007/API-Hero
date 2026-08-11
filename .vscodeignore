@@ -57,5 +57,12 @@ tmp/**
 temp/**
 
 # Extension chrome icons must ship (icon.png, api-*.svg, execution-*.svg).
-# Listing screenshots / banner / GIF are Cloudinary CDN URLs in README — exclude from VSIX.
+# Listing screenshots / banner / workflow / MCP GIFs are Cloudinary CDN URLs in README —
+# never package them (keeps the VSIX small).
 images/marketplace/**
+**/*.gif
+**/screenshot-*.png
+**/social-preview*.png
+**/workflow-hero*.png
+**/banner.png
+**/hero.png

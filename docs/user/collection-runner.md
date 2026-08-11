@@ -44,57 +44,123 @@ Setting `apiHero.collectionRunner.failurePolicy` (default `ask`):
 
 User cancel stops the run; in-flight request is aborted when possible; remaining planned requests are cancelled.
 
-## Chaining requests with `@depends-on`
+## Request Dependencies & Data Flow
 
-Requests in a collection run can pass variables to each other. A request that
-uses `@extract` (or `@sensitive-extract`) to capture a value makes it
-available — by default in the **Run** scope — to every request that runs
-after it in the same collection run:
+Collection runs can pass values from one request to the next. A request that uses
+`@extract` (or `@sensitive-extract`) writes a variable — by default into the
+**Run** scope — and later requests in the same collection run can consume it with
+`{{name}}`.
+
+### Three-hop example
+
+Login extracts a token; Get User uses that token and extracts a user id; Get Orders
+uses the user id:
 
 ```api
 @name Login
-@extract accessToken from body.access_token
+@extract token from body.access_token
 POST {{host}}/login
+Content-Type: application/json
+
+{
+  "username": "demo",
+  "password": "{{password}}"
+}
 ```
 
 ```api
-@name Products
-@depends-on Login
-GET {{host}}/products
-Authorization: Bearer {{accessToken}}
+@name Get User
+@extract userId from body.id
+GET {{host}}/me
+Authorization: Bearer {{token}}
 ```
 
-`@depends-on` stores **human-readable** refs: a bare `@name` when that name is
-unique in the collection, or `Folder/Name` (folder relative path + `/` + name)
-when the same display name appears in more than one folder. The Request Editor
-Depends-on picker shows name + folder and persists the shortest unique ref.
-Renaming a request in the Request Editor rewrites dependents' `@depends-on`
-tokens across the collection.
+```api
+@name Get Orders
+GET {{host}}/users/{{userId}}/orders
+```
+
+Membership order in the Collections tree does not have to match this sequence —
+API Hero reorders the run when produces/consumes (or `@depends-on`) require it.
+
+### `@depends-on`
+
+`@depends-on` declares an **explicit** edge to another request by human-readable
+ref. It is optional when an implicit edge already exists: if request A
+`@extract`s `token` and request B uses `{{token}}`, the Collection Runner orders
+A before B without requiring `@depends-on`.
+
+Use `@depends-on` when you need a hard ordering edge that variables alone do not
+express, or when you want the dependency visible in the file:
+
+```api
+@name Get User
+@depends-on Login
+@extract userId from body.id
+GET {{host}}/me
+Authorization: Bearer {{token}}
+```
+
+Refs are **human-readable**: a bare `@name` when that name is unique in the
+collection, or `Folder/Name` (folder relative path + `/` + name) when the same
+display name appears in more than one folder. The Request Editor Depends-on
+picker shows name + folder and persists the shortest unique ref. Renaming a
+request in the Request Editor rewrites dependents' `@depends-on` tokens across
+the collection.
 
 Opaque `req_*` tokens and discovery ids (`request:…#…`) are never written to
 `@depends-on`. Leftover `req_*` values from older drafts are migrated back to
 names on save when uniquely resolvable.
 
-You only need `@depends-on` when a request consumes a variable but the
-producing request isn't already earlier in the collection — API Hero also
-detects the `{{accessToken}}` reference itself and orders requests accordingly.
+### Extracted variables
 
-If reordering was needed, a notification reads
-**"Reordered N requests for dependencies"** after the run. A circular
-dependency (two requests that depend on each other, directly or through
-others) blocks the run before any request executes and shows the cycle path
-in an error notification.
+`@extract` / `@sensitive-extract` default to **Run** scope during a collection
+run: values live in the shared per-run store and are available to later requests
+in that run only. Use `scope=collection` (or other scopes) when you need the
+value to persist beyond the run — see [Variables](./variables.md).
 
-If an upstream request fails, is skipped, or doesn't produce the expected
-variable, the dependent request is skipped with a reason such as
-`Missing run variable: accessToken (producer Login failed)` instead of
-running with a stale or missing value.
+### Execution order
+
+- **Collection / folder / multi-select runs** analyze produces/consumes and
+  `@depends-on`, then reorder the frozen membership plan into dependency order
+  before execution. If reordering was needed, a notification reads
+  **"Reordered N requests for dependencies"** after the run.
+- **Single-request Run** (Run Request from the editor) executes only that
+  request. It does **not** automatically run upstream producers or walk
+  `@depends-on` edges. Ensure required variables already exist in a persisted
+  scope (for example environment, collection, or `@extract … scope=collection`
+  from an earlier run) or as document `@variable`s before running one request
+  alone. Default Run-scope extracts from a finished collection run do not
+  survive for a later editor Run Request.
+
+### Failure and cycles
+
+If an upstream request fails, is skipped, or does not produce the expected
+variable, dependents are skipped with a reason such as
+`Missing run variable: token (producer Login failed)` instead of running with a
+stale or missing value.
+
+A circular dependency (two requests that depend on each other, directly or
+through others) **blocks the run before any request executes** and shows the
+cycle path in an error notification, for example
+`Dependency cycle detected: Login → Get User → Login`.
+
+### Collection Run Report
 
 The **Collection Run Report** shows the resulting execution order (with a
 "Reordered" badge when it changed), which variables each request produced
 (`+name`) and planned to consume (`-name`), skip reasons, and a text list of
-dependency edges such as `Login → Products (accessToken)` — variable **names**
-only, never values.
+dependency edges such as `Login → Get User (token)` — variable **names** only,
+never values. Unresolved consumes and a variable trace appear when applicable.
+
+### How scenarios relate
+
+[Scenarios](./scenarios.md) orchestrate workflows with their own step graph:
+connections and `requestRef` control order and which Collection request each
+step runs. Scenario scheduling does **not** auto-import or apply collection
+`@depends-on` / implicit produces→consumes edges. Use Collection Runner for
+bulk collection dependency order; use Scenarios when you need branches and
+scenario-level control flow.
 
 ## Collection Run Debugger
 
@@ -128,5 +194,7 @@ directly, or use `@extract … scope=collection` to write it from a response.
 ## Related
 
 - [Collections](./collections.md)
+- [Variables](./variables.md)
+- [Scenarios](./scenarios.md)
 - [Assertions](./assertions.md)
 - [History](./history.md)

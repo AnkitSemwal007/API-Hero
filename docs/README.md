@@ -7,6 +7,7 @@ Command IDs remain under the `apiHero.*` namespace for compatibility. See [relea
 | Area | Description |
 | --- | --- |
 | [User guide](./user/getting-started.md) | Install, author requests, collections, env, auth, history, OpenAPI |
+| [CLI / CI](./user/cli.md) | Headless `apihero` runner for requests, collections, and scenarios |
 | [MCP server](./user/mcp.md) | Headless MCP tools for Cursor, Claude Code, Codex, and other agents |
 | [Architecture](./architecture/README.md) | Extension composition and domain design |
 | [Development](./development/README.md) | Repo layout, conventions, webviews, testing |
@@ -18,6 +19,7 @@ Command IDs remain under the `apiHero.*` namespace for compatibility. See [relea
 ## Quick links
 
 - [Getting started](./user/getting-started.md)
+- [CLI / CI](./user/cli.md)
 - [MCP for AI agents](./user/mcp.md)
 - [Creating requests](./user/creating-requests.md)
 - [Scenarios](./user/scenarios.md)

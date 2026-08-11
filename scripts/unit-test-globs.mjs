@@ -51,6 +51,7 @@ export const UNIT_TEST_GLOBS = Object.freeze([
   'dist/request-editor/vscode/*.test.js',
   'dist/execution/*.test.js',
   'dist/orchestration/*.test.js',
+  'dist/curl/*.test.js',
   'dist/response/*.test.js',
   'dist/variables/*.test.js',
   'dist/variables/vscode/*.test.js',
@@ -59,4 +60,6 @@ export const UNIT_TEST_GLOBS = Object.freeze([
   'dist/ui/webview/*.test.js',
   'dist/ui/webview/icons/*.test.js',
   'dist/mcp/*.test.js',
+  'dist/cli/*.test.js',
+  'dist/headless/*.test.js',
 ]);

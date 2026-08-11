@@ -35,7 +35,9 @@ import {
 import type { RunAtSourceLocationResult } from '../orchestration';
 import type { VariableDefinition } from '../models';
 import type { CollectionVariableStore } from '../variables';
+import { DefaultVariableResolver } from '../variables';
 import { ApiHeroMcpService } from './service';
+import type { ApiHeroMcpServiceDeps } from './service';
 import { MCP_SECRET_MASK, redactForMcp } from './redact';
 import { projectRunSummary } from './dto';
 
@@ -120,11 +122,17 @@ class FakeExecutor implements CollectionRequestExecutorPort {
   };
 
   public calls: Array<{ sourceId: string; offset: number }> = [];
+  public throwOnCall: Error | undefined;
+  public onCall: (() => void) | undefined;
 
   public async runAtSourceLocation(
     source: { readonly sourceId: string; readonly offset: number },
   ): Promise<RunAtSourceLocationResult> {
     this.calls.push({ sourceId: source.sourceId, offset: source.offset });
+    this.onCall?.();
+    if (this.throwOnCall !== undefined) {
+      throw this.throwOnCall;
+    }
     return this.next;
   }
 }
@@ -132,6 +140,7 @@ class FakeExecutor implements CollectionRequestExecutorPort {
 function createHarness(options?: {
   readonly empty?: boolean;
   readonly executor?: FakeExecutor;
+  readonly analyzeAndEnrich?: ApiHeroMcpServiceDeps['analyzeAndEnrich'];
 }) {
   const ws = '/ws';
   const collectionRoot = `${ws}/Collections/Demo`;
@@ -200,8 +209,15 @@ function createHarness(options?: {
   ]);
   const collectionRunContext = createCollectionRunVariableContext();
   let activeVars: readonly VariableDefinition[] = [];
+  let analyzeAndEnrichCalls = 0;
+  const defaultAnalyzeAndEnrich: ApiHeroMcpServiceDeps['analyzeAndEnrich'] =
+    async (plan) => {
+      analyzeAndEnrichCalls += 1;
+      return { ok: true, plan };
+    };
 
   const service = new ApiHeroMcpService({
+    workspaceRoot: ws,
     discovery,
     runner,
     runManager,
@@ -209,11 +225,21 @@ function createHarness(options?: {
     sourceReader,
     collectionVariableStore: variableStore,
     collectionRunContext,
+    variableResolver: new DefaultVariableResolver(),
+    getExternalVariableDefinitions: () => activeVars,
+    fileExists: async () => true,
     getStaticVariableNames: () => new Set(activeVars.map((v) => v.name)),
     setActiveCollectionVariables: (variables) => {
       activeVars = variables;
     },
-    analyzeAndEnrich: async (plan) => ({ ok: true, plan }),
+    preloadCollectionVariables: async (rootPath) => {
+      try {
+        return await variableStore.load(rootPath);
+      } catch {
+        return [];
+      }
+    },
+    analyzeAndEnrich: options?.analyzeAndEnrich ?? defaultAnalyzeAndEnrich,
   });
 
   return {
@@ -224,6 +250,8 @@ function createHarness(options?: {
     collectionRoot,
     helloPath,
     failPath,
+    getActiveVars: () => activeVars,
+    getAnalyzeAndEnrichCalls: () => analyzeAndEnrichCalls,
   };
 }
 
@@ -292,7 +320,7 @@ describe('ApiHeroMcpService', () => {
   });
 
   test('6. runCollection executes via runner and returns summary', async () => {
-    const { service } = createHarness();
+    const { service, getAnalyzeAndEnrichCalls } = createHarness();
     const result = await service.runCollection('Demo');
     assert.equal(result.ok, true);
     if (!result.ok) return;
@@ -300,6 +328,24 @@ describe('ApiHeroMcpService', () => {
     assert.equal(result.data.total, 2);
     assert.ok(result.data.runId.length > 0);
     assert.equal(result.data.passed, 2);
+    assert.equal(getAnalyzeAndEnrichCalls(), 1);
+  });
+
+  test('6b. runCollection maps analyzeAndEnrich failure to DEPENDENCY_ENRICH_FAILED', async () => {
+    const message =
+      'Dependency cycle detected: Login → Get User → Login';
+    const { service } = createHarness({
+      analyzeAndEnrich: async () => ({
+        ok: false,
+        code: 'DEPENDENCY_CYCLE',
+        message,
+      }),
+    });
+    const result = await service.runCollection('Demo');
+    assert.equal(result.ok, false);
+    if (result.ok) return;
+    assert.equal(result.error.code, 'DEPENDENCY_ENRICH_FAILED');
+    assert.equal(result.error.message, message);
   });
 
   test('7. getRun retrieves a prior run summary', async () => {
@@ -545,6 +591,38 @@ describe('ApiHeroMcpService', () => {
     assert.equal(result.data.status, 'failed');
     assert.equal(result.data.failureDiagnostics?.category, 'extraction');
     assert.equal(result.data.failureDiagnostics?.failedAtStage, 'extraction');
+  });
+
+  test('runRequest primes collection variables during execution and clears after', async () => {
+    const executor = new FakeExecutor();
+    let seenDuringCall: readonly VariableDefinition[] = [];
+    const harness = createHarness({ executor });
+    executor.onCall = () => {
+      seenDuringCall = harness.getActiveVars();
+    };
+    const result = await harness.service.runRequest({
+      collection: 'Demo',
+      request: 'Hello',
+    });
+    assert.equal(result.ok, true);
+    assert.ok(seenDuringCall.some((variable) => variable.name === 'basePath'));
+    assert.ok(seenDuringCall.some((variable) => variable.name === 'apiToken'));
+    assert.equal(harness.getActiveVars().length, 0);
+  });
+
+  test('runRequest clears active collection variables after executor failure', async () => {
+    const executor = new FakeExecutor();
+    executor.throwOnCall = new Error('transport boom');
+    const harness = createHarness({ executor });
+    await assert.rejects(
+      () =>
+        harness.service.runRequest({
+          collection: 'Demo',
+          request: 'Hello',
+        }),
+      /transport boom/,
+    );
+    assert.equal(harness.getActiveVars().length, 0);
   });
 
   test('13. secret redaction strips bearer tokens from tool JSON', () => {
