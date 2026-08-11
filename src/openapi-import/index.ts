@@ -32,6 +32,18 @@ export type {
 } from './loader';
 
 export {
+  deriveFileNameHint,
+  fetchOpenApiSpecUrl,
+  validateOpenApiSpecUrl,
+} from './fetch-spec-url';
+export type {
+  FetchOpenApiSpecUrlFailure,
+  FetchOpenApiSpecUrlOptions,
+  FetchOpenApiSpecUrlResult,
+  FetchOpenApiSpecUrlSuccess,
+} from './fetch-spec-url';
+
+export {
   maskImportSecretText,
   isSensitiveName,
   placeholderForSensitiveName,

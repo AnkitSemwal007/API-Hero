@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.8.2] - 2026-08-11
+
+Import OpenAPI/Swagger definitions directly from a URL. Backward compatible with **2.8.0**.
+
+### Added
+
+- Import OpenAPI 3.0/3.1 specifications directly from HTTP/HTTPS URLs
+- URL-based JSON/YAML OpenAPI import
+- Same existing OpenAPI importer generates `.api` files and collections
+
+### Security
+
+- HTTP/HTTPS only
+- Embedded URL credentials rejected
+- Redirect final URLs validated
+- Authorization/Cookie headers are not sent
+- Redirect limit enforced
+
+### Compatibility
+
+- Existing local JSON/YAML OpenAPI import remains unchanged
+- Swagger 2.0 remains unsupported
+
+### Docs
+
+- [OpenAPI import](docs/user/openapi-import.md) — URL source, security, and auth limitations
+- [Architecture: OpenAPI import](docs/architecture/openapi-import.md) — URL fetch stage ahead of the existing pipeline
+
 ## [2.8.0] - 2026-08-11
 
 Universal MCP workspace configuration and client-owned Codex/Cursor/Claude documentation. Backward compatible with **2.7.0**.

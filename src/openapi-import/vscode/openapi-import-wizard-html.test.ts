@@ -34,6 +34,11 @@ describe('openapi-import-wizard-html', () => {
     assert.match(html, /Manage Authentication/u);
     assert.match(html, /id="previewImport"/u);
     assert.match(html, /id="outputDirectory"/u);
+    assert.match(html, /id="sourceModeFile"/u);
+    assert.match(html, /id="sourceModeUrl"/u);
+    assert.match(html, /id="specUrl"/u);
+    assert.match(html, /Local File/u);
+    assert.match(html, /fetchUrl/u);
     assert.doesNotMatch(html, /connect-src [^']*https/u);
   });
 
@@ -54,6 +59,13 @@ describe('openapi-import-wizard-html', () => {
     assert.deepEqual(parseOpenApiImportWizardMessage({ type: 'pickFile' }), {
       type: 'pickFile',
     });
+    assert.deepEqual(
+      parseOpenApiImportWizardMessage({
+        type: 'fetchUrl',
+        url: 'https://example.com/openapi.json',
+      }),
+      { type: 'fetchUrl', url: 'https://example.com/openapi.json' },
+    );
     assert.deepEqual(
       parseOpenApiImportWizardMessage({ type: 'cancelImport' }),
       { type: 'cancelImport' },
@@ -98,6 +110,14 @@ describe('openapi-import-wizard-html', () => {
     );
     assert.equal(
       parseOpenApiImportWizardMessage({ type: 'selectWorkspace' }),
+      undefined,
+    );
+    assert.equal(
+      parseOpenApiImportWizardMessage({ type: 'fetchUrl' }),
+      undefined,
+    );
+    assert.equal(
+      parseOpenApiImportWizardMessage({ type: 'fetchUrl', url: '   ' }),
       undefined,
     );
   });

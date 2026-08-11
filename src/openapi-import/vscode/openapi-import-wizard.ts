@@ -8,7 +8,6 @@ import { join } from 'node:path';
 
 import {
   commands,
-  Uri,
   ViewColumn,
   window,
   workspace,
@@ -22,11 +21,16 @@ import {
   CONFIGURATION_SECTION,
   normalizeImportMaxFileBytes,
 } from '../../constants';
+import {
+  NodeHttpTransport,
+  type HttpTransport,
+} from '../../execution';
 import type { AuthenticationProfile, Environment } from '../../models';
 import type { Logger } from '../../shared';
 import { createWebviewNonce } from '../../ui/webview';
 import {
   evaluateImportSourceSize,
+  fetchOpenApiSpecUrl,
   rollbackWrittenFiles,
   runImportPipeline,
   type ImportProgressEvent,
@@ -55,6 +59,11 @@ export interface OpenOpenApiImportWizardOptions {
   readonly applySettingsPatch: (patch: SettingsPatch) => Promise<void>;
   /** When false, summary omits the Manage Authentication CTA. */
   readonly manageAuthAvailable?: boolean;
+  /**
+   * HTTP transport used for URL import. Defaults to {@link NodeHttpTransport}.
+   * Inject a fake transport in tests.
+   */
+  readonly transport?: HttpTransport;
 }
 
 /**
@@ -94,17 +103,30 @@ export async function openOpenApiImportWizard(
     let settled = false;
     let importSucceeded = false;
     let selectedFolderPath = wizardFolders[0]!.path;
-    let selectedFileUri: Uri | undefined;
+    let sourcePath = '';
+    let sourceFileName: string | undefined;
     let sourceText = '';
     let outputDirectoryName = '';
     let cancelRequested = false;
+    let fetchGeneration = 0;
+    let fetchAbort: AbortController | undefined;
+    let fetchInFlight = false;
     const disposables: Disposable[] = [];
+    const transport = options.transport ?? new NodeHttpTransport();
+
+    const abortInFlightFetch = (): void => {
+      fetchGeneration += 1;
+      fetchInFlight = false;
+      fetchAbort?.abort();
+      fetchAbort = undefined;
+    };
 
     const finish = (success: boolean): void => {
       if (settled) {
         return;
       }
       settled = true;
+      abortInFlightFetch();
       for (const disposable of disposables) {
         disposable.dispose();
       }
@@ -193,11 +215,15 @@ export async function openOpenApiImportWizard(
       };
     };
 
+    const hasSource = (): boolean => sourceText.length > 0 && sourcePath.length > 0;
+
+    const sourceMissingMessage = 'Select an OpenAPI specification file or URL first.';
+
     const runAnalyze = async (requestedOutput: string): Promise<void> => {
-      if (selectedFileUri === undefined || sourceText.length === 0) {
+      if (!hasSource()) {
         await post({
           type: 'previewError',
-          message: 'Select an OpenAPI specification file first.',
+          message: sourceMissingMessage,
         });
         return;
       }
@@ -205,8 +231,8 @@ export async function openOpenApiImportWizard(
       try {
         const result = await runImportPipeline({
           sourceText,
-          sourcePath: selectedFileUri.fsPath,
-          fileName: selectedFileUri.path.split('/').pop(),
+          sourcePath,
+          ...(sourceFileName === undefined ? {} : { fileName: sourceFileName }),
           targetRoot: selectedFolderPath,
           ...(outputDirectoryName.length > 0
             ? { outputDirectoryName }
@@ -249,10 +275,10 @@ export async function openOpenApiImportWizard(
     };
 
     const runImport = async (requestedOutput: string): Promise<void> => {
-      if (selectedFileUri === undefined || sourceText.length === 0) {
+      if (!hasSource()) {
         await post({
           type: 'error',
-          message: 'Select an OpenAPI specification file first.',
+          message: sourceMissingMessage,
         });
         return;
       }
@@ -296,8 +322,8 @@ export async function openOpenApiImportWizard(
       try {
         const result = await runImportPipeline({
           sourceText,
-          sourcePath: selectedFileUri.fsPath,
-          fileName: selectedFileUri.path.split('/').pop(),
+          sourcePath,
+          ...(sourceFileName === undefined ? {} : { fileName: sourceFileName }),
           targetRoot: selectedFolderPath,
           ...(outputDirectoryName.length > 0
             ? { outputDirectoryName }
@@ -384,6 +410,43 @@ export async function openOpenApiImportWizard(
       }
     };
 
+    const runFetchUrl = async (rawUrl: string): Promise<void> => {
+      if (fetchInFlight) {
+        return;
+      }
+      fetchInFlight = true;
+      const generation = ++fetchGeneration;
+      fetchAbort?.abort();
+      fetchAbort = new AbortController();
+      const result = await fetchOpenApiSpecUrl(rawUrl, {
+        transport,
+        maxResponseBytes: maxFileBytes(),
+        signal: fetchAbort.signal,
+      });
+      if (settled || generation !== fetchGeneration) {
+        return;
+      }
+      fetchInFlight = false;
+      fetchAbort = undefined;
+      if (!result.ok) {
+        options.logger.warning('OpenAPI URL fetch failed', {
+          message: result.message,
+          code: result.code,
+        });
+        await post({ type: 'error', message: result.message });
+        return;
+      }
+      sourceText = result.text;
+      sourcePath = result.sourceUrl;
+      sourceFileName = result.fileName;
+      const name = result.fileName ?? result.sourceUrl;
+      await post({
+        type: 'fileSelected',
+        path: result.sourceUrl,
+        name,
+      });
+    };
+
     disposables.push(
       panel.webview.onDidReceiveMessage((raw) => {
         void (async () => {
@@ -399,6 +462,7 @@ export async function openOpenApiImportWizard(
             }
             case 'cancel':
             case 'close': {
+              abortInFlightFetch();
               finish(importSucceeded);
               return;
             }
@@ -447,13 +511,18 @@ export async function openOpenApiImportWizard(
               }
               const bytes = await workspace.fs.readFile(fileUri);
               sourceText = Buffer.from(bytes).toString('utf8');
-              selectedFileUri = fileUri;
-              const name = fileUri.path.split('/').pop() ?? fileUri.fsPath;
+              sourcePath = fileUri.fsPath;
+              sourceFileName = fileUri.path.split('/').pop();
+              const name = sourceFileName ?? fileUri.fsPath;
               await post({
                 type: 'fileSelected',
                 path: fileUri.fsPath,
                 name,
               });
+              return;
+            }
+            case 'fetchUrl': {
+              await runFetchUrl(message.url);
               return;
             }
             case 'analyze': {

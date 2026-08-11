@@ -77,6 +77,7 @@ export type OpenApiImportWizardInboundMessage =
   | { readonly type: 'close' }
   | { readonly type: 'selectWorkspace'; readonly path: string }
   | { readonly type: 'pickFile' }
+  | { readonly type: 'fetchUrl'; readonly url: string }
   | { readonly type: 'analyze'; readonly outputDirectoryName: string }
   | { readonly type: 'startImport'; readonly outputDirectoryName: string }
   | { readonly type: 'cancelImport' }
@@ -131,6 +132,13 @@ export function parseOpenApiImportWizardMessage(
     return { type: 'selectWorkspace', path: record.path };
   }
   if (
+    type === 'fetchUrl' &&
+    typeof record.url === 'string' &&
+    record.url.trim().length > 0
+  ) {
+    return { type: 'fetchUrl', url: record.url };
+  }
+  if (
     (type === 'analyze' || type === 'startImport') &&
     typeof record.outputDirectoryName === 'string'
   ) {
@@ -177,11 +185,31 @@ export function renderOpenApiImportWizardHtml(nonce: string): string {
   </section>
 
   <section id="step-file" class="panel" hidden>
-    <h2>Specification file</h2>
-    <p class="hint">Select a JSON or YAML OpenAPI document.</p>
-    <div class="file-row">
-      <button type="button" id="browseFile" class="primary">Browse…</button>
-      <p id="fileLabel" class="file-label muted">No file selected</p>
+    <h2>Source</h2>
+    <p class="hint">Import from a local OpenAPI file or fetch a public HTTP(S) URL. The same importer converts either source into <code>.api</code> files.</p>
+    <fieldset class="source-mode">
+      <legend class="sr-only">Specification source</legend>
+      <label class="radio">
+        <input type="radio" name="sourceMode" id="sourceModeFile" value="file" checked />
+        <span>Local File</span>
+      </label>
+      <label class="radio">
+        <input type="radio" name="sourceMode" id="sourceModeUrl" value="url" />
+        <span>URL</span>
+      </label>
+    </fieldset>
+    <div id="fileSourcePanel" class="source-panel">
+      <div class="file-row">
+        <button type="button" id="browseFile" class="primary">Browse…</button>
+        <p id="fileLabel" class="file-label muted">No file selected</p>
+      </div>
+    </div>
+    <div id="urlSourcePanel" class="source-panel" hidden>
+      <label class="field">
+        <span>OpenAPI URL</span>
+        <input id="specUrl" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://example.com/openapi.json" />
+      </label>
+      <p class="hint">The URL is fetched over HTTP(S), then converted with the same OpenAPI importer used for local files. Authenticated URLs are not supported.</p>
     </div>
     <footer class="actions">
       <button type="button" id="fileBack" class="secondary">Back</button>
@@ -303,6 +331,32 @@ input:focus, select:focus {
 }
 .file-row { display: grid; gap: 8px; justify-items: start; }
 .file-label { word-break: break-all; }
+.source-mode {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 18px;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+.source-mode .radio {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.source-panel { display: grid; gap: 8px; }
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 .counts {
   display: grid;
   grid-template-columns: max-content 1fr;
@@ -348,7 +402,7 @@ const WIZARD_SCRIPT = `
   const STEP_ORDER = ${JSON.stringify([...OPENAPI_IMPORT_WIZARD_STEPS])};
   const STEP_LABELS = {
     workspace: 'Workspace',
-    file: 'File',
+    file: 'Source',
     preview: 'Preview',
     progress: 'Progress',
     summary: 'Summary',
@@ -356,15 +410,24 @@ const WIZARD_SCRIPT = `
 
   /** @type {{ folders: Array<{ name: string, path: string }>, skipWorkspaceStep: boolean, selectedFolderPath?: string, manageAuthAvailable: boolean, step: string } | undefined} */
   let state;
+  let sourceMode = 'file';
   let filePath = '';
   let fileName = '';
+  let urlReady = false;
   let analyzing = false;
+  let fetchingUrl = false;
+  let pendingFetchUrl = '';
 
   const errorEl = document.getElementById('error');
   const stepsNav = document.getElementById('steps');
   const workspaceSelect = document.getElementById('workspace');
   const fileLabel = document.getElementById('fileLabel');
   const fileNext = document.getElementById('fileNext');
+  const fileSourcePanel = document.getElementById('fileSourcePanel');
+  const urlSourcePanel = document.getElementById('urlSourcePanel');
+  const specUrl = document.getElementById('specUrl');
+  const sourceModeFile = document.getElementById('sourceModeFile');
+  const sourceModeUrl = document.getElementById('sourceModeUrl');
   const outputDirectory = document.getElementById('outputDirectory');
   const previewCounts = document.getElementById('previewCounts');
   const previewWarnings = document.getElementById('previewWarnings');
@@ -385,6 +448,29 @@ const WIZARD_SCRIPT = `
     }
     errorEl.hidden = false;
     errorEl.textContent = message;
+  }
+
+  function sourceReady() {
+    if (sourceMode === 'url') {
+      return urlReady || specUrl.value.trim().length > 0;
+    }
+    return Boolean(filePath);
+  }
+
+  function updateFileNext() {
+    fileNext.disabled = analyzing || fetchingUrl || !sourceReady();
+    specUrl.disabled = fetchingUrl;
+    sourceModeFile.disabled = fetchingUrl || analyzing;
+    sourceModeUrl.disabled = fetchingUrl || analyzing;
+  }
+
+  function setSourceMode(mode) {
+    sourceMode = mode === 'url' ? 'url' : 'file';
+    sourceModeFile.checked = sourceMode === 'file';
+    sourceModeUrl.checked = sourceMode === 'url';
+    fileSourcePanel.hidden = sourceMode !== 'file';
+    urlSourcePanel.hidden = sourceMode !== 'url';
+    updateFileNext();
   }
 
   function fillCounts(target, rows) {
@@ -464,17 +550,43 @@ const WIZARD_SCRIPT = `
     state = next;
     fillWorkspaces();
     showError('');
+    sourceMode = 'file';
     filePath = '';
     fileName = '';
+    urlReady = false;
+    fetchingUrl = false;
+    analyzing = false;
+    pendingFetchUrl = '';
+    specUrl.value = '';
     fileLabel.textContent = 'No file selected';
     fileLabel.classList.add('muted');
-    fileNext.disabled = true;
+    setSourceMode('file');
     document.getElementById('fileBack').hidden = next.skipWorkspaceStep === true;
     if (next.skipWorkspaceStep) {
       showStep('file');
     } else {
       showStep(next.step || 'workspace');
     }
+  }
+
+  function beginAnalyze() {
+    showError('');
+    analyzing = true;
+    updateFileNext();
+    document.getElementById('previewImport').disabled = true;
+    showStep('preview');
+    previewCounts.innerHTML = '';
+    const loading = document.createElement('dt');
+    loading.textContent = 'Status';
+    const loadingDd = document.createElement('dd');
+    loadingDd.textContent = 'Analyzing specification…';
+    previewCounts.appendChild(loading);
+    previewCounts.appendChild(loadingDd);
+    fillList(previewWarnings, []);
+    vscode.postMessage({
+      type: 'analyze',
+      outputDirectoryName: outputDirectory.value.trim(),
+    });
   }
 
   document.getElementById('workspaceCancel').addEventListener('click', () => {
@@ -503,37 +615,58 @@ const WIZARD_SCRIPT = `
   document.getElementById('fileCancel').addEventListener('click', () => {
     vscode.postMessage({ type: 'cancel' });
   });
+  sourceModeFile.addEventListener('change', () => {
+    if (sourceModeFile.checked) {
+      setSourceMode('file');
+      showError('');
+    }
+  });
+  sourceModeUrl.addEventListener('change', () => {
+    if (sourceModeUrl.checked) {
+      setSourceMode('url');
+      showError('');
+    }
+  });
+  specUrl.addEventListener('input', () => {
+    urlReady = false;
+    updateFileNext();
+  });
   document.getElementById('browseFile').addEventListener('click', () => {
     showError('');
     vscode.postMessage({ type: 'pickFile' });
   });
   document.getElementById('fileNext').addEventListener('click', () => {
-    if (!filePath || analyzing) {
+    if (analyzing || fetchingUrl) {
       return;
     }
-    showError('');
-    analyzing = true;
-    fileNext.disabled = true;
-    document.getElementById('previewImport').disabled = true;
-    showStep('preview');
-    previewCounts.innerHTML = '';
-    const loading = document.createElement('dt');
-    loading.textContent = 'Status';
-    const loadingDd = document.createElement('dd');
-    loadingDd.textContent = 'Analyzing specification…';
-    previewCounts.appendChild(loading);
-    previewCounts.appendChild(loadingDd);
-    fillList(previewWarnings, []);
-    vscode.postMessage({
-      type: 'analyze',
-      outputDirectoryName: outputDirectory.value.trim(),
-    });
+    if (sourceMode === 'url') {
+      const url = specUrl.value.trim();
+      if (!url) {
+        showError('Enter an OpenAPI URL.');
+        return;
+      }
+      if (urlReady && filePath === url) {
+        beginAnalyze();
+        return;
+      }
+      showError('');
+      fetchingUrl = true;
+      updateFileNext();
+      fileNext.textContent = 'Fetching…';
+      pendingFetchUrl = url;
+      vscode.postMessage({ type: 'fetchUrl', url });
+      return;
+    }
+    if (!filePath) {
+      return;
+    }
+    beginAnalyze();
   });
 
   document.getElementById('previewBack').addEventListener('click', () => {
     showError('');
     analyzing = false;
-    fileNext.disabled = !filePath;
+    updateFileNext();
     showStep('file');
     vscode.postMessage({ type: 'back', to: 'file' });
   });
@@ -572,16 +705,60 @@ const WIZARD_SCRIPT = `
       return;
     }
     if (message.type === 'fileSelected') {
-      filePath = message.path || '';
-      fileName = message.name || '';
+      fetchingUrl = false;
+      fileNext.textContent = 'Next';
+      const selectedPath = message.path || '';
+      const selectedName = message.name || '';
+      const isUrlSource =
+        sourceMode === 'url' || /^https?:\\/\\//i.test(selectedPath);
+      if (isUrlSource) {
+        const currentUrl = specUrl.value.trim();
+        // Discard stale completions if the field changed (or a newer fetch started).
+        if (
+          pendingFetchUrl &&
+          currentUrl &&
+          currentUrl !== pendingFetchUrl &&
+          selectedPath !== currentUrl
+        ) {
+          pendingFetchUrl = '';
+          urlReady = false;
+          updateFileNext();
+          showError('URL changed during fetch. Click Next to fetch again.');
+          return;
+        }
+        sourceMode = 'url';
+        setSourceMode('url');
+        filePath = selectedPath;
+        fileName = selectedName;
+        urlReady = Boolean(filePath);
+        if (filePath && !specUrl.value.trim()) {
+          specUrl.value = filePath;
+        }
+        pendingFetchUrl = '';
+        updateFileNext();
+        showError('');
+        if (urlReady && !analyzing) {
+          beginAnalyze();
+        }
+        return;
+      }
+      sourceMode = 'file';
+      setSourceMode('file');
+      filePath = selectedPath;
+      fileName = selectedName;
+      pendingFetchUrl = '';
+      urlReady = false;
       fileLabel.textContent = filePath || 'No file selected';
       fileLabel.classList.toggle('muted', !filePath);
-      fileNext.disabled = !filePath;
+      updateFileNext();
       showError('');
       return;
     }
     if (message.type === 'preview' && message.preview) {
       analyzing = false;
+      fetchingUrl = false;
+      fileNext.textContent = 'Next';
+      updateFileNext();
       const p = message.preview;
       fillCounts(previewCounts, [
         ['API', (p.apiName || 'OpenAPI') + (p.apiVersion ? ' ' + p.apiVersion : '')],
@@ -602,7 +779,9 @@ const WIZARD_SCRIPT = `
     }
     if (message.type === 'previewError') {
       analyzing = false;
-      fileNext.disabled = !filePath;
+      fetchingUrl = false;
+      fileNext.textContent = 'Next';
+      updateFileNext();
       showError(message.message || 'Could not analyze specification.');
       showStep('file');
       return;
@@ -649,6 +828,10 @@ const WIZARD_SCRIPT = `
       return;
     }
     if (message.type === 'error' && typeof message.message === 'string') {
+      fetchingUrl = false;
+      pendingFetchUrl = '';
+      fileNext.textContent = 'Next';
+      updateFileNext();
       showError(message.message);
     }
   });

@@ -37,7 +37,7 @@ async function main(): Promise<void> {
   const service = ApiHeroMcpService.fromRuntime(runtime);
   const server = new McpServer({
     name: 'api-hero',
-    version: '2.8.0',
+    version: '2.8.2',
   });
   registerApiHeroMcpTools(server, service);
 

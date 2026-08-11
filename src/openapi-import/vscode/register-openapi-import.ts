@@ -15,6 +15,7 @@ import {
   CONFIGURATION_KEYS,
   CONFIGURATION_SECTION,
 } from '../../constants';
+import { NodeHttpTransport } from '../../execution';
 import type { AuthenticationProfile, Environment } from '../../models';
 import type { Logger } from '../../shared';
 import {
@@ -54,6 +55,7 @@ export function registerOpenApiImport(
         readAuthProfiles,
         applySettingsPatch,
         manageAuthAvailable: true,
+        transport: new NodeHttpTransport(),
       });
     },
   );

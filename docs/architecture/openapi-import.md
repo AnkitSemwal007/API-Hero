@@ -19,12 +19,14 @@ Title: **API Hero: Import OpenAPI Specification**
 ## Pipeline
 
 ```text
-File → Loader → Parser → Validator → $ref Resolver → Generators
-  → Domain artifacts → Workspace Writer → Settings patch → Collections refresh
+Local file | URL → (URL: HttpTransport GET) → Loader → Parser → Validator
+  → $ref Resolver → Generators → Domain artifacts → Workspace Writer
+  → Settings patch → Collections refresh
 ```
 
 | Stage | Module | Responsibility |
 | --- | --- | --- |
+| Fetch (URL) | `fetch-spec-url.ts` | Validate http(s) URL, GET via `HttpTransport`, UTF-8 text + fileName hint |
 | Load | `loader.ts` | Size cap, JSON vs YAML detection, parse root |
 | Parse | `openapi/parse.ts` | Map root → focused document model |
 | Validate | `openapi/validate.ts` | Version 3.0/3.1, required `info`, diagnostics |
@@ -33,6 +35,10 @@ File → Loader → Parser → Validator → $ref Resolver → Generators
 | Write | `workspace-writer.ts` | Path-safe file writes under target root |
 | Orchestrate | `pipeline.ts` | Stages, `ImportSummary`, cancellation |
 | UI | `vscode/register-openapi-import.ts`, `openapi-import-wizard.ts` | **OpenAPI import wizard** webview, progress, settings, refresh |
+
+URL import reuses `runImportPipeline({ sourceText })` — there is **no** second
+OpenAPI parser. The wizard host injects `NodeHttpTransport` (or a test fake);
+raw `fetch()` is not used.
 
 Generated `.api` text uses the shared **request-source** model (same serialization
 path as the Request Editor) so imported files round-trip cleanly in the form UI.
@@ -149,9 +155,18 @@ plaintext settings. The summary lists SecretStorage hints for the user.
 
 - Never execute imported content.
 - Configurable size cap: `apiHero.import.maxFileBytes` (default 5 MiB,
-  hard max 50 MiB). The VS Code adapter `stat`s the file and rejects oversized
-  specs **before** `readFile`; the loader re-checks decoded UTF-8 byte length.
-- `$ref` depth / cycle protection.
+  hard max 50 MiB). The VS Code adapter `stat`s local files and rejects
+  oversized specs **before** `readFile`; URL fetch applies the same limit via
+  `HttpTransportContext.maxResponseBytes`; the loader re-checks decoded UTF-8
+  byte length.
+- URL fetch: http(s) only; no embedded credentials; no Authorization/Cookie
+  headers; TLS certificate verification on; redirects followed by
+  `NodeHttpTransport` (non-http(s) redirect targets rejected). Localhost /
+  private / link-local hosts are intentionally allowed (local extension
+  workflows). Cloud-style SSRF private-range blocking is **not** implemented —
+  it would break legitimate local Swagger servers and diverge from Request
+  Engine policy.
+- `$ref` depth / cycle protection. Remote `$ref` URLs are **not** fetched.
 - Generated relative paths sanitized; `..` and absolute segments rejected so
   writes cannot escape the import target root.
 - Diagnostics pass through `maskImportSecretText` before UI display.
@@ -161,6 +176,7 @@ plaintext settings. The summary lists SecretStorage hints for the user.
 ## Limitations (intentionally deferred)
 
 - Swagger 2.0, export, Postman / Insomnia / GraphQL import
+- Authenticated OpenAPI URL fetch (401/403 or URLs with embedded credentials)
 - Response schema / assertion generation
 - OAuth2 / OpenID login flows (schemes appear as `none` profiles; details stay in import notes/summary)
 - Remote `$ref` fetching
@@ -177,3 +193,8 @@ Core pipeline tests live in `src/openapi-import/openapi-import.test.ts`
 (`node:test`, no extension host): JSON/YAML fixtures, validation, `$ref` /
 circular, auth/env/request generation, malformed specs, path traversal,
 cancellation, and a large-ish smoke import.
+
+URL fetch tests live in `src/openapi-import/fetch-spec-url.test.ts` (FakeTransport
++ optional local `NodeHttpTransport` smoke) and cover protocol/credential
+rejection, HTTP errors, Content-Type fileName hints, and pipeline equivalence
+with direct `runImportPipeline({ sourceText })`.

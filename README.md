@@ -4,7 +4,7 @@
 
 Author `.api` requests beside your code, run them with assertions, and keep collections in Git — without leaving the editor.
 
-> Extension ID: **`ankitsemwal.api-hero`** · Version: **2.8.0** · License: [MIT](LICENSE)
+> Extension ID: **`ankitsemwal.api-hero`** · Version: **2.8.2** · License: [MIT](LICENSE)
 
 [Documentation](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/README.md) · [Changelog](CHANGELOG.md) · [Support](SUPPORT.md)
 
@@ -18,7 +18,7 @@ Author `.api` requests beside your code, run them with assertions, and keep coll
 - **Scenarios for real workflows** — multi-step orchestration with templates, request binding, live step status, and Scenario Reports
 - **Git-native collections** — folders and human-readable `.api` files you can diff and review in PRs
 - **Run with confidence** — assertions, environments, Live Run Report for collection runs, and health-aware auth
-- **Import and grow** — OpenAPI 3.x import into the same `.api` + collection layout
+- **Import and grow** — OpenAPI 3.x import from a local file or HTTP(S) URL into the same `.api` + collection layout
 
 ---
 
@@ -185,7 +185,7 @@ Manual `@depends-on` picker plus Auto / Unknown / Ambiguous projections from the
 
 ### OpenAPI Import
 
-**API Hero: Import OpenAPI Specification** opens a wizard: pick a spec, preview, write `.api` files and collection structure. Generation uses the same serializer as the Request Editor.
+**API Hero: Import OpenAPI Specification** opens a wizard: choose a **local file** or paste a public **HTTP(S) URL**, preview, then write `.api` files and collection structure. URL import fetches the specification and uses the **same** OpenAPI 3.0/3.1 importer as local files (Swagger 2.0 is not supported).
 
 → [OpenAPI Import](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/openapi-import.md)
 
