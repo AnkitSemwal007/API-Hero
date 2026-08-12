@@ -12,11 +12,13 @@ import {
   type DependencyEdge,
   type FailurePolicyKind as FailurePolicyKindType,
   type PlannedRequest,
+  type RequestAttemptRecord,
   type RequestRunOutcomeKind as OutcomeKind,
   type RequestRunResult,
   type RunSummary,
 } from '../models';
 import { listFailurePolicies } from '../failure-policies';
+import { formatAttemptLabel } from '../progress-labels';
 import type { CollectionRunSessionSnapshot } from '../run-session-models';
 import type { ResponsePresentation } from '../../response/presentation';
 import type { ResolvedVariableSnapshot } from '../../variables';
@@ -67,6 +69,12 @@ export interface CollectionRunReportRow {
   readonly consumedVariablesLabel?: string;
   /** Secret-free reason a dependent request was skipped (§10.1, §6.7). */
   readonly skipReason?: string;
+  /**
+   * Per-attempt lines for retried requests (status codes / outcomes).
+   * Presentation-only projection of {@link RequestRunResult.attempts}.
+   */
+  readonly attemptsLabel?: string;
+  readonly attemptLines?: readonly string[];
   /**
    * Expandable debugger payload. Presentation-only — never RuntimeResponse.
    * Absent for skipped / never-executed rows.
@@ -292,6 +300,7 @@ export function buildCollectionRunReportModel(
       ...(result.skipReason === undefined
         ? {}
         : { skipReason: result.skipReason }),
+      ...projectAttemptFields(result.attempts),
       ...(details === undefined ? {} : { details }),
     };
   });
@@ -373,7 +382,11 @@ export function buildLiveCollectionRunReportModel(
       currentOrdinal !== undefined &&
       planned.ordinal === currentOrdinal
     ) {
-      return mapPlaceholderRow(planned, 'running');
+      return mapPlaceholderRow(
+        planned,
+        'running',
+        session.lastProgress?.attempt,
+      );
     }
     return mapPlaceholderRow(planned, 'pending');
   });
@@ -510,14 +523,45 @@ function mapResultRow(
       };
     })(),
     ...(result.skipReason === undefined ? {} : { skipReason: result.skipReason }),
+    ...projectAttemptFields(result.attempts),
     ...(details === undefined ? {} : { details }),
   };
+}
+
+function projectAttemptFields(
+  attempts: readonly RequestAttemptRecord[] | undefined,
+): Partial<CollectionRunReportRow> {
+  if (attempts === undefined || attempts.length <= 1) {
+    return {};
+  }
+  const attemptLines = attempts.map(formatAttemptLine);
+  return {
+    attemptsLabel: `${attempts.length} attempts`,
+    attemptLines,
+  };
+}
+
+function formatAttemptLine(attempt: RequestAttemptRecord): string {
+  const status =
+    attempt.statusCode === undefined ? attempt.outcome : String(attempt.statusCode);
+  const retryable =
+    attempt.retryable === true
+      ? ' · retryable'
+      : attempt.retryable === false
+        ? ' · not retryable'
+        : '';
+  const duration =
+    attempt.durationMs === undefined ? '' : ` · ${attempt.durationMs} ms`;
+  return `#${attempt.attemptNumber}: ${status}${retryable}${duration}`;
 }
 
 function mapPlaceholderRow(
   planned: PlannedRequest,
   phase: 'running' | 'pending',
+  attempt?: import('../models').RunProgressAttempt,
 ): CollectionRunReportRow {
+  const attemptMessage =
+    phase === 'running' ? formatAttemptLabel(attempt) : undefined;
   return {
     requestId: planned.requestId,
     ordinal: planned.ordinal,
@@ -531,7 +575,14 @@ function mapPlaceholderRow(
     statusBadgeClass: phase === 'running' ? 'status-running' : 'status-pending',
     durationLabel: '—',
     assertionsLabel: '—',
-    ...(phase === 'running' ? { message: 'Executing request...' } : {}),
+    ...(phase === 'running'
+      ? {
+          message:
+            attemptMessage === undefined
+              ? 'Executing request...'
+              : attemptMessage,
+        }
+      : {}),
     canOpen: planned.requestId.trim().length > 0,
     isFailure: false,
     ...projectFolderFields(planned),
@@ -1345,6 +1396,16 @@ main { display: flex; flex-direction: column; min-height: 100vh; }
 .failure-facts { margin: 8px 0 0; padding: 0 0 0 1.1em; }
 .failure-facts li { padding: 1px 0; color: var(--vscode-descriptionForeground); }
 .message.skip-reason { color: var(--vscode-editorWarning-foreground); }
+.attempts {
+  margin-top: var(--ah-space-1);
+  font-size: .88em;
+  color: var(--vscode-descriptionForeground);
+}
+.attempts-label { font-weight: 600; margin-bottom: 2px; }
+.attempt-list {
+  margin: 2px 0 0;
+  padding-left: 1.2em;
+}
 .vars-produced {
   color: var(--vscode-charts-green, var(--vscode-terminal-ansiGreen, #89d185));
   font-size: .85em; overflow-wrap: anywhere; margin-top: 2px;
@@ -1812,14 +1873,24 @@ const REPORT_SCRIPT = `
     if (row.skipReason) {
       return '<div class="message skip-reason">' + escapeHtml(row.skipReason) + '</div>';
     }
+    let html = '';
+    if (row.attemptLines && row.attemptLines.length > 0) {
+      html += '<div class="attempts"><div class="attempts-label">' +
+        escapeHtml(row.attemptsLabel || 'Attempts') +
+        '</div><ul class="attempt-list">' +
+        row.attemptLines.map(function (line) {
+          return '<li>' + escapeHtml(line) + '</li>';
+        }).join('') +
+        '</ul></div>';
+    }
     if (!row.message) {
-      return '';
+      return html;
     }
     const breakAt = row.message.indexOf('\\n');
     if (breakAt < 0) {
-      return '<div class="message">' + escapeHtml(row.message) + '</div>';
+      return html + '<div class="message">' + escapeHtml(row.message) + '</div>';
     }
-    return '<div class="message"><span class="message-title">' +
+    return html + '<div class="message"><span class="message-title">' +
       escapeHtml(row.message.slice(0, breakAt)) + '</span>' +
       escapeHtml(row.message.slice(breakAt + 1)) + '</div>';
   }

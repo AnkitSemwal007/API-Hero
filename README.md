@@ -26,7 +26,7 @@ Author `.api` requests beside your code, organize them in Git-friendly collectio
 - **Variables & environments** — `{{name}}` with clear precedence; collection variables in `api-hero.variables.json`; sensitive overlays gitignored
 - **Authentication** — `none` / `basic` / `bearer` / `apiKey` profiles, Login API sessions, Secret Storage
 - **Assertions** — `expect` lines with Expected/Actual in Response Viewer and Run Reports
-- **Collection Runner** — run collection / folder / selected requests with failure policies
+- **Collection Runner** — run collection / folder / selected requests with failure policies and optional **Run Options** (retries + DELETE skip)
 - **Collection Run Reports** — compact summary and rows, filters, folder grouping, and drill-down Details
 - **Copy as cURL** — resolve variables + auth and copy a redacted POSIX cURL command (no HTTP)
 - **Request History** — metadata in VS Code global storage (`request-history.json`)
@@ -346,6 +346,7 @@ Lifecycle for a single request:
   - `stop-on-first-error`
   - `continue-on-error`
   - `skip-invalid-requests`
+- **Run Options** — optional retries (transport / `408`/`429`/`5xx`) and skip DELETE for the run; Attempts list shows progress; only the **final** attempt writes extracts / history
 - **Outcomes:** `passed` / `failed` / `skipped` / `cancelled`
 - **Dependencies** reorder; **cycles block** the run
 - **Open Live Report** / **Open Run Report** when finished

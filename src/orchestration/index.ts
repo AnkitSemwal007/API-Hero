@@ -21,6 +21,7 @@ export type {
   RunAtSourceLocationResult,
   RunRequestOutcome,
   RunRequestSource,
+  SideEffectCommitContext,
 } from './execution-orchestrator';
 export type { ResolvedVariableSnapshot } from '../variables';
 export {

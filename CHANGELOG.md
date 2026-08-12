@@ -9,13 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.8.4] - 2026-08-12
 
-OpenAPI environment safety, Collection Run Report / Variable Trace UX polish, and Scenario menu cleanup. Backward compatible with **2.8.3**.
+OpenAPI environment safety, Collection Execution Controls (retry + destructive skip), Collection Run Report / Variable Trace UX polish, Scenario menu cleanup, and security masking alignment. Backward compatible with **2.8.3**.
 
 ### Added
 
+- **Collection Execution Controls** — Run Options QuickPick for retries (off / settings preset / custom) and optional DELETE skip; settings for retry defaults; attempt progress in Execution view and Run Report
 - OpenAPI import environment safety — preserve the active environment when one is already selected (e.g. DummyJSON stays active when importing OpenAI); imported environments are always created and remain selectable; undefined `security` scheme names warn without inventing auth profiles
 - Collection Run Report UX — compact summary and rows, outcome/method/search filters, folder grouping, and drill-down Details
 - Variable Trace UX — compact Variables status in the report header; full trace and unresolved names on expand
+
+### Security
+
+- Aligned sensitive HTTP header masking across Response UI, assertions, MCP, and cURL (`authorization`, `proxy-authorization`, `cookie`, `set-cookie`, `x-api-key`, `api-key`, `apikey`, `x-auth-token`)
+- OpenAPI server variables named like secrets (`apiKey`, `token`, `password`, …) are imported as `sensitive: true`
 
 ### Changed
 
@@ -26,7 +32,7 @@ OpenAPI environment safety, Collection Run Report / Variable Trace UX polish, an
 ### Docs & Marketplace
 
 - Release readiness and notes pinned to **2.8.4**
-- User docs updated for OpenAPI env safety, compact Run Report / Variables UX, and CLI distribution status
+- User docs updated for OpenAPI env safety, Collection Execution Controls / retry, compact Run Report / Variables UX, and CLI distribution status
 
 ## [2.8.3] - 2026-08-11
 

@@ -146,7 +146,7 @@ export function registerApiHeroMcpTools(
     {
       title: 'Run Collection',
       description:
-        'Run all requests in a collection via CollectionRunnerService. Optional failurePolicy: stop-on-first-error | continue-on-error | skip-invalid-requests (default continue-on-error). Per-request rows are slim; use apihero_get_request_result for full response bodies.',
+        'Run all requests in a collection via CollectionRunnerService. Optional failurePolicy: stop-on-first-error | continue-on-error | skip-invalid-requests (default continue-on-error). Optional retry (enabled, maxRetries, delayMs, backoff) and skipDestructiveRequests (DELETE only). Defaults omitted = no retries / no destructive skip. Per-request rows are slim; use apihero_get_request_result for full response bodies.',
       inputSchema: {
         collection: z.string().describe('Collection display name or id'),
         failurePolicy: z
@@ -157,10 +157,38 @@ export function registerApiHeroMcpTools(
           ])
           .optional()
           .describe('How to handle request failures during the run'),
+        retry: z
+          .object({
+            enabled: z.boolean().optional(),
+            maxRetries: z.number().int().min(0).max(10).optional(),
+            delayMs: z.number().int().min(0).max(60_000).optional(),
+            backoff: z.enum(['fixed', 'exponential']).optional(),
+          })
+          .optional()
+          .describe(
+            'Optional retry controls. enabled default false; when enabled, defaults maxRetries=2, delayMs=500, backoff=exponential.',
+          ),
+        skipDestructiveRequests: z
+          .boolean()
+          .optional()
+          .describe('When true, skip DELETE requests for this run'),
       },
     },
-    async ({ collection, failurePolicy }) =>
-      safeTool(() => service.runCollection(collection, failurePolicy)),
+    async ({ collection, failurePolicy, retry, skipDestructiveRequests }) =>
+      safeTool(() =>
+        service.runCollection(
+          collection,
+          failurePolicy,
+          retry === undefined && skipDestructiveRequests === undefined
+            ? undefined
+            : {
+                ...(retry === undefined ? {} : { retry }),
+                ...(skipDestructiveRequests === undefined
+                  ? {}
+                  : { skipDestructiveRequests }),
+              },
+        ),
+      ),
   );
 
   server.registerTool(

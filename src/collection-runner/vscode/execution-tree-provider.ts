@@ -11,6 +11,7 @@ import {
 
 import { COMMAND_IDS } from '../../constants';
 import { listFailurePolicies } from '../failure-policies';
+import { formatAttemptLabel } from '../progress-labels';
 import type { CollectionRunSessionSnapshot } from '../run-session-models';
 import { RunSessionStatus } from '../run-session-models';
 
@@ -192,17 +193,21 @@ function treeItemForActive(session: CollectionRunSessionSnapshot): TreeItem {
       : session.completed;
   const policy =
     POLICY_LABELS[session.failurePolicy] ?? session.failurePolicy;
-  item.description = `${displayed} / ${session.total} - ${current}`;
+  const attemptLabel = formatAttemptLabel(session.lastProgress?.attempt);
+  const currentWithAttempt =
+    attemptLabel === undefined ? current : `${current} (${attemptLabel})`;
+  item.description = `${displayed} / ${session.total} - ${currentWithAttempt}`;
   item.tooltip = [
     session.collectionName,
     `Progress: ${displayed} / ${session.total}`,
     `Current: ${current}`,
+    ...(attemptLabel === undefined ? [] : [`Attempt: ${attemptLabel}`]),
     `Elapsed: ${formatDuration(session.elapsedMs)}`,
     `Policy: ${policy}`,
     `Run ID: ${session.runId}`,
   ].join('\n');
   item.accessibilityInformation = {
-    label: `${session.collectionName}, running, ${displayed} of ${session.total} requests, current ${current}, elapsed ${formatDuration(session.elapsedMs)}, ${policy}`,
+    label: `${session.collectionName}, running, ${displayed} of ${session.total} requests, current ${currentWithAttempt}, elapsed ${formatDuration(session.elapsedMs)}, ${policy}`,
   };
   item.command = {
     command: COMMAND_IDS.openLiveRunReport,

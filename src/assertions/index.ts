@@ -61,6 +61,7 @@ export {
   MASKED_ASSERTION_VALUE,
   formatAssertionValue,
   formatHeaderValueForReport,
+  isSensitiveAssertionPath,
   isSensitiveHeaderName,
   maskAssertionText,
 } from './mask';

@@ -44,6 +44,48 @@ Setting `apiHero.collectionRunner.failurePolicy` (default `ask`):
 
 User cancel stops the run; in-flight request is aborted when possible; remaining planned requests are cancelled.
 
+## Run Options (retry + destructive skip)
+
+After the failure policy is resolved, API Hero prompts for **Run Options**
+(QuickPick — no separate settings page):
+
+1. **Retries** — Off, settings preset (e.g. `2 exponential 500ms`), or Custom…
+2. **Destructive requests** — Skip DELETE for this run, or allow DELETE
+
+Defaults come from settings (pre-selected in the QuickPick):
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `apiHero.collectionRunner.retryEnabled` | `false` | Prefer retries on / off |
+| `apiHero.collectionRunner.maxRetries` | `2` | Retries after the first attempt (total attempts = maxRetries + 1) |
+| `apiHero.collectionRunner.retryDelayMs` | `500` | Base delay between attempts |
+| `apiHero.collectionRunner.retryBackoff` | `exponential` | `fixed` or `exponential` (`delayMs × 2^(retryIndex−1)`, capped) |
+| `apiHero.collectionRunner.skipDestructiveRequests` | `false` | Prefer skipping DELETE |
+
+**What is retried:** network/transport failures and HTTP `408`, `429`, `502`,
+`503`, `504` — including when the HTTP response completed successfully with
+those status codes (orchestrator `outcome: success`). Assertion failures on a
+retryable status are also retried.
+
+**What is not retried:** `400` / `401` / `403` / `404` / `409` / `422`, assertion
+failures on non-retryable statuses, cases where assertions were evaluated and
+all passed (including `expect status == 503` succeeding), variable/precondition
+failures, extraction failures, unread files, cancels, and dependency skips.
+
+Cancel during a retry wait aborts the run (remaining requests cancelled).
+Intermediate retry attempts do not commit request history or write extracted
+variables — only the final attempt does. After retry exhaustion, a
+success+503 response with no failing assertions still finishes as **Passed**
+(orchestrator HTTP semantics are preserved).
+
+**Destructive skip:** when enabled, `DELETE` requests are skipped with reason
+“Destructive requests are disabled for this run.” `POST` / `PUT` / `PATCH` are
+not treated as destructive.
+
+The Run Report and Execution view show attempt progress (`Attempt 2/3`,
+`Retrying… 1/2`) and, for retried requests, an Attempts list (status codes /
+outcomes). Dependency skip reasons are unchanged.
+
 ## Request Dependencies & Data Flow
 
 Collection runs can pass values from one request to the next. A request that uses
@@ -214,7 +256,7 @@ directly, or use `@extract … scope=collection` to write it from a response.
 ## Notes
 
 - Per-request Response viewer is suppressed during collection runs.
-- History still records each network-attempted request (with optional `collectionName`).
+- History records the final attempt for each planned request (with optional `collectionName`). Intermediate retry attempts do not create History rows.
 - Order follows a frozen Collections snapshot (depth-first folder expansion), then adjusts for dependencies.
 
 ## Related

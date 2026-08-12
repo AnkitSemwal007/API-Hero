@@ -19,12 +19,26 @@ import {
   freezeRunSummary,
   type DependencyEdge,
   type PlannedRequest,
+  type RequestAttemptRecord,
   type RequestFailureDiagnostics,
   type RequestRunResult,
   type RunPlan,
+  type RunProgressAttempt,
   type RunProgressEvent,
   type RunSummary,
 } from './models';
+import {
+  computeRetryDelayMs,
+  delay as cancellableDelay,
+  isCollectionRetryEligible,
+  isCollectionRetryEligibleFromSideEffectContext,
+} from './retry-eligibility';
+import {
+  DESTRUCTIVE_REQUEST_SKIP_REASON,
+  isDestructiveHttpMethod,
+  normalizeCollectionRunOptions,
+  type CollectionRunOptions,
+} from './run-options';
 
 /**
  * Narrow port over {@link ExecutionOrchestrator.runAtSourceLocation}.
@@ -52,6 +66,11 @@ export interface CollectionRunnerOptions {
   readonly sourceReader: CollectionRunSourceReader;
   readonly progress?: CollectionRunProgressPort;
   readonly now?: () => number;
+  /**
+   * Injectable delay between retries (tests). Defaults to
+   * {@link cancellableDelay}.
+   */
+  readonly delay?: (ms: number, signal?: AbortSignal) => Promise<void>;
 }
 
 export interface ExecuteRunOptions {
@@ -81,17 +100,24 @@ export interface ExecuteRunOptions {
 /**
  * Sequential collection runner. Builds no HTTP logic of its own — every
  * attempted request goes through {@link CollectionRequestExecutorPort}.
+ * Retry and destructive-skip live only here (not in a second engine).
  */
 export class CollectionRunnerService {
   private readonly now: () => number;
+  private readonly delay: (
+    ms: number,
+    signal?: AbortSignal,
+  ) => Promise<void>;
 
   public constructor(private readonly options: CollectionRunnerOptions) {
     this.now = options.now ?? Date.now;
+    this.delay = options.delay ?? cancellableDelay;
   }
 
   public async execute(options: ExecuteRunOptions): Promise<RunSummary> {
     const { plan } = options;
     const policy = resolveFailurePolicy(plan.failurePolicy);
+    const runOptions = normalizeCollectionRunOptions(plan.runOptions);
     const startedAt = this.now();
     const results: RequestRunResult[] = [];
     const resultsById = new Map<string, RequestRunResult>();
@@ -152,6 +178,7 @@ export class CollectionRunnerService {
       const result = await this.executeOne(
         planned,
         policy,
+        runOptions,
         options.signal,
         options.historyCaptureContext,
         {
@@ -160,6 +187,18 @@ export class CollectionRunnerService {
           resultsById,
           runVariableStore: options.runVariableStore,
           staticVariableNames: options.staticVariableNames,
+        },
+        (attempt) => {
+          this.emit({
+            runId: plan.runId,
+            phase: 'request-started',
+            current: planned,
+            completed: results.length,
+            remaining: plan.requests.length - results.length,
+            total: plan.requests.length,
+            elapsedMs: this.now() - startedAt,
+            attempt,
+          });
         },
       );
       results.push(result);
@@ -212,9 +251,11 @@ export class CollectionRunnerService {
   private async executeOne(
     planned: PlannedRequest,
     policy: FailurePolicy,
+    runOptions: CollectionRunOptions,
     signal: AbortSignal | undefined,
     historyCaptureContext: HistoryCaptureContext | undefined,
     dependencyContext: DependencyPreflightContext,
+    onAttemptProgress: (attempt: RunProgressAttempt) => void,
   ): Promise<RequestRunResult> {
     if (signal?.aborted) {
       return cancelledResult(planned, 'Run cancelled.');
@@ -229,6 +270,20 @@ export class CollectionRunnerService {
         outcome: RequestRunOutcomeKind.Skipped,
         message: skipReason,
         skipReason,
+      };
+    }
+
+    if (
+      runOptions.skipDestructiveRequests &&
+      isDestructiveHttpMethod(planned.method)
+    ) {
+      return {
+        requestId: planned.requestId,
+        ordinal: planned.ordinal,
+        label: planned.label,
+        outcome: RequestRunOutcomeKind.Skipped,
+        message: DESTRUCTIVE_REQUEST_SKIP_REASON,
+        skipReason: DESTRUCTIVE_REQUEST_SKIP_REASON,
       };
     }
 
@@ -255,52 +310,216 @@ export class CollectionRunnerService {
       return cancelledResult(planned, 'Run cancelled.');
     }
 
-    const started = this.now();
-    let runResult: RunAtSourceLocationResult;
-    try {
-      runResult = await this.options.executor.runAtSourceLocation(
-        {
-          text,
-          sourceId: planned.filePath,
-          offset: planned.offset,
-        },
-        {
-          showViewer: false,
-          useProgressUi: false,
-          showNotifications: false,
-          ...(signal === undefined ? {} : { signal }),
-          ...(historyCaptureContext === undefined
-            ? {}
-            : { historyCaptureContext }),
-        },
-      );
-    } catch {
-      const reason = 'The request could not be executed.';
-      return {
-        requestId: planned.requestId,
-        ordinal: planned.ordinal,
-        label: planned.label,
-        outcome: RequestRunOutcomeKind.Failed,
-        durationMs: this.now() - started,
-        ...buildFailureFields({
-          category: RequestFailureCategory.Transport,
-          reason,
-          httpRequestSent: false,
+    const maxAttempts = runOptions.retry.enabled
+      ? runOptions.retry.maxRetries + 1
+      : 1;
+    const attempts: RequestAttemptRecord[] = [];
+    const requestStartedAt = this.now();
+
+    for (
+      let attemptNumber = 1;
+      attemptNumber <= maxAttempts;
+      attemptNumber += 1
+    ) {
+      if (signal?.aborted) {
+        return attachAttempts(
+          cancelledResult(planned, 'Run cancelled.'),
+          attempts,
+          this.now() - requestStartedAt,
+        );
+      }
+
+      if (maxAttempts > 1) {
+        onAttemptProgress({
+          current: attemptNumber,
+          max: maxAttempts,
+          phase: 'executing',
+        });
+      }
+
+      const attemptStarted = this.now();
+      const retriesRemainingAfterThisAttempt = maxAttempts - attemptNumber;
+      let mapped: RequestRunResult;
+      try {
+        const runResult = await this.options.executor.runAtSourceLocation(
+          {
+            text,
+            sourceId: planned.filePath,
+            offset: planned.offset,
+          },
+          {
+            showViewer: false,
+            useProgressUi: false,
+            showNotifications: false,
+            ...(signal === undefined ? {} : { signal }),
+            ...(historyCaptureContext === undefined
+              ? {}
+              : { historyCaptureContext }),
+            ...(runOptions.retry.enabled && maxAttempts > 1
+              ? {
+                  shouldCommitSideEffects: (ctx) => {
+                    if (retriesRemainingAfterThisAttempt <= 0) {
+                      return true;
+                    }
+                    return !isCollectionRetryEligibleFromSideEffectContext(ctx);
+                  },
+                }
+              : {}),
+          },
+        );
+        mapped = mapOrchestratorResult(
+          planned,
+          runResult,
+          policy,
+          this.now() - attemptStarted,
+        );
+      } catch {
+        const reason = 'The request could not be executed.';
+        mapped = {
+          requestId: planned.requestId,
+          ordinal: planned.ordinal,
+          label: planned.label,
+          outcome: RequestRunOutcomeKind.Failed,
+          durationMs: this.now() - attemptStarted,
+          ...buildFailureFields({
+            category: RequestFailureCategory.Transport,
+            reason,
+            httpRequestSent: false,
+          }),
+        };
+      }
+
+      const willRetry =
+        retriesRemainingAfterThisAttempt > 0 &&
+        isCollectionRetryEligible(mapped);
+
+      attempts.push(
+        toAttemptRecord(attemptNumber, mapped, {
+          displayAsRetryableFailure: willRetry,
         }),
-      };
+      );
+
+      if (mapped.outcome === RequestRunOutcomeKind.Cancelled) {
+        return attachAttempts(
+          mapped,
+          attempts,
+          this.now() - requestStartedAt,
+        );
+      }
+
+      if (!willRetry) {
+        return attachAttempts(
+          mapped,
+          attempts,
+          this.now() - requestStartedAt,
+        );
+      }
+
+      const waitMs = computeRetryDelayMs(
+        attemptNumber,
+        runOptions.retry.delayMs,
+        runOptions.retry.backoff,
+      );
+      onAttemptProgress({
+        current: attemptNumber + 1,
+        max: maxAttempts,
+        phase: 'waiting',
+      });
+
+      try {
+        await this.delay(waitMs, signal);
+      } catch {
+        return attachAttempts(
+          cancelledResult(planned, 'Run cancelled.'),
+          attempts,
+          this.now() - requestStartedAt,
+        );
+      }
     }
 
-    return mapOrchestratorResult(
-      planned,
-      runResult,
-      policy,
-      this.now() - started,
+    // Unreachable when maxAttempts >= 1; satisfy the type checker.
+    return attachAttempts(
+      cancelledResult(planned, 'Run cancelled.'),
+      attempts,
+      this.now() - requestStartedAt,
     );
   }
 
   private emit(event: RunProgressEvent): void {
     this.options.progress?.onProgress(event);
   }
+}
+
+function toAttemptRecord(
+  attemptNumber: number,
+  result: RequestRunResult,
+  options?: {
+    /**
+     * When true, record this attempt as a failed/retryable display row even if
+     * the mapped orchestrator outcome is Passed (e.g. success+503 that will
+     * be retried). Does not mutate the final {@link RequestRunResult}.
+     */
+    readonly displayAsRetryableFailure?: boolean;
+  },
+): RequestAttemptRecord {
+  const displayAsFailure = options?.displayAsRetryableFailure === true;
+  const outcome = displayAsFailure
+    ? RequestRunOutcomeKind.Failed
+    : result.outcome;
+  const retryable = displayAsFailure
+    ? true
+    : result.outcome === RequestRunOutcomeKind.Failed
+      ? isCollectionRetryEligible(result)
+      : undefined;
+  const message = displayAsFailure
+    ? result.statusCode !== undefined
+      ? `Retryable HTTP ${result.statusCode}`
+      : (result.message ??
+        result.failureDiagnostics?.reason ??
+        'Retryable attempt')
+    : result.message === undefined
+      ? result.failureDiagnostics?.reason === undefined
+        ? undefined
+        : result.failureDiagnostics.reason
+      : result.message;
+  return {
+    attemptNumber,
+    outcome,
+    ...(result.statusCode === undefined
+      ? {}
+      : { statusCode: result.statusCode }),
+    ...(message === undefined ? {} : { message }),
+    ...(result.durationMs === undefined
+      ? {}
+      : { durationMs: result.durationMs }),
+    ...(retryable === undefined ? {} : { retryable }),
+  };
+}
+
+function attachAttempts(
+  result: RequestRunResult,
+  attempts: readonly RequestAttemptRecord[],
+  wallClockMs: number,
+): RequestRunResult {
+  // Prefer summed orchestrator attempt timings so averageResponseTimeMs stays
+  // aligned with per-attempt HTTP work (excludes inter-retry delays).
+  const attemptSum = attempts.reduce(
+    (sum, attempt) => sum + (attempt.durationMs ?? 0),
+    0,
+  );
+  const durationMs =
+    attempts.length === 0
+      ? wallClockMs
+      : attemptSum > 0
+        ? attemptSum
+        : (result.durationMs ?? wallClockMs);
+  return {
+    ...result,
+    durationMs,
+    ...(attempts.length === 0
+      ? {}
+      : { attempts: Object.freeze([...attempts]) }),
+  };
 }
 
 /** Per-run context threaded into {@link findPreflightSkipReason} (§6.7). */
@@ -357,7 +576,9 @@ function findPreflightSkipReason(
       continue;
     }
     const producerLabel = labelById.get(edge.fromRequestId) ?? edge.fromRequestId;
-    const producerState = describeProducerState(resultsById.get(edge.fromRequestId));
+    const producerState = describeProducerState(
+      resultsById.get(edge.fromRequestId),
+    );
     return `Missing run variable: ${variable} (producer ${producerLabel} ${producerState})`;
   }
   return undefined;
@@ -482,7 +703,8 @@ export function mapOrchestratorResult(
         ...buildFailureFields({
           category: RequestFailureCategory.Precondition,
           reason:
-            runResult.message ?? 'The request could not be prepared for execution.',
+            runResult.message ??
+            'The request could not be prepared for execution.',
           httpRequestSent,
           ...(runResult.preconditionStage === undefined
             ? {}

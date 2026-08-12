@@ -5,7 +5,10 @@ import type {
   VariableValue,
 } from '../models';
 import { MASKED_HEADER_VALUE } from '../response/presentation';
-import { redactUrlUserinfo } from '../shared';
+import {
+  isSensitiveHttpHeaderName,
+  redactUrlUserinfo,
+} from '../shared';
 import { MASKED_VARIABLE_VALUE } from '../variables';
 import { posixSingleQuote } from './shell-escape';
 
@@ -14,8 +17,7 @@ import { posixSingleQuote } from './shell-escape';
  * - URL uses `resolution.presentationUrl` (sensitive query / path vars masked)
  *   plus `redactUrlUserinfo` defense-in-depth
  * - Headers listed in `resolution.sensitiveHeaderNames`, well-known auth/API-key/
- *   cookie headers (`authorization`, `proxy-authorization`, `cookie`,
- *   `set-cookie`, `x-api-key`, `api-key`, `x-auth-token`), or whose values equal
+ *   cookie headers (see `SENSITIVE_HTTP_HEADER_NAMES`), or whose values equal
  *   a sensitive variable value → mask
  * - Body content: occurrences of sensitive variable values → mask
  * - Basic auth (`-u`) uses masked user:password when scheme is `basic`
@@ -123,17 +125,7 @@ function serializeCurlBody(body: RuntimeBody | undefined): string | undefined {
   return body.content;
 }
 
-/** Aligned with MCP export redaction (`src/mcp/redact.ts` SENSITIVE_HEADER_NAMES). */
-const WELL_KNOWN_SENSITIVE_HEADERS = new Set([
-  'authorization',
-  'proxy-authorization',
-  'cookie',
-  'set-cookie',
-  'x-api-key',
-  'api-key',
-  'x-auth-token',
-]);
-
+/** Well-known sensitive headers — shared with MCP / UI presentation. */
 function redactHeaderValue(
   header: RuntimeHeader,
   request: AuthenticatedRequest,
@@ -142,7 +134,7 @@ function redactHeaderValue(
   const lower = header.name.toLowerCase();
   if (
     request.resolution.sensitiveHeaderNames.includes(lower) ||
-    WELL_KNOWN_SENSITIVE_HEADERS.has(lower)
+    isSensitiveHttpHeaderName(header.name)
   ) {
     return MASKED_HEADER_VALUE;
   }

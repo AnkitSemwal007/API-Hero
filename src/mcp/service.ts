@@ -14,8 +14,11 @@ import {
   buildRunPlan,
   mapOrchestratorResult,
   resolveFailurePolicy,
+  validateCollectionRunOptions,
   type CollectionRequestExecutorPort,
   type CollectionRunManager,
+  type CollectionRunOptions,
+  type CollectionRunOptionsInput,
   type CollectionRunnerService,
   type CollectionRunVariableContext,
   type FailurePolicyKind,
@@ -314,6 +317,7 @@ export class ApiHeroMcpService {
   public async runCollection(
     nameOrId: string,
     failurePolicy?: string,
+    runOptions?: CollectionRunOptionsInput,
   ): Promise<McpResult<McpRunSummaryDto>> {
     const busy = this.tryAcquireMcpRun();
     if (busy !== undefined) {
@@ -321,7 +325,11 @@ export class ApiHeroMcpService {
     }
 
     try {
-      return await this.runCollectionUnlocked(nameOrId, failurePolicy);
+      return await this.runCollectionUnlocked(
+        nameOrId,
+        failurePolicy,
+        runOptions,
+      );
     } finally {
       this.releaseMcpRun();
     }
@@ -330,6 +338,7 @@ export class ApiHeroMcpService {
   private async runCollectionUnlocked(
     nameOrId: string,
     failurePolicy?: string,
+    runOptionsInput?: CollectionRunOptionsInput,
   ): Promise<McpResult<McpRunSummaryDto>> {
     const resolved = await this.resolveCollection(nameOrId);
     if (!resolved.ok) {
@@ -341,12 +350,22 @@ export class ApiHeroMcpService {
       return policy;
     }
 
+    let runOptions: CollectionRunOptions | undefined;
+    if (runOptionsInput !== undefined) {
+      const validated = validateCollectionRunOptions(runOptionsInput);
+      if (!validated.ok) {
+        return mcpError('INVALID_RUN_OPTIONS', validated.message);
+      }
+      runOptions = validated.options;
+    }
+
     let plan;
     try {
       plan = buildRunPlan({
         aggregate,
         target: { mode: 'collection', collectionId: collection.id },
         failurePolicy: policy.data,
+        ...(runOptions === undefined ? {} : { runOptions }),
       });
     } catch (error) {
       return mcpError(

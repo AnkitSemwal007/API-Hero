@@ -6,7 +6,11 @@ import type {
 import type { TestReport } from '../assertions';
 import { maskAssertionText } from '../assertions';
 import type { ExtractionReport } from '../extraction';
-import { deepFreeze, redactUrlUserinfo } from '../shared';
+import {
+  deepFreeze,
+  isSensitiveHttpHeaderName,
+  redactUrlUserinfo,
+} from '../shared';
 import { MASKED_VARIABLE_VALUE } from '../variables';
 
 export const RESPONSE_TEXT_PREVIEW_LIMIT = 256 * 1024;
@@ -156,13 +160,6 @@ export interface ResponsePresentation {
   readonly summary: string;
 }
 
-const SENSITIVE_HEADERS = new Set([
-  'authorization',
-  'proxy-authorization',
-  'cookie',
-  'set-cookie',
-]);
-
 const ERROR_TITLES: Readonly<Record<ExecutionErrorCode, string>> = {
   MALFORMED_URL: 'Malformed URL',
   UNSUPPORTED_BODY: 'Unsupported request body',
@@ -226,7 +223,7 @@ export function presentExecutionResult(
 
   const response = result.response;
   const headers = response.headers.map((header) => {
-    const masked = SENSITIVE_HEADERS.has(header.name.toLowerCase());
+    const masked = isSensitiveHttpHeaderName(header.name);
     return {
       name: header.name,
       value: masked ? MASKED_HEADER_VALUE : header.value,

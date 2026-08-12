@@ -46,8 +46,16 @@ Profiles require `id` and `providerId` (`none` \| `basic` \| `bearer` \| `apiKey
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
 | `apiHero.collectionRunner.failurePolicy` | enum | `ask` | Default failure policy for collection/folder/selected runs |
+| `apiHero.collectionRunner.retryEnabled` | boolean | `false` | Pre-select retries in Run Options |
+| `apiHero.collectionRunner.maxRetries` | number (0–10) | `2` | Default max retries after the first attempt |
+| `apiHero.collectionRunner.retryDelayMs` | number (0–60000) | `500` | Default base delay between retries (ms) |
+| `apiHero.collectionRunner.retryBackoff` | `fixed` \| `exponential` | `exponential` | Default backoff when retries are enabled |
+| `apiHero.collectionRunner.skipDestructiveRequests` | boolean | `false` | Pre-select skipping DELETE requests |
 
-Values: `ask`, `stop-on-first-error`, `continue-on-error`, `skip-invalid-requests`.
+Failure policy values: `ask`, `stop-on-first-error`, `continue-on-error`, `skip-invalid-requests`.
+
+Run Options QuickPicks (retries + DELETE skip) use these as defaults before each
+collection/folder/selected run. See [Collection Runner](../user/collection-runner.md).
 
 ## Language features
 

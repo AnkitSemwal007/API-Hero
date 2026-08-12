@@ -30,11 +30,19 @@ import {
   type CollectionRunManager,
   buildRunPlan,
   listFailurePolicies,
+  normalizeCollectionRunOptions,
+  type CollectionRunOptions,
   type CollectionRunVariableContext,
+  type CollectionRetryBackoff,
   type DependenciesExtension,
   type FailurePolicyKind,
   type RunPlanTarget,
   type RunSummary,
+  COLLECTION_RETRY_DEFAULT_BACKOFF,
+  COLLECTION_RETRY_DEFAULT_DELAY_MS,
+  COLLECTION_RETRY_DEFAULT_MAX_RETRIES,
+  COLLECTION_RETRY_MAX_DELAY_MS_CAP,
+  COLLECTION_RETRY_MAX_RETRIES_CAP,
 } from '../index';
 import {
   CollectionRunStatusBar,
@@ -131,10 +139,18 @@ export function registerCollectionRunner(
     const policy = await resolveFailurePolicy();
     if (policy === undefined) return;
 
+    const runOptions = await resolveCollectionRunOptions();
+    if (runOptions === undefined) return;
+
     const aggregate = await discovery.refresh();
     let plan;
     try {
-      plan = buildRunPlan({ aggregate, target, failurePolicy: policy });
+      plan = buildRunPlan({
+        aggregate,
+        target,
+        failurePolicy: policy,
+        runOptions,
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to build a collection run plan.';
       await window.showErrorMessage(message);
@@ -325,6 +341,238 @@ async function resolveFailurePolicy(): Promise<FailurePolicyKind | undefined> {
     ),
   );
   return resolveFailurePolicyForRun(setting, pickFailurePolicy);
+}
+
+async function resolveCollectionRunOptions(): Promise<
+  CollectionRunOptions | undefined
+> {
+  const defaults = readCollectionRunOptionDefaults();
+  const retry = await pickRetryOptions(defaults);
+  if (retry === undefined) {
+    return undefined;
+  }
+  const skipDestructive = await pickSkipDestructive(
+    defaults.skipDestructiveRequests,
+  );
+  if (skipDestructive === undefined) {
+    return undefined;
+  }
+  return normalizeCollectionRunOptions({
+    retry,
+    skipDestructiveRequests: skipDestructive,
+  });
+}
+
+interface CollectionRunOptionDefaults {
+  readonly retryEnabled: boolean;
+  readonly maxRetries: number;
+  readonly delayMs: number;
+  readonly backoff: CollectionRetryBackoff;
+  readonly skipDestructiveRequests: boolean;
+}
+
+function readCollectionRunOptionDefaults(): CollectionRunOptionDefaults {
+  const configuration = workspace.getConfiguration(CONFIGURATION_SECTION);
+  const backoffRaw = configuration.get<string>(
+    CONFIGURATION_KEYS.collectionRunnerRetryBackoff,
+    DEFAULT_CONFIGURATION.collectionRunnerRetryBackoff,
+  );
+  const backoff: CollectionRetryBackoff =
+    backoffRaw === 'fixed' || backoffRaw === 'exponential'
+      ? backoffRaw
+      : COLLECTION_RETRY_DEFAULT_BACKOFF;
+  const maxRetriesRaw = configuration.get<number>(
+    CONFIGURATION_KEYS.collectionRunnerMaxRetries,
+    DEFAULT_CONFIGURATION.collectionRunnerMaxRetries,
+  );
+  const delayMsRaw = configuration.get<number>(
+    CONFIGURATION_KEYS.collectionRunnerRetryDelayMs,
+    DEFAULT_CONFIGURATION.collectionRunnerRetryDelayMs,
+  );
+  return {
+    retryEnabled: configuration.get<boolean>(
+      CONFIGURATION_KEYS.collectionRunnerRetryEnabled,
+      DEFAULT_CONFIGURATION.collectionRunnerRetryEnabled,
+    ),
+    maxRetries:
+      typeof maxRetriesRaw === 'number' && Number.isSafeInteger(maxRetriesRaw)
+        ? Math.min(
+            Math.max(0, maxRetriesRaw),
+            COLLECTION_RETRY_MAX_RETRIES_CAP,
+          )
+        : COLLECTION_RETRY_DEFAULT_MAX_RETRIES,
+    delayMs:
+      typeof delayMsRaw === 'number' && Number.isSafeInteger(delayMsRaw)
+        ? Math.min(Math.max(0, delayMsRaw), COLLECTION_RETRY_MAX_DELAY_MS_CAP)
+        : COLLECTION_RETRY_DEFAULT_DELAY_MS,
+    backoff,
+    skipDestructiveRequests: configuration.get<boolean>(
+      CONFIGURATION_KEYS.collectionRunnerSkipDestructiveRequests,
+      DEFAULT_CONFIGURATION.collectionRunnerSkipDestructiveRequests,
+    ),
+  };
+}
+
+async function pickRetryOptions(
+  defaults: CollectionRunOptionDefaults,
+): Promise<CollectionRunOptions['retry'] | undefined> {
+  type RetryPick =
+    | { readonly id: 'off' }
+    | { readonly id: 'preset' }
+    | { readonly id: 'custom' };
+
+  const presetLabel = `Retries: ${defaults.maxRetries} ${defaults.backoff} ${defaults.delayMs}ms`;
+  const items: Array<{
+    label: string;
+    description?: string;
+    pick: RetryPick;
+  }> = [
+    {
+      label: 'Retries: Off',
+      description: 'No automatic retries',
+      pick: { id: 'off' },
+    },
+    {
+      label: presetLabel,
+      description: 'Use settings defaults',
+      pick: { id: 'preset' },
+    },
+    {
+      label: 'Retries: Custom…',
+      description: 'Choose max retries, delay, and backoff',
+      pick: { id: 'custom' },
+    },
+  ];
+
+  const active =
+    defaults.retryEnabled === false
+      ? items[0]
+      : items[1];
+  const picked = await window.showQuickPick(items, {
+    title: 'Collection run retries',
+    placeHolder: 'Choose retry behavior for this run',
+    ...(active === undefined ? {} : { activeItems: [active] }),
+  });
+  if (picked === undefined) {
+    return undefined;
+  }
+
+  if (picked.pick.id === 'off') {
+    return {
+      enabled: false,
+      maxRetries: defaults.maxRetries,
+      delayMs: defaults.delayMs,
+      backoff: defaults.backoff,
+    };
+  }
+
+  if (picked.pick.id === 'preset') {
+    return {
+      enabled: true,
+      maxRetries: defaults.maxRetries,
+      delayMs: defaults.delayMs,
+      backoff: defaults.backoff,
+    };
+  }
+
+  const maxRetriesInput = await window.showInputBox({
+    title: 'Max retries',
+    prompt: `Retries after the first attempt (0–${COLLECTION_RETRY_MAX_RETRIES_CAP})`,
+    value: String(defaults.maxRetries),
+    validateInput: (value) => {
+      const parsed = Number(value);
+      if (
+        !Number.isSafeInteger(parsed) ||
+        parsed < 0 ||
+        parsed > COLLECTION_RETRY_MAX_RETRIES_CAP
+      ) {
+        return `Enter an integer from 0 to ${COLLECTION_RETRY_MAX_RETRIES_CAP}.`;
+      }
+      return undefined;
+    },
+  });
+  if (maxRetriesInput === undefined) {
+    return undefined;
+  }
+
+  const delayInput = await window.showInputBox({
+    title: 'Retry delay (ms)',
+    prompt: `Base delay between attempts (0–${COLLECTION_RETRY_MAX_DELAY_MS_CAP})`,
+    value: String(defaults.delayMs),
+    validateInput: (value) => {
+      const parsed = Number(value);
+      if (
+        !Number.isSafeInteger(parsed) ||
+        parsed < 0 ||
+        parsed > COLLECTION_RETRY_MAX_DELAY_MS_CAP
+      ) {
+        return `Enter an integer from 0 to ${COLLECTION_RETRY_MAX_DELAY_MS_CAP}.`;
+      }
+      return undefined;
+    },
+  });
+  if (delayInput === undefined) {
+    return undefined;
+  }
+
+  const backoffItems: Array<{
+    label: string;
+    description: string;
+    backoff: CollectionRetryBackoff;
+  }> = [
+    {
+      label: 'Exponential',
+      description: 'delayMs × 2^(retryIndex−1)',
+      backoff: 'exponential',
+    },
+    {
+      label: 'Fixed',
+      description: 'Same delayMs between every retry',
+      backoff: 'fixed',
+    },
+  ];
+  const activeBackoff =
+    backoffItems.find((item) => item.backoff === defaults.backoff) ??
+    backoffItems[0];
+  const backoffPicked = await window.showQuickPick(backoffItems, {
+    title: 'Retry backoff',
+    placeHolder: 'Choose backoff strategy',
+    ...(activeBackoff === undefined ? {} : { activeItems: [activeBackoff] }),
+  });
+  if (backoffPicked === undefined) {
+    return undefined;
+  }
+
+  return {
+    enabled: true,
+    maxRetries: Number(maxRetriesInput),
+    delayMs: Number(delayInput),
+    backoff: backoffPicked.backoff,
+  };
+}
+
+async function pickSkipDestructive(
+  defaultSkip: boolean,
+): Promise<boolean | undefined> {
+  const items = [
+    {
+      label: 'Skip destructive DELETE requests',
+      description: 'DELETE methods are skipped for this run',
+      skip: true,
+    },
+    {
+      label: 'Allow DELETE requests',
+      description: 'Run DELETE methods normally',
+      skip: false,
+    },
+  ];
+  const active = items.find((item) => item.skip === defaultSkip) ?? items[1];
+  const picked = await window.showQuickPick(items, {
+    title: 'Destructive requests',
+    placeHolder: 'Skip DELETE requests for this run?',
+    ...(active === undefined ? {} : { activeItems: [active] }),
+  });
+  return picked?.skip;
 }
 
 async function pickFailurePolicy(): Promise<FailurePolicyKind | undefined> {

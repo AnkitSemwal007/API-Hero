@@ -9,12 +9,14 @@ export type {
   DependencyNodeMeta,
   FailurePolicyKind,
   PlannedRequest,
+  RequestAttemptRecord,
   RequestFailureCategory,
   RequestFailureDiagnostics,
   RequestRunOutcomeKind,
   RequestRunResult,
   RunIdentifier,
   RunPlan,
+  RunProgressAttempt,
   RunProgressEvent,
   RunProgressPhase,
   RunStatistics,
@@ -33,6 +35,39 @@ export {
   freezeRunPlan,
   freezeRunSummary,
 } from './models';
+
+export type {
+  CollectionRetryBackoff,
+  CollectionRetryOptions,
+  CollectionRunOptions,
+  CollectionRunOptionsInput,
+  CollectionRunOptionsValidationResult,
+} from './run-options';
+export {
+  COLLECTION_RETRY_DEFAULT_BACKOFF,
+  COLLECTION_RETRY_DEFAULT_DELAY_MS,
+  COLLECTION_RETRY_DEFAULT_MAX_RETRIES,
+  COLLECTION_RETRY_MAX_DELAY_MS_CAP,
+  COLLECTION_RETRY_MAX_RETRIES_CAP,
+  DESTRUCTIVE_REQUEST_SKIP_REASON,
+  defaultCollectionRunOptions,
+  isDestructiveHttpMethod,
+  normalizeCollectionRunOptions,
+  validateCollectionRunOptions,
+} from './run-options';
+
+export {
+  COLLECTION_NON_RETRYABLE_STATUS_CODES,
+  COLLECTION_RETRYABLE_STATUS_CODES,
+  assertionsPassedSuccessfully,
+  computeRetryDelayMs,
+  delay as cancellableRetryDelay,
+  isCollectionRetryEligible,
+  isCollectionRetryEligibleFromAttempt,
+  isCollectionRetryEligibleFromSideEffectContext,
+  shouldRetryCollectionAttempt,
+} from './retry-eligibility';
+export type { CollectionRetryAttemptView } from './retry-eligibility';
 
 export type { FailurePolicy } from './failure-policies';
 export {

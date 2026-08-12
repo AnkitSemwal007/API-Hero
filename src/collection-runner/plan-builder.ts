@@ -12,6 +12,11 @@ import {
   type PlannedRequest,
   type RunPlan,
 } from './models';
+import {
+  normalizeCollectionRunOptions,
+  type CollectionRunOptions,
+  type CollectionRunOptionsInput,
+} from './run-options';
 
 /** Target describing which requests to include in a plan. */
 export type RunPlanTarget =
@@ -34,6 +39,8 @@ export interface BuildRunPlanOptions {
   readonly aggregate: WorkspaceCollections;
   readonly target: RunPlanTarget;
   readonly failurePolicy: FailurePolicyKind;
+  /** Optional retry / skip-destructive options (normalized onto the plan). */
+  readonly runOptions?: CollectionRunOptionsInput | CollectionRunOptions;
   readonly runId?: string;
   readonly now?: () => number;
 }
@@ -84,6 +91,14 @@ export function buildRunPlan(options: BuildRunPlanOptions): RunPlan {
     toPlannedRequest(request, ordinal, collection),
   );
 
+  const runOptions =
+    options.runOptions === undefined
+      ? undefined
+      : normalizeCollectionRunOptions(options.runOptions);
+  const hasNonDefaultRunOptions =
+    runOptions !== undefined &&
+    (runOptions.retry.enabled || runOptions.skipDestructiveRequests);
+
   return freezeRunPlan({
     runId: options.runId ?? createRunIdentifier(nowMs),
     mode: options.target.mode,
@@ -91,6 +106,7 @@ export function buildRunPlan(options: BuildRunPlanOptions): RunPlan {
     collectionName: collection.metadata.name,
     ...(folderId === undefined ? {} : { folderId }),
     failurePolicy: options.failurePolicy,
+    ...(hasNonDefaultRunOptions ? { runOptions } : {}),
     requests: planned,
     createdAt: new Date(nowMs).toISOString(),
   });

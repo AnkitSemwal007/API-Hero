@@ -11,6 +11,7 @@ import {
   evaluateAssertions,
   extractAssertionsForDocument,
   extractAssertionsForOffset,
+  formatAssertionValue,
   formatHeaderValueForReport,
   hasAssertionFailures,
   MASKED_ASSERTION_VALUE,
@@ -555,7 +556,23 @@ describe('evaluateAssertions', () => {
       formatHeaderValueForReport('Authorization', 'Bearer x'),
       MASKED_ASSERTION_VALUE,
     );
+    assert.equal(
+      formatHeaderValueForReport('X-Auth-Token', 'tok-secret'),
+      MASKED_ASSERTION_VALUE,
+    );
+    assert.equal(
+      formatHeaderValueForReport('x-api-key', 'key-secret'),
+      MASKED_ASSERTION_VALUE,
+    );
+    assert.equal(
+      formatAssertionValue('clear-secret', { path: 'access_token' }),
+      MASKED_ASSERTION_VALUE,
+    );
     assert.match(maskAssertionText('https://user:pass@example.com'), /example\.com/);
+    assert.match(
+      maskAssertionText('expect header x-auth-token == "leak"'),
+      /x-auth-token\s*==\s*••••••••/iu,
+    );
     assert.doesNotMatch(
       JSON.stringify(failure),
       /super-secret-token/u,

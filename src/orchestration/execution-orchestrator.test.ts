@@ -1088,6 +1088,83 @@ test('stores secret-free assertion counts only in history extensions', async () 
   assert.doesNotMatch(JSON.stringify(entries[0]), /expect status/u);
 });
 
+test('commitHistory:false skips history; outcome unchanged', async () => {
+  const repository = new InMemoryHistoryRepository();
+  const recorder = new DefaultHistoryRecorder(repository);
+  let observerCalls = 0;
+  const h = harness(
+    {
+      async execute(request) {
+        return success(request, 503);
+      },
+    },
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    recorder,
+    undefined,
+    {
+      onExecuted: () => {
+        observerCalls += 1;
+      },
+    },
+  );
+
+  const result = await h.orchestrator.runAtSourceLocation(
+    source('GET https://example.test/items'),
+    {
+      showViewer: false,
+      commitHistory: false,
+      runPostExecution: false,
+    },
+  );
+
+  assert.equal(result.outcome, 'success');
+  assert.equal(result.statusCode, 503);
+  assert.equal((await repository.list()).length, 0);
+  assert.equal(observerCalls, 0);
+});
+
+test('shouldCommitSideEffects:false skips history and extraction', async () => {
+  const repository = new InMemoryHistoryRepository();
+  const recorder = new DefaultHistoryRecorder(repository);
+  let observerCalls = 0;
+  const h = harness(
+    {
+      async execute(request) {
+        return success(request, 503);
+      },
+    },
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    recorder,
+    undefined,
+    {
+      onExecuted: () => {
+        observerCalls += 1;
+      },
+    },
+  );
+
+  const result = await h.orchestrator.runAtSourceLocation(
+    source('GET https://example.test/items'),
+    {
+      showViewer: false,
+      shouldCommitSideEffects: () => false,
+    },
+  );
+
+  assert.equal(result.outcome, 'success');
+  assert.equal(result.statusCode, 503);
+  assert.equal((await repository.list()).length, 0);
+  assert.equal(observerCalls, 0);
+});
+
 test('resolveAtSourceLocation returns authenticated request without calling execute', async () => {
   let executeCalls = 0;
   const h = harness({

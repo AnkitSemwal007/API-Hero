@@ -17,7 +17,7 @@ import type {
   ImportDiagnostic,
 } from '../models';
 import type { OpenApiDocument, OpenApiServer } from '../openapi/types';
-import { slugifyIdentifier } from '../sanitize';
+import { isSensitiveName, slugifyIdentifier } from '../sanitize';
 
 export interface EnvironmentGenerationResult {
   readonly environments: readonly GeneratedEnvironment[];
@@ -138,7 +138,7 @@ function expandServerUrl(server: OpenApiServer): {
     variables.push({
       name: sanitizeVarName(name),
       value,
-      sensitive: false,
+      sensitive: isSensitiveName(name),
     });
     baseUrl = baseUrl.replaceAll(`{${name}}`, `{{${sanitizeVarName(name)}}}`);
   }

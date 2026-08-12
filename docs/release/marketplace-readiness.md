@@ -1,6 +1,6 @@
 # Marketplace readiness — 2.8.4
 
-Checklist for publishing **API Hero** `ankitsemwal.api-hero` **2.8.4** (OpenAPI environment safety, Collection Run Report / Variable Trace UX, Scenario menu cleanup; builds on **2.8.3** Copy as cURL + MCP `apihero_run_scenario` and **2.8.2** OpenAPI URL import).
+Checklist for publishing **API Hero** `ankitsemwal.api-hero` **2.8.4** (Collection Execution Controls, OpenAPI environment safety + sensitive server vars, header masking alignment, Collection Run Report / Variable Trace UX, Scenario menu cleanup; builds on **2.8.3** Copy as cURL + MCP `apihero_run_scenario` and **2.8.2** OpenAPI URL import).
 
 **Note:** Headless CLI / CI (`apihero`) implementation is retained in-repo for development. It is **not** advertised or distributed as a shipped public product capability in **2.8.4**.
 
@@ -22,7 +22,8 @@ Checklist for publishing **API Hero** `ankitsemwal.api-hero` **2.8.4** (OpenAPI 
 - [x] `npm run package` produces `release/api-hero-2.8.4.vsix` (~3.82 MB)
 - [x] README Marketplace presentation — developer reference (requests, collections, variables, auth, assertions, runner, history, scenarios, OpenAPI, MCP); no public CLI distribution claims
 - [x] MCP docs ([user/mcp.md](../user/mcp.md)) — nine tools including `apihero_run_scenario`; client-owned config; extension path pin **2.8.4**
-- [x] OpenAPI / Collection Runner user docs match **2.8.4** env safety and compact Run Report UX
+- [x] OpenAPI / Collection Runner user docs match **2.8.4** env safety, Collection Execution Controls (retry + DELETE skip), and compact Run Report UX
+- [x] Security — Response UI / assertions / MCP / cURL share sensitive header names; OpenAPI server vars use `isSensitiveName`
 - [x] No GraphQL / OAuth2 claims beyond shipped scope
 - [x] Storage docs correct: history = VS Code `globalStorageUri` / `request-history.json`; scenarios = `.apihero/scenarios/`
 - [x] Namespace migration compatibility aliases documented in [stable-identifiers.md](./stable-identifiers.md)

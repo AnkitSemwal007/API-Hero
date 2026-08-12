@@ -1,12 +1,15 @@
 # Roadmap
 
-Honest near-term plan for **API Hero** after **2.8.4** (OpenAPI environment safety, Collection Run Report / Variable Trace UX, Scenario menu cleanup; **2.8.3** Copy as cURL + MCP `apihero_run_scenario`; **2.8.2** OpenAPI URL import; **2.8.1** complete README + Marketplace documentation; **2.8.0** universal MCP `--workspace` + client-owned MCP docs; **2.7.0** MCP server for AI agents; **2.6.0** Scenarios progressive disclosure, project-store scenario paths, Reset Workspace, Run Report failure diagnostics; Authentication Premium UX + Scenario Experience shipped in **2.5.0**; Scenarios Phase 1 foundation in **2.4.0**). Product features through **2.3.x** already ship — Execution Center, Collection Runner / Run Report polish, dependency workflow, Collection Run Debugger, Managers (Environments, Auth), Overview, History Detail, OpenAPI wizard, Response copy/save/search, response variable extraction, and collection chaining (`@depends-on`, per-run store, collection variables). Those are not roadmap gaps.
+Honest near-term plan for **API Hero** after **2.8.4** (Collection Execution Controls, OpenAPI environment safety + sensitive server vars, header masking alignment, Collection Run Report / Variable Trace UX, Scenario menu cleanup; **2.8.3** Copy as cURL + MCP `apihero_run_scenario`; **2.8.2** OpenAPI URL import; **2.8.1** complete README + Marketplace documentation; **2.8.0** universal MCP `--workspace` + client-owned MCP docs; **2.7.0** MCP server for AI agents; **2.6.0** Scenarios progressive disclosure, project-store scenario paths, Reset Workspace, Run Report failure diagnostics; Authentication Premium UX + Scenario Experience shipped in **2.5.0**; Scenarios Phase 1 foundation in **2.4.0**). Product features through **2.3.x** already ship — Execution Center, Collection Runner / Run Report polish, dependency workflow, Collection Run Debugger, Managers (Environments, Auth), Overview, History Detail, OpenAPI wizard, Response copy/save/search, response variable extraction, and collection chaining (`@depends-on`, per-run store, collection variables). Those are not roadmap gaps.
 
 ## Shipped in 2.8.4
 
 | Item | Notes |
 | --- | --- |
+| Collection Execution Controls | Run Options retry + optional DELETE skip; attempt progress vs final outcome |
 | OpenAPI environment safety | Preserve active env on import; imported envs selectable; undefined security schemes warn without inventing auth |
+| OpenAPI sensitive server vars | Server `{variables}` named like secrets import as `sensitive: true` |
+| Sensitive header masking alignment | Response UI matches MCP/cURL (`x-api-key`, `x-auth-token`, …) |
 | Collection Run Report UX | Compact summary/rows, filters, folder grouping, drill-down Details |
 | Variable Trace UX | Compact Variables status; expand for full trace / unresolved |
 | Scenario menu cleanup | Create Scenario removed from Collections top-level `…`; dedicated Scenario UX unchanged |

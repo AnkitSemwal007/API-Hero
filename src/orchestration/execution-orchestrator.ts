@@ -199,6 +199,26 @@ export type PreconditionStage =
   | 'build';
 
 /**
+ * Facts available after execute + assertion evaluation, used by collection
+ * retry to decide whether this attempt should commit history / extraction.
+ * Does not change HTTP outcome semantics.
+ */
+export interface SideEffectCommitContext {
+  readonly statusCode?: number;
+  /** True when `ExecutionResult.success` is true. */
+  readonly httpSuccess: boolean;
+  /** True when an assertion report was produced for this attempt. */
+  readonly assertionsEvaluated: boolean;
+  readonly assertionFailed: boolean;
+  readonly cancelledAtTransport: boolean;
+  /**
+   * From `ExecutionResult.error.retryable` when the HTTP attempt failed.
+   * Absent when the attempt succeeded or the error omitted the flag.
+   */
+  readonly transportRetryable?: boolean;
+}
+
+/**
  * Options for {@link ExecutionOrchestrator.runAtSourceLocation}.
  * Collection Runner uses this port with viewer/progress/notifications suppressed.
  */
@@ -219,6 +239,26 @@ export interface RunAtSourceLocationOptions {
    * provider from construction is used.
    */
   readonly historyCaptureContext?: HistoryCaptureContext;
+  /**
+   * When false, skip History commit for this attempt. Default true.
+   * Does not change HTTP / assertion outcome mapping.
+   */
+  readonly commitHistory?: boolean;
+  /**
+   * When false, skip the post-execution extraction observer. Default true.
+   * Does not change HTTP / assertion outcome mapping.
+   */
+  readonly runPostExecution?: boolean;
+  /**
+   * Optional collection-layer gate after execute + assertions.
+   * When it returns false, history and post-execution extraction are skipped
+   * for this attempt (same as setting both flags false for that decision).
+   * Default (undefined): always allow side effects (subject to the boolean
+   * flags above).
+   */
+  readonly shouldCommitSideEffects?: (
+    context: SideEffectCommitContext,
+  ) => boolean;
 }
 
 /** Richer single-request result used by Collection Runner. */
@@ -589,21 +629,48 @@ export class ExecutionOrchestrator {
             assertionReport !== undefined &&
             hasAssertionFailures(assertionReport);
 
-          await this.commitHistory(
-            run.id,
-            source,
-            selected,
-            authenticated,
-            result,
-            options.historyCaptureContext,
-            assertionReport,
-          );
+          const statusCode = result.success
+            ? result.response.statusCode
+            : undefined;
+          const sideEffectContext: SideEffectCommitContext = {
+            ...(statusCode === undefined ? {} : { statusCode }),
+            httpSuccess: result.success,
+            assertionsEvaluated: assertionReport !== undefined,
+            assertionFailed,
+            cancelledAtTransport,
+            ...(!result.success && result.error.retryable !== undefined
+              ? { transportRetryable: result.error.retryable }
+              : {}),
+          };
+          const callbackAllowsSideEffects =
+            options.shouldCommitSideEffects?.(sideEffectContext) ?? true;
+          const shouldCommitHistory =
+            callbackAllowsSideEffects && options.commitHistory !== false;
+          const shouldRunPostExecution =
+            callbackAllowsSideEffects && options.runPostExecution !== false;
+
+          if (shouldCommitHistory) {
+            await this.commitHistory(
+              run.id,
+              source,
+              selected,
+              authenticated,
+              result,
+              options.historyCaptureContext,
+              assertionReport,
+            );
+          }
 
           let extractionReport: ExtractionReport | undefined;
           try {
             // Post-execution seam (extraction). Not gated by assertion pass.
-            // Skip CANCELLED / replaced runs.
-            if (!cancelledAtTransport && this.isCurrent(run.id)) {
+            // Skip CANCELLED / replaced runs. Collection retry may also skip
+            // via runPostExecution / shouldCommitSideEffects.
+            if (
+              shouldRunPostExecution &&
+              !cancelledAtTransport &&
+              this.isCurrent(run.id)
+            ) {
               const extractedRules = extractExtractionRulesForOffset(
                 parsed.ast,
                 source.text,

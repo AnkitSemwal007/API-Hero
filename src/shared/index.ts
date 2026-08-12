@@ -19,3 +19,7 @@ export { rangesOverlap } from './ranges';
 export type { OffsetRange } from './ranges';
 export { redactUrlUserinfo } from './url';
 export { readPackageVersion } from './package-version';
+export {
+  SENSITIVE_HTTP_HEADER_NAMES,
+  isSensitiveHttpHeaderName,
+} from './sensitive-headers';

@@ -20,6 +20,12 @@ export const CONFIGURATION_KEYS = {
   historyMaxEntries: 'history.maxEntries',
   importMaxFileBytes: 'import.maxFileBytes',
   collectionRunnerFailurePolicy: 'collectionRunner.failurePolicy',
+  collectionRunnerRetryEnabled: 'collectionRunner.retryEnabled',
+  collectionRunnerMaxRetries: 'collectionRunner.maxRetries',
+  collectionRunnerRetryDelayMs: 'collectionRunner.retryDelayMs',
+  collectionRunnerRetryBackoff: 'collectionRunner.retryBackoff',
+  collectionRunnerSkipDestructiveRequests:
+    'collectionRunner.skipDestructiveRequests',
   languageFeatures: {
     hover: 'languageFeatures.hover',
     outline: 'languageFeatures.outline',
@@ -50,6 +56,11 @@ export const DEFAULT_CONFIGURATION = {
    * without a QuickPick.
    */
   collectionRunnerFailurePolicy: 'ask',
+  collectionRunnerRetryEnabled: false,
+  collectionRunnerMaxRetries: 2,
+  collectionRunnerRetryDelayMs: 500,
+  collectionRunnerRetryBackoff: 'exponential',
+  collectionRunnerSkipDestructiveRequests: false,
   languageFeatures: {
     hover: true,
     outline: true,
@@ -100,6 +111,11 @@ export type ConfigurationKey =
   | typeof CONFIGURATION_KEYS.historyMaxEntries
   | typeof CONFIGURATION_KEYS.importMaxFileBytes
   | typeof CONFIGURATION_KEYS.collectionRunnerFailurePolicy
+  | typeof CONFIGURATION_KEYS.collectionRunnerRetryEnabled
+  | typeof CONFIGURATION_KEYS.collectionRunnerMaxRetries
+  | typeof CONFIGURATION_KEYS.collectionRunnerRetryDelayMs
+  | typeof CONFIGURATION_KEYS.collectionRunnerRetryBackoff
+  | typeof CONFIGURATION_KEYS.collectionRunnerSkipDestructiveRequests
   | typeof CONFIGURATION_KEYS.globalVariables
   | typeof CONFIGURATION_KEYS.workspaceVariables
   | typeof CONFIGURATION_KEYS.environments
@@ -124,6 +140,11 @@ export function flattenConfigurationKeys(): readonly string[] {
     CONFIGURATION_KEYS.historyMaxEntries,
     CONFIGURATION_KEYS.importMaxFileBytes,
     CONFIGURATION_KEYS.collectionRunnerFailurePolicy,
+    CONFIGURATION_KEYS.collectionRunnerRetryEnabled,
+    CONFIGURATION_KEYS.collectionRunnerMaxRetries,
+    CONFIGURATION_KEYS.collectionRunnerRetryDelayMs,
+    CONFIGURATION_KEYS.collectionRunnerRetryBackoff,
+    CONFIGURATION_KEYS.collectionRunnerSkipDestructiveRequests,
     CONFIGURATION_KEYS.languageFeatures.hover,
     CONFIGURATION_KEYS.languageFeatures.outline,
     CONFIGURATION_KEYS.languageFeatures.diagnostics,

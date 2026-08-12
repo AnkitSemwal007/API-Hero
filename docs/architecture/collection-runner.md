@@ -109,20 +109,61 @@ Default failure policy is configurable via
 `apiHero.collectionRunner.failurePolicy` (`ask` prompts; otherwise
 stop / continue / skip-invalid without a QuickPick).
 
+## Run options (retry + skip destructive)
+
+Validated options freeze onto `RunPlan.runOptions` (first-class fields — not
+extension bags). Omitted options preserve historical behavior (no retries, no
+destructive skip).
+
+| Piece | Location | Role |
+| --- | --- | --- |
+| Options + caps | `run-options.ts` | `CollectionRunOptions`, normalize/validate |
+| Classifier | `retry-eligibility.ts` | Pure eligibility + delay/backoff helpers |
+| Retry loop | `collection-runner.ts` (`executeOne`) | Only place that retries; sequential |
+| Side-effect gate | `RunAtSourceLocationOptions.shouldCommitSideEffects` | Skip history/extraction on intermediate retries |
+| UI | `register-collection-runner.ts` | Compact QuickPicks after failure policy |
+| Attempt UI | `progress-labels.ts`, Execution tree, Run Report | `Attempt n/m` / `Retrying…` + Attempts list |
+
+`shouldStopAfter` still applies to the **final** per-request result after
+retries. Continue-on-error with failures still finishes as `completed` (failed
+counts live in statistics) — unchanged for backward compatibility.
+
+Retry eligibility treats completed HTTP responses with status `408` / `429` /
+`502` / `503` / `504` as retryable even when the orchestrator maps them to
+`Passed` / `success`, unless assertions were evaluated and all passed. Intermediate
+attempts record a failed/✗ display row for those statuses; the authoritative
+final `RequestRunResult.outcome` keeps orchestrator semantics (e.g. exhausted
+success+503 with no failing assertions remains **Passed**). Only the final
+attempt commits history and runs post-execution extraction.
+
+Scenario `RetryPolicy` remains a separate model (pattern only; types are not
+shared).
+
 **Residual UX debt:** the orchestrator may still update the single-request
 status bar item while the collection run status bar is active (`useProgressUi`
 suppresses progress UI, not status). Prefer a follow-up `updateStatus` option
 rather than a second execution path.
+
+### Release notes / known design (2.8.4)
+
+Retry eligibility has two entry points (`isCollectionRetryEligible` from a
+mapped `RequestRunResult`, and `isCollectionRetryEligibleFromSideEffectContext`
+from pre-map HTTP/assertion facts). Both funnel through
+`isCollectionRetryEligibleFromAttempt`, so real orchestrator outcomes
+(success+503, failed transport, assertion+503 / assertion+400) stay aligned.
+Do not fork separate rule tables without an explicit product decision.
 
 ## Layering
 
 | Layer | Location | Responsibility |
 | --- | --- | --- |
 | Models | `src/collection-runner/models.ts` | Immutable run plan/result/summary + extension bags |
+| Run options | `src/collection-runner/run-options.ts` | Retry + skip-destructive options |
+| Retry classifier | `src/collection-runner/retry-eligibility.ts` | Pure retry eligibility / delay |
 | Session manager | `src/collection-runner/collection-run-manager.ts` | Active/recent sessions, cancel, progress SSoT (`CollectionRunManager`) |
 | Plan builder | `src/collection-runner/plan-builder.ts` | Snapshot → ordered `RunPlan` |
 | Failure policies | `src/collection-runner/failure-policies.ts` | Stop / continue / skip-invalid |
-| Runner service | `src/collection-runner/collection-runner.ts` | Sequential execute + progress events |
+| Runner service | `src/collection-runner/collection-runner.ts` | Sequential execute + retry + progress events |
 | VS Code adapters | `src/collection-runner/vscode/` | Commands, Execution TreeView, status bar, source reader, Collection Run Report panel |
 
 The domain barrel (`src/collection-runner/index.ts`) must not import `vscode`.

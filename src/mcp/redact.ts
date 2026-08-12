@@ -4,7 +4,10 @@
  */
 
 import { MASKED_HEADER_VALUE } from '../response/presentation';
-import { redactUrlUserinfo } from '../shared';
+import {
+  isSensitiveHttpHeaderName,
+  redactUrlUserinfo,
+} from '../shared';
 import { MASKED_VARIABLE_VALUE } from '../variables';
 
 /** Same mask glyph used by response presentation and variable UI. */
@@ -24,16 +27,6 @@ const JWT_IN_TEXT =
  */
 const JSON_SENSITIVE_STRING_PROP =
   /"(accessToken|refreshToken|idToken|access_token|refresh_token|id_token|password|passwd|client_secret|clientSecret|apiKey|api_key|authorization|token)"\s*:\s*"(?:\\.|[^"\\])*"/giu;
-
-const SENSITIVE_HEADER_NAMES = new Set([
-  'authorization',
-  'proxy-authorization',
-  'cookie',
-  'set-cookie',
-  'x-api-key',
-  'api-key',
-  'x-auth-token',
-]);
 
 /**
  * Deep-clones JSON-compatible values and masks secrets in headers, bodies,
@@ -99,8 +92,7 @@ function redactHeaderEntry(header: unknown): unknown {
   }
   const entry = header as Record<string, unknown>;
   const name = typeof entry.name === 'string' ? entry.name : '';
-  const lower = name.toLowerCase();
-  if (SENSITIVE_HEADER_NAMES.has(lower) || isSensitiveKey(name)) {
+  if (isSensitiveHttpHeaderName(name) || isSensitiveKey(name)) {
     return {
       ...entry,
       value: MASKED_HEADER_VALUE,

@@ -70,7 +70,7 @@ Without `--workspace`, set `APIHERO_WORKSPACE` or run with cwd at the workspace 
 | `apihero_list_requests` | Requests in a collection (optional `folder` filter) |
 | `apihero_get_request` | Request details + auth metadata + variable refs |
 | `apihero_run_request` | Run one request via `ExecutionOrchestrator` |
-| `apihero_run_collection` | Run a collection via `CollectionRunnerService` (`failurePolicy` optional). Per-request rows are slim (status, diagnostics, assertion expected/actual); use `apihero_get_request_result` for full response bodies |
+| `apihero_run_collection` | Run a collection via `CollectionRunnerService` (`failurePolicy`, optional `retry`, optional `skipDestructiveRequests`). Per-request rows are slim (status, diagnostics, assertion expected/actual); use `apihero_get_request_result` for full response bodies |
 | `apihero_run_scenario` | Run a Scenario via `ScenarioEngine` (same engine as UI Run Scenario). Identify by name, id, or `.scenario.json` path; optional `inputs` override variable defaults for this run |
 | `apihero_get_run` | Fetch a run summary / session by `runId` |
 | `apihero_get_request_result` | One request result from a prior run (full secret-redacted response presentation) |

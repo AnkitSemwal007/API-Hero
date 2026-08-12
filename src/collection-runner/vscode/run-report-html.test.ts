@@ -139,6 +139,51 @@ describe('collection-run-report-html', () => {
     assert.equal(model.rows[1]?.statusCode, undefined);
   });
 
+  test('buildCollectionRunReportModel projects attempt lines for retries', () => {
+    const base = sampleSummary();
+    const withAttempts: RunSummary = {
+      ...base,
+      results: [
+        {
+          ...base.results[1]!,
+          attempts: [
+            {
+              attemptNumber: 1,
+              outcome: RequestRunOutcomeKind.Failed,
+              statusCode: 503,
+              retryable: true,
+              durationMs: 10,
+            },
+            {
+              attemptNumber: 2,
+              outcome: RequestRunOutcomeKind.Failed,
+              statusCode: 503,
+              retryable: true,
+              durationMs: 12,
+            },
+            {
+              attemptNumber: 3,
+              outcome: RequestRunOutcomeKind.Passed,
+              statusCode: 200,
+              durationMs: 8,
+            },
+          ],
+        },
+      ],
+    };
+    const model = buildCollectionRunReportModel(withAttempts);
+    assert.equal(model.rows[0]?.attemptsLabel, '3 attempts');
+    assert.deepEqual(model.rows[0]?.attemptLines, [
+      '#1: 503 · retryable · 10 ms',
+      '#2: 503 · retryable · 12 ms',
+      '#3: 200 · 8 ms',
+    ]);
+    assert.match(
+      renderCollectionRunReportHtml('n'),
+      /attempt-list/u,
+    );
+  });
+
   test('buildCollectionRunReportModel surfaces dependency order, produced vars, and skip reasons', () => {
     const model = buildCollectionRunReportModel(sampleDependencySummary());
     assert.equal(model.reordered, true);

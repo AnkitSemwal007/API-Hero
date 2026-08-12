@@ -338,4 +338,110 @@ describe('Collection Runner integration (PR5 context + writer wiring)', () => {
     assert.equal(collectionRunContext.getRunStore(), undefined);
     assert.equal(runVariableStore.toDefinitions().length, 0);
   });
+
+  test('cross-run isolation: Run B cannot read a run-scope token extracted by Run A after Run A ends', async () => {
+    const collectionRunContext = createCollectionRunVariableContext();
+    const writer = new CompositeVariableWriter({
+      overlay: new InMemoryRuntimeVariableOverlay(),
+      runStore: new InMemoryRunVariableStore(),
+      environment: new NoOpVariableWriter(),
+      resolveRunStore: () => collectionRunContext.getRunStore(),
+    });
+
+    const runAStore = new InMemoryRunVariableStore();
+    const planA = loginThenProductsPlan('run_a_token');
+    collectionRunContext.begin({
+      runId: planA.runId,
+      collectionId: planA.collectionId,
+      collectionRootPath: COLLECTION_ROOT,
+      runStore: runAStore,
+    });
+    const runnerA = new CollectionRunnerService({
+      executor: new LoginProductsExecutor(writer, collectionRunContext),
+      sourceReader: new FakeSourceReader(),
+    });
+    try {
+      const summaryA = await runnerA.execute({
+        plan: planA,
+        runVariableStore: runAStore,
+      });
+      assert.equal(summaryA.results[0]?.outcome, 'passed');
+      assert.equal(
+        runAStore.toDefinitions().find((d) => d.name === 'accessToken')?.value,
+        'tok-123',
+      );
+    } finally {
+      runAStore.clear();
+      collectionRunContext.end(planA.runId);
+    }
+
+    assert.equal(collectionRunContext.isActive(), false);
+    assert.equal(runAStore.toDefinitions().length, 0);
+
+    const runBStore = new InMemoryRunVariableStore();
+    const productsOnly: PlannedRequest = {
+      requestId: 'products',
+      collectionId: COLLECTION_ID,
+      filePath: PRODUCTS_PATH,
+      offset: 0,
+      label: 'Products',
+      method: 'GET',
+      url: 'https://example.test/products',
+      ordinal: 0,
+      produces: [],
+      consumes: ['accessToken'],
+    };
+    const planB = freezeRunPlan({
+      runId: 'run_b_no_token',
+      mode: 'collection',
+      collectionId: COLLECTION_ID,
+      collectionName: 'Checkout',
+      failurePolicy: 'continue-on-error',
+      requests: [productsOnly],
+      createdAt: new Date(0).toISOString(),
+      extensions: {
+        dependencies: {
+          nodes: [
+            {
+              requestId: 'products',
+              produces: [],
+              consumes: ['accessToken'],
+              dependsOnNames: [],
+            },
+          ],
+          edges: [],
+          reordered: false,
+          originalOrder: ['products'],
+          executionOrder: ['products'],
+          cycles: [],
+          unresolvedConsumes: [],
+        },
+      },
+    });
+    collectionRunContext.begin({
+      runId: planB.runId,
+      collectionId: planB.collectionId,
+      collectionRootPath: COLLECTION_ROOT,
+      runStore: runBStore,
+    });
+    const runnerB = new CollectionRunnerService({
+      executor: new LoginProductsExecutor(writer, collectionRunContext),
+      sourceReader: new FakeSourceReader(),
+    });
+    try {
+      assert.equal(runBStore.get('accessToken'), undefined);
+      const summaryB = await runnerB.execute({
+        plan: planB,
+        runVariableStore: runBStore,
+      });
+      // Products looks up accessToken in the active run store only — Run A's
+      // token was cleared and must not leak into Run B.
+      assert.equal(runBStore.get('accessToken'), undefined);
+      assert.equal(summaryB.results[0]?.outcome, 'failed');
+      assert.equal(summaryB.results[0]?.statusCode, 401);
+    } finally {
+      runBStore.clear();
+      collectionRunContext.end(planB.runId);
+    }
+  });
 });

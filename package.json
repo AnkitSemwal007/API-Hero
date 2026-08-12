@@ -2068,6 +2068,43 @@
           "default": "ask",
           "description": "Default failure policy for collection, folder, and selected-request runs. When set to ask, API Hero prompts before each run; otherwise the chosen policy is used without a QuickPick."
         },
+        "apiHero.collectionRunner.retryEnabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Default whether collection runs retry eligible transport failures (network, 408/429/502/503/504). The Run Options QuickPick pre-selects this value."
+        },
+        "apiHero.collectionRunner.maxRetries": {
+          "type": "number",
+          "default": 2,
+          "minimum": 0,
+          "maximum": 10,
+          "description": "Default max retries after the initial attempt when collection-run retry is enabled (total attempts = maxRetries + 1)."
+        },
+        "apiHero.collectionRunner.retryDelayMs": {
+          "type": "number",
+          "default": 500,
+          "minimum": 0,
+          "maximum": 60000,
+          "description": "Default base delay in milliseconds between collection-run retry attempts."
+        },
+        "apiHero.collectionRunner.retryBackoff": {
+          "type": "string",
+          "enum": [
+            "fixed",
+            "exponential"
+          ],
+          "enumDescriptions": [
+            "Wait the same delayMs between every retry.",
+            "Wait delayMs × 2^(retryIndex−1) between retries (capped)."
+          ],
+          "default": "exponential",
+          "description": "Default backoff strategy for collection-run retries when retry is enabled."
+        },
+        "apiHero.collectionRunner.skipDestructiveRequests": {
+          "type": "boolean",
+          "default": false,
+          "description": "Default whether collection runs skip DELETE requests. The Run Options QuickPick pre-selects this value."
+        },
         "apiHero.languageFeatures.hover": {
           "type": "boolean",
           "default": true,

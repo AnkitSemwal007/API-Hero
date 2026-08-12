@@ -15,6 +15,12 @@ import type {
   RunProgressEvent,
   RunSummary,
 } from '../index';
+import {
+  formatAttemptLabel,
+  formatAttemptSuffix,
+} from '../progress-labels';
+
+export { formatAttemptLabel, formatAttemptSuffix } from '../progress-labels';
 
 /** Reads `.api` text through VS Code's filesystem provider. */
 export class VsCodeCollectionRunSourceReader {
@@ -116,12 +122,13 @@ export class VsCodeCollectionRunProgress
       event.phase === 'request-started'
         ? Math.min(event.completed + 1, event.total)
         : event.completed;
+    const attemptSuffix = formatAttemptSuffix(event.attempt);
     const message =
       event.phase === 'completed'
         ? `Finished ${event.completed}/${event.total}`
         : label === undefined
-          ? `Running ${displayed}/${event.total}`
-          : `${displayed}/${event.total}: ${label}`;
+          ? `Running ${displayed}/${event.total}${attemptSuffix}`
+          : `${displayed}/${event.total}: ${label}${attemptSuffix}`;
 
     const percent =
       event.total > 0 ? (displayed / event.total) * 100 : undefined;
@@ -253,7 +260,10 @@ export function formatRunSummaryMessage(summary: RunSummary): string {
 function formatRunningTooltip(session: {
   readonly collectionName: string;
   readonly current?: { readonly label: string };
-  readonly lastProgress?: { readonly phase: string };
+  readonly lastProgress?: {
+    readonly phase: string;
+    readonly attempt?: import('../models').RunProgressAttempt;
+  };
   readonly completed: number;
   readonly total: number;
   readonly elapsedMs: number;
@@ -266,9 +276,11 @@ function formatRunningTooltip(session: {
     session.lastProgress?.phase === 'request-started'
       ? Math.min(session.completed + 1, session.total)
       : session.completed;
+  const attemptLine = formatAttemptLabel(session.lastProgress?.attempt);
   return [
     session.collectionName,
     `Request: ${current}`,
+    ...(attemptLine === undefined ? [] : [`Attempt: ${attemptLine}`]),
     `Progress: ${displayed} / ${session.total}`,
     `Elapsed: ${formatDuration(session.elapsedMs)}`,
   ].join('\n');

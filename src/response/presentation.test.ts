@@ -91,6 +91,9 @@ test('masks sensitive headers and exposes only a cookie placeholder', () => {
       { name: 'proxy-authorization', value: 'Basic secret' },
       { name: 'Cookie', value: 'session=secret' },
       { name: 'Set-Cookie', value: 'session=secret' },
+      { name: 'X-API-Key', value: 'api-key-secret' },
+      { name: 'api-key', value: 'legacy-api-key' },
+      { name: 'X-Auth-Token', value: 'auth-token-secret' },
       { name: 'X-Safe', value: 'visible' },
     ]),
   });
@@ -113,7 +116,22 @@ test('masks sensitive headers and exposes only a cookie placeholder', () => {
       MASKED_HEADER_VALUE,
       MASKED_HEADER_VALUE,
       MASKED_HEADER_VALUE,
+      MASKED_HEADER_VALUE,
+      MASKED_HEADER_VALUE,
+      MASKED_HEADER_VALUE,
       'visible',
+    ],
+  );
+  assert.deepEqual(
+    model.headers.filter((header) => header.masked).map((header) => header.name),
+    [
+      'Authorization',
+      'proxy-authorization',
+      'Cookie',
+      'Set-Cookie',
+      'X-API-Key',
+      'api-key',
+      'X-Auth-Token',
     ],
   );
   assert.equal(model.cookies.available, false);

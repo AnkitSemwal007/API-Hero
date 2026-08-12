@@ -199,6 +199,7 @@ function evaluateOne(
         ? undefined
         : formatAssertionValue(assertion.expected, {
             headerName: assertion.subject.headerName,
+            path: assertion.subject.path,
           }),
     actual: displayActual,
     context: contextLabel,
@@ -373,13 +374,17 @@ function resolveSubject(
           expected:
             assertion.expected === undefined
               ? undefined
-              : formatAssertionValue(assertion.expected),
+              : formatAssertionValue(assertion.expected, {
+                  path: assertion.subject.path,
+                }),
         };
       }
       return {
         ok: true,
         actual: resolved.value,
-        displayActual: formatAssertionValue(resolved.value),
+        displayActual: formatAssertionValue(resolved.value, {
+          path: assertion.subject.path,
+        }),
         contextLabel: bodyContext(assertion),
       };
     }
@@ -521,13 +526,19 @@ function describeFailure(assertion: Assertion, actual: unknown): string {
     case AssertionOperator.Contains:
       return `Expected ${formatAssertionValue(actual, {
         headerName: assertion.subject.headerName,
+        path: assertion.subject.path,
       })} to contain ${formatAssertionValue(assertion.expected, {
         headerName: assertion.subject.headerName,
+        path: assertion.subject.path,
       })}.`;
     case AssertionOperator.In:
       return `Expected ${formatAssertionValue(actual, {
         headerName: assertion.subject.headerName,
-      })} to be in ${formatAssertionValue(assertion.expected)}.`;
+        path: assertion.subject.path,
+      })} to be in ${formatAssertionValue(assertion.expected, {
+        headerName: assertion.subject.headerName,
+        path: assertion.subject.path,
+      })}.`;
     default:
       return `Assertion failed for operator "${assertion.operator}".`;
   }

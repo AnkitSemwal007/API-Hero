@@ -1,6 +1,7 @@
 import { cloneDetached, deepFreeze } from '../shared';
 import type { ResponsePresentation } from '../response/presentation';
 import type { ResolvedVariableSnapshot } from '../variables';
+import type { CollectionRunOptions } from './run-options';
 
 /** Opaque stable identity for one collection run. */
 export type RunIdentifier = string;
@@ -192,10 +193,31 @@ export interface RunPlan {
   readonly collectionName: string;
   readonly folderId?: string;
   readonly failurePolicy: FailurePolicyKind;
+  /**
+   * Validated retry / skip-destructive options for this plan.
+   * Omitted → identical to historical behavior (no retries, no destructive skip).
+   */
+  readonly runOptions?: CollectionRunOptions;
   readonly requests: readonly PlannedRequest[];
   /** ISO-8601 creation timestamp. */
   readonly createdAt: string;
   readonly extensions?: CollectionRunExtensionBag;
+}
+
+/**
+ * One HTTP / orchestrator attempt within a single planned request.
+ * Retries append entries here — the parent {@link RequestRunResult} stays one row.
+ */
+export interface RequestAttemptRecord {
+  /** 1-based attempt number. */
+  readonly attemptNumber: number;
+  readonly outcome: RequestRunOutcomeKind;
+  readonly statusCode?: number;
+  /** Secret-free message / reason for this attempt. */
+  readonly message?: string;
+  readonly durationMs?: number;
+  /** Whether this failed attempt was classified as retryable. */
+  readonly retryable?: boolean;
 }
 
 /** Result of executing (or skipping) one planned request. */
@@ -204,7 +226,10 @@ export interface RequestRunResult {
   readonly ordinal: number;
   readonly label: string;
   readonly outcome: RequestRunOutcomeKind;
-  /** Wall-clock time for the orchestrator call when the request was attempted. */
+  /**
+   * Summed orchestrator attempt timings (excludes inter-retry delays).
+   * For a single attempt, matches the orchestrator duration.
+   */
   readonly durationMs?: number;
   readonly statusCode?: number;
   /** Secret-free message for UI / summary. */
@@ -244,6 +269,11 @@ export interface RequestRunResult {
    * Secret-safe variable snapshots for Execution Details (referenced vars only).
    */
   readonly resolvedVariables?: readonly ResolvedVariableSnapshot[];
+  /**
+   * Per-attempt records when the request was executed (including retries).
+   * Omitted for dependency / destructive skips that never attempted HTTP.
+   */
+  readonly attempts?: readonly RequestAttemptRecord[];
 }
 
 /** Aggregate counts and timing for a finished run. */
@@ -305,6 +335,15 @@ export type RunProgressPhase =
   | 'request-finished'
   | 'completed';
 
+/** Live attempt visibility for retries (Execution Center / progress UI). */
+export interface RunProgressAttempt {
+  /** Current attempt (executing) or upcoming attempt (waiting), 1-based. */
+  readonly current: number;
+  /** Max attempts for this request (`maxRetries + 1` when retry enabled). */
+  readonly max: number;
+  readonly phase: 'executing' | 'waiting';
+}
+
 /** Progress snapshot for UI adapters (notification / status bar). */
 export interface RunProgressEvent {
   readonly runId: RunIdentifier;
@@ -315,6 +354,8 @@ export interface RunProgressEvent {
   readonly total: number;
   readonly elapsedMs: number;
   readonly lastResult?: RequestRunResult;
+  /** Present while a request is executing or waiting between retries. */
+  readonly attempt?: RunProgressAttempt;
 }
 
 /**
