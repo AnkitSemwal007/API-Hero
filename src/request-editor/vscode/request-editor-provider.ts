@@ -63,6 +63,13 @@ export interface RequestEditorProviderOptions {
   /** Active environment display name, or undefined when none is selected. */
   readonly getActiveEnvironmentLabel?: () => string | undefined;
   /**
+   * Fires when external variable definitions change so the webview catalog
+   * can refresh without waiting for a document edit.
+   */
+  readonly onExternalVariablesChanged?: (
+    listener: () => void,
+  ) => Disposable;
+  /**
    * Same-collection Depends-on picker catalog for the open document.
    * Entries use display names; the form stores human depend refs.
    */
@@ -215,6 +222,18 @@ class RequestEditorDocumentSync implements Disposable {
         this.scheduleTextToForm();
       }),
     );
+    if (this.options.onExternalVariablesChanged !== undefined) {
+      this.disposables.push(
+        this.options.onExternalVariablesChanged(() => {
+          fireAndForget(this.postState(), (error: unknown) =>
+            this.reportBackgroundError(
+              error,
+              'Could not refresh variable completions.',
+            ),
+          );
+        }),
+      );
+    }
   }
 
   public dispose(): void {
@@ -256,6 +275,7 @@ class RequestEditorDocumentSync implements Disposable {
     }
     if (message.type === 'switchEnvironment') {
       await commands.executeCommand(COMMAND_IDS.switchEnvironment);
+      await this.postState();
       return;
     }
     if (message.type === 'selectAuthentication') {

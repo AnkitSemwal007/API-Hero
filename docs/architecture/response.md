@@ -38,7 +38,10 @@ headers, a cookie placeholder, timing, header/body/estimated response sizes,
 content type, charset, original request URL/method, final URL, redirects, body
 preview, and a concise summary. Failures map every `ExecutionErrorCode` to a
 structured title, message, retryability, safe cause metadata, and timing
-(including `RESPONSE_TOO_LARGE`).
+(including `RESPONSE_TOO_LARGE`). Deterministic status/transport
+`explanation` (title, factual lines, `possibleCauses`) is attached for HTTP
+4xx/5xx — including successful transport — and for transport failures so the
+Request Editor can show **Possible causes** without a second error system.
 
 Header order and duplicate names remain visible. `Authorization`,
 `Proxy-Authorization`, `Cookie`, and `Set-Cookie` values are always replaced
@@ -85,9 +88,17 @@ Every request, response, error, cause, header, and body string is HTML-escaped
 before insertion. Highlighting emits escaped text plus fixed class names. HTML
 and XML bodies are never mounted as markup. JSON trees use fixed generated
 elements and escaped keys/values. Webview-to-host messages are validated by a closed parser. Supported actions
-include `ready`, **copy body**, **save body**, **copy headers**, and in-panel
+include `ready`, **copy body**, **save body**, **copy headers**,
+**compare previous**, **generate TypeScript** (successful JSON only), and in-panel
 **search** controls that operate on the already-masked presentation model.
 Unknown commands and extra properties are ignored.
+
+TypeScript generation is framework-free (`src/codegen/typescript-from-json.ts`).
+The viewer posts `generateTypeScript`; `ResponseViewerService` reads the last
+successful JSON body text, generates declarations with an explicit “one observed
+response” disclaimer, and delegates **Copy** / **Create .ts** (name + destination,
+overwrite confirmation) to host actions. Type names are derived from JSON keys
+only — never from string values.
 
 CSS uses VS Code foreground, background, border, focus, button, editor, and
 symbol variables. It declares light/dark color-scheme support, responsive
@@ -110,12 +121,15 @@ a display concern for responses that fit under that cap.
 ## Shipped viewer actions
 
 Copy body, save body, copy headers, and body search are implemented against the
-presentation model (host clipboard / save dialog). Cookie jars, redirect-chain
-UI, response diff, and streaming body presentation remain out of scope.
+presentation model (host clipboard / save dialog). **Request/Response Diff**
+compares in-session `ResponsePresentation` snapshots via a per-`requestKey`
+presentation ring (Previous vs Current) and Collection Run Manager recent
+presentations (Run A vs B). Diff never stores raw bodies in History. Cookie
+jars, redirect-chain UI, and streaming body presentation remain out of scope.
 
 ## Deferred future work
 
-Cookie details beyond Set-Cookie counts, redirect-chain UI, diff, and streaming
+Cookie details beyond Set-Cookie counts, redirect-chain UI, and streaming
 body presentation remain deferred or belong to other subsystems. Request
 History is metadata-only — see [history.md](./history.md). Collections
 organization is separate — see [collections.md](./collections.md). Do not

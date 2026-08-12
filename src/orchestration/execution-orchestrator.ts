@@ -108,6 +108,7 @@ export interface ExecutionResultViewer {
       readonly requestKey: string;
       readonly offset: number;
     },
+    presentOptions?: import('../response').PresentExecutionOptions,
   ): void;
 }
 
@@ -711,11 +712,31 @@ export class ExecutionOrchestrator {
 
           if (showViewer) {
             try {
-              this.viewer.show(result, assertionReport, extractionReport, {
-                sourceId: source.sourceId,
-                requestKey,
-                offset: source.offset,
-              });
+              const capture =
+                options.historyCaptureContext ?? this.getHistoryCaptureContext();
+              const execCtx = this.getExecutionContext();
+              const presentOptions = {
+                ...(capture.environmentName === undefined
+                  || capture.environmentName.trim().length === 0
+                  ? {}
+                  : { environmentLabel: capture.environmentName.trim() }),
+                ...(execCtx.timeoutMs === undefined
+                  ? {}
+                  : { timeoutMs: execCtx.timeoutMs }),
+              };
+              this.viewer.show(
+                result,
+                assertionReport,
+                extractionReport,
+                {
+                  sourceId: source.sourceId,
+                  requestKey,
+                  offset: source.offset,
+                },
+                Object.keys(presentOptions).length > 0
+                  ? presentOptions
+                  : undefined,
+              );
             } catch {
               this.status.update({ kind: 'failed' });
               if (showNotifications) {

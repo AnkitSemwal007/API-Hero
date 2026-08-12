@@ -435,6 +435,9 @@ function projectPresentation(presentation: ResponsePresentation): unknown {
     body: presentation.body,
     statistics: presentation.statistics,
     failure: presentation.failure,
+    ...(presentation.explanation === undefined
+      ? {}
+      : { explanation: presentation.explanation }),
     assertions: presentation.assertions,
     summary: presentation.summary,
   };

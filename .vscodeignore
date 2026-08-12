@@ -12,16 +12,25 @@ _fix*.py
 _keep*.py
 .gitignore
 
-# Source & build tooling (runtime is dist/)
+# Source & build tooling (runtime is bundled dist/ entry points)
 src/**
 scripts/**
 tsconfig.json
 eslint.config.mjs
 package-lock.json
 
-# Accidental/extraneous packages — never ship (not in package.json)
-node_modules/esbuild/**
-node_modules/@esbuild/**
+# Production deps are inlined into esbuild bundles (extension / MCP / CLI).
+# Do not ship node_modules sprawl (MCP SDK transitive tree, etc.).
+node_modules/**
+
+# After `npm run bundle`, only the three entry bundles are needed at runtime.
+# Keep tsc multi-file dist/ for local test/dev; exclude it from the VSIX.
+dist/**
+!dist/extension.js
+!dist/mcp/
+!dist/mcp/server.js
+!dist/cli/
+!dist/cli/main.js
 
 # Tests & coverage
 coverage/**
@@ -30,9 +39,10 @@ coverage/**
 **/*.test.d.ts
 **/__tests__/**
 
-# Source maps & TypeScript (ship compiled JS only)
+# Source maps & TypeScript (ship bundled JS only)
 **/*.map
 **/*.ts
+**/*.d.ts
 
 # Docs / examples not required on Marketplace
 docs/**
@@ -55,6 +65,8 @@ release/**
 **/Thumbs.db
 tmp/**
 temp/**
+tmp-*.txt
+tmp-mcp-*
 
 # Extension chrome icons must ship (icon.png, api-*.svg, execution-*.svg).
 # Listing screenshots / banner / workflow / MCP GIFs are Cloudinary CDN URLs in README —

@@ -461,3 +461,52 @@ test('presents extraction outcomes and masks sensitive values', () => {
   assert.equal(model.extraction.outcomes[0]?.variableName, 'token');
   assert.doesNotMatch(JSON.stringify(model.extraction), /secret-token/u);
 });
+
+test('attaches 401 explanation on successful transport', () => {
+  const model = presentExecutionResult(
+    success({
+      statusCode: 401,
+      statusText: 'Unauthorized',
+    }),
+  );
+  assert.equal(model.success, true);
+  assert.equal(model.explanation?.title, '401 Unauthorized');
+  assert.deepEqual(model.explanation?.possibleCauses, [
+    'Authorization header missing',
+    'Token unresolved',
+    'Token invalid or expired',
+  ]);
+});
+
+test('attaches timeout transport explanation with factual lines', () => {
+  const model = presentExecutionResult(
+    Object.freeze({
+      success: false,
+      requestId: 'request-1',
+      request: Object.freeze({
+        method: 'GET',
+        url: 'https://user:sekrit@example.test/slow',
+      }),
+      timing: Object.freeze({
+        startedAt: '2026-07-19T10:00:00.000Z',
+        completedAt: '2026-07-19T10:00:05.000Z',
+        durationMs: 5_000,
+      }),
+      error: Object.freeze({
+        code: 'TIMEOUT',
+        message: 'The request exceeded its configured timeout.',
+        retryable: true,
+      }),
+    }),
+    undefined,
+    undefined,
+    { timeoutMs: 5_000 },
+  );
+  assert.equal(model.explanation?.title, 'Request timed out');
+  assert.ok(model.explanation?.facts.some((f) => f.startsWith('URL:')));
+  assert.doesNotMatch(model.explanation?.facts.join('\n') ?? '', /sekrit/u);
+  assert.ok(model.explanation?.facts.includes('Timeout: 5.00 s'));
+  assert.ok(
+    (model.explanation?.possibleCauses.length ?? 0) > 0,
+  );
+});

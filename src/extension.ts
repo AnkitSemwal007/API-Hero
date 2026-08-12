@@ -1,5 +1,5 @@
 import type { ExtensionContext } from 'vscode';
-import { languages, window } from 'vscode';
+import { commands, languages, window } from 'vscode';
 
 import {
   CommandRegistrar,
@@ -44,10 +44,11 @@ import {
   createHistoryInfrastructure,
   registerHistory,
 } from './history/vscode';
-import { registerOpenApiImport } from './openapi-import/vscode';
+import { registerCurlImport } from './curl/vscode';
+import { registerOpenApiImport, registerPostmanImport, registerInsomniaImport } from './openapi-import/vscode';
 import { registerRequestEditor } from './request-editor/vscode';
 import { registerScenarios } from './scenarios/vscode';
-import { EXTENSION_NAME, normalizeHistoryMaxEntries } from './constants';
+import { COMMAND_IDS, EXTENSION_NAME, normalizeHistoryMaxEntries } from './constants';
 import {
   API_LANGUAGE_ID,
   ApiRequestCodeLensProvider,
@@ -75,6 +76,7 @@ import {
 import { SecretStorageService } from './storage';
 import {
   ResponseViewerService,
+  type ResponsePresentation,
 } from './response';
 import {
   createVsCodeResponseViewerHostActions,
@@ -147,6 +149,21 @@ export async function activate(context: ExtensionContext): Promise<void> {
   );
   const collectionVariableCache = new Map<string, readonly VariableDefinition[]>();
   let activeCollectionRunVariables: readonly VariableDefinition[] = [];
+  /** Listeners notified when collection (or other external) catalog definitions change. */
+  const variableCatalogListeners = new Set<() => void>();
+  const notifyVariableCatalogChanged = (): void => {
+    for (const listener of variableCatalogListeners) {
+      listener();
+    }
+  };
+  const onVariableCatalogChanged = (listener: () => void): { dispose: () => void } => {
+    variableCatalogListeners.add(listener);
+    return {
+      dispose: () => {
+        variableCatalogListeners.delete(listener);
+      },
+    };
+  };
   /**
    * Resolves the owning collection's root path for a single-request source
    * (§8.3 "Single request in a collection file"). Filled in once Collections
@@ -180,6 +197,7 @@ export async function activate(context: ExtensionContext): Promise<void> {
       fireAndForget(
         collectionVariableStore.load(rootPath).then((definitions) => {
           collectionVariableCache.set(key, definitions);
+          notifyVariableCatalogChanged();
         }),
         (error: unknown) => {
           logger.warning('Failed to load collection variables', {
@@ -264,6 +282,7 @@ export async function activate(context: ExtensionContext): Promise<void> {
       if (plan.updateActiveRunSnapshot) {
         activeCollectionRunVariables = plan.definitions;
       }
+      notifyVariableCatalogChanged();
     } catch (error: unknown) {
       logger.warning('Failed to refresh collection variables after write', {
         message: error instanceof Error ? error.message : String(error),
@@ -300,12 +319,22 @@ export async function activate(context: ExtensionContext): Promise<void> {
     const snapshot = environmentManager.capture();
     const sourceId = window.activeTextEditor?.document.uri.toString() ?? '';
     const key = requestKey ?? requestKeyFor(sourceId, 0);
+    const environmentName = snapshot.active?.name;
+    const environmentDefinitions = (snapshot.active?.variables ?? []).map(
+      (variable) =>
+        environmentName === undefined || environmentName.length === 0
+          ? variable
+          : {
+              ...variable,
+              environmentName,
+            },
+    );
     return {
       definitions: [
         ...snapshot.globalVariables,
         ...snapshot.workspaceVariables,
         ...collectionDefinitionsForSource(sourceId),
-        ...(snapshot.active?.variables ?? []),
+        ...environmentDefinitions,
         ...runtimeOverlay.getDefinitions({ requestKey: key }),
         ...activeRunDefinitions(),
       ],
@@ -367,6 +396,16 @@ export async function activate(context: ExtensionContext): Promise<void> {
         return [...names];
       },
       variableWriter: extractionRegistration.writer,
+      getPresentOptions: () => {
+        const environmentName = environmentManager.capture().active?.name?.trim();
+        const timeoutMs = settingsProvider.getSettings().requestTimeout;
+        return {
+          ...(environmentName === undefined || environmentName.length === 0
+            ? {}
+            : { environmentLabel: environmentName }),
+          ...(timeoutMs === undefined ? {} : { timeoutMs }),
+        };
+      },
     },
   );
   const executor = new DefaultRequestExecutor(new NodeHttpTransport());
@@ -475,11 +514,13 @@ export async function activate(context: ExtensionContext): Promise<void> {
       const authenticationRegistration =
         authenticationProfiles.onDidChange(listener);
       const secretRegistration = secretStorage.onDidChange(listener);
+      const catalogRegistration = onVariableCatalogChanged(listener);
       return {
         dispose: () => {
           environmentRegistration.dispose();
           authenticationRegistration.dispose();
           secretRegistration.dispose();
+          catalogRegistration.dispose();
         },
       };
     },
@@ -553,7 +594,32 @@ export async function activate(context: ExtensionContext): Promise<void> {
   });
   getHistoryCaptureContext = historyRegistration.getCaptureContext;
   const collectionRunManager = new CollectionRunManager();
-  const collectionRunReportPanel = new CollectionRunReportPanel();
+  const collectionRunReportPanel = new CollectionRunReportPanel({
+    openRequest: async (requestId) => {
+      await commands.executeCommand(COMMAND_IDS.openCollectionRequest, requestId);
+    },
+    revealRequest: async (requestId) => {
+      await commands.executeCommand(COMMAND_IDS.openCollectionRequest, requestId);
+      await commands.executeCommand(COMMAND_IDS.focusCollections);
+    },
+    compareRuns: async (requestId, current) => {
+      const previous = findPreviousCollectionPresentation(
+        collectionRunManager,
+        requestId,
+        current,
+      );
+      if (previous === undefined) {
+        await window.showInformationMessage(
+          'No previous collection run presentation is available for this request. Run the collection again, then Compare Runs.',
+        );
+        return;
+      }
+      responseViewer.showDiff(previous.presentation, current, {
+        leftLabel: previous.label,
+        rightLabel: 'Current',
+      });
+    },
+  });
   registerExecutionView({
     context,
     manager: collectionRunManager,
@@ -579,6 +645,7 @@ export async function activate(context: ExtensionContext): Promise<void> {
       activeCollectionRunVariables = variables;
     },
     getStaticVariableNames: staticVariableNamesForRun,
+    responseViewer,
   });
   registerScenarios({
     context,
@@ -596,6 +663,19 @@ export async function activate(context: ExtensionContext): Promise<void> {
     discovery: collectionsRegistration.discovery,
     environmentManager,
   });
+  registerPostmanImport({
+    context,
+    logger,
+    discovery: collectionsRegistration.discovery,
+    environmentManager,
+  });
+  registerInsomniaImport({
+    context,
+    logger,
+    discovery: collectionsRegistration.discovery,
+    environmentManager,
+  });
+  registerCurlImport({ context });
   registerEnvironments({
     context,
     environmentManager,
@@ -661,6 +741,16 @@ export async function activate(context: ExtensionContext): Promise<void> {
         (environment) => environment.id === activeId,
       )?.name;
     },
+    onExternalVariablesChanged: (listener) => {
+      const environmentRegistration = environmentManager.onDidChange(listener);
+      const catalogRegistration = onVariableCatalogChanged(listener);
+      return {
+        dispose: () => {
+          environmentRegistration.dispose();
+          catalogRegistration.dispose();
+        },
+      };
+    },
   });
   registerOverview({
     context,
@@ -680,6 +770,40 @@ export async function activate(context: ExtensionContext): Promise<void> {
     ...languageRegistrations,
   );
   logger.info('Extension activated');
+}
+
+/**
+ * Finds the most recent prior collection-run presentation for a request id
+ * from {@link CollectionRunManager.listRecent}, skipping the current snapshot
+ * when it is the same object reference as `current`.
+ */
+function findPreviousCollectionPresentation(
+  manager: CollectionRunManager,
+  requestId: string,
+  current: ResponsePresentation,
+): { readonly presentation: ResponsePresentation; readonly label: string } | undefined {
+  const recent = manager.listRecent();
+  for (const session of recent) {
+    const match = session.results.find(
+      (result) =>
+        result.requestId === requestId && result.presentation !== undefined,
+    );
+    if (match?.presentation === undefined) {
+      continue;
+    }
+    if (match.presentation === current) {
+      continue;
+    }
+    const started =
+      session.completedAt
+      ?? session.startedAt
+      ?? session.runId;
+    return {
+      presentation: match.presentation,
+      label: `Run A (${started})`,
+    };
+  }
+  return undefined;
 }
 
 /** Releases no resources beyond those owned by the extension context. */

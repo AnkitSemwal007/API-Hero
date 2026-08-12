@@ -71,6 +71,13 @@ export interface RegisterRequestEditorOptions {
   readonly getStaticVariableNames?: () => ReadonlySet<string>;
   /** Active environment display name for Variables-tab discoverability. */
   readonly getActiveEnvironmentLabel?: () => string | undefined;
+  /**
+   * Notifies when external variable catalogs change (env switch, collection
+   * load/persist, …) so open editors can refresh completions.
+   */
+  readonly onExternalVariablesChanged?: (
+    listener: () => void,
+  ) => Disposable;
   /** Collections discovery for same-collection Depends-on picker. */
   readonly discovery?: CollectionDiscoveryService;
   /** Mutation service for same-folder requestOrder alignment after depends-on. */
@@ -120,6 +127,7 @@ export function registerRequestEditor(
         model,
       ),
     getActiveEnvironmentLabel: options.getActiveEnvironmentLabel,
+    onExternalVariablesChanged: options.onExternalVariablesChanged,
     getDependencyCatalog: (documentPath) => {
       const aggregate = options.discovery?.snapshot;
       const currentRequestId = findRequestIdForDocumentPath(

@@ -51,9 +51,12 @@ Snippets (`get`, `post`, `separator`, and others) are available in the `api` lan
 | Run Request | Editor title, context menu, CodeLens, or `Ctrl+Alt+R` / `Cmd+Alt+R` |
 | Run with assertions | **API Hero: Run Request with Assertions** |
 | Copy as cURL | Context menu or **API Hero: Copy as cURL** — copies a resolved, secret-redacted cURL command (does not execute the request) |
+| Import cURL | Command Palette / Collections menu / selection context — paste, selection, or file → preview → create `.api` (never shell-executes) |
 | Open Request Editor | **API Hero: Open Request Editor** (when using the text editor) |
 
 **Copy as cURL** resolves variables and authentication the same way Run Request does, then writes a POSIX-shell-safe `curl` command to the clipboard. Secrets are redacted by default (presentation URL, sensitive headers, sensitive variable values in the body, Basic `-u` credentials). The request is **not** sent over the network.
+
+**Import cURL** (`apiHero.importCurl`) is the reverse path: paste a curl command, use the editor selection, or open a text file. The command is tokenized and parsed **in-process** (no `child_process` / shell). After a masked preview you choose a destination `.api` file. Bearer/Basic and other sensitive **headers** become `{{token}}` / `{{cookie}}` (or similar) placeholders. **Body and query string values are kept literally** as in the pasted command (so the request shape stays faithful)—avoid committing production secrets in those fields. Unsupported curl flags (proxy, `-k`, output files, etc.) are reported as warnings and ignored. Unclosed quotes fail the import; common `--flag=value` and `-XPOST` forms are accepted.
 
 **Run File** is a stub (Coming Soon) and is hidden from the Command Palette.
 

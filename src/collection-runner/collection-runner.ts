@@ -6,6 +6,7 @@ import type {
 } from '../orchestration';
 import {
   presentExecutionResult,
+  type PresentExecutionOptions,
   type ResponsePresentation,
 } from '../response/presentation';
 import type { RunVariableStore } from '../variables';
@@ -372,6 +373,12 @@ export class CollectionRunnerService {
           runResult,
           policy,
           this.now() - attemptStarted,
+          historyCaptureContext?.environmentName === undefined
+            || historyCaptureContext.environmentName.trim().length === 0
+            ? undefined
+            : {
+                environmentLabel: historyCaptureContext.environmentName.trim(),
+              },
         );
       } catch {
         const reason = 'The request could not be executed.';
@@ -610,6 +617,7 @@ export function mapOrchestratorResult(
   runResult: RunAtSourceLocationResult,
   policy: FailurePolicy,
   fallbackDurationMs: number,
+  presentOptions?: PresentExecutionOptions,
 ): RequestRunResult {
   const durationMs = runResult.durationMs ?? fallbackDurationMs;
   const assertionFields = assertionFieldsFrom(runResult);
@@ -625,6 +633,7 @@ export function mapOrchestratorResult(
           runResult.execution,
           runResult.assertions,
           runResult.extraction,
+          presentOptions,
         );
   const base = {
     requestId: planned.requestId,
@@ -652,6 +661,7 @@ export function mapOrchestratorResult(
   switch (runResult.outcome) {
     case 'success':
       if (hasBlockingExtractionFailure(runResult.extraction)) {
+        const explanation = explanationFromPresentation(presentation);
         return {
           ...base,
           outcome: RequestRunOutcomeKind.Failed,
@@ -660,6 +670,7 @@ export function mapOrchestratorResult(
             reason: describeExtractionFailure(runResult.extraction),
             httpRequestSent,
             failedAtStage: 'extraction',
+            ...(explanation === undefined ? {} : { explanation }),
           }),
         };
       }
@@ -721,6 +732,7 @@ function buildFailureFields(input: {
   readonly reason: string;
   readonly httpRequestSent: boolean;
   readonly failedAtStage?: string;
+  readonly explanation?: RequestFailureDiagnostics['explanation'];
 }): Pick<RequestRunResult, 'message' | 'failureDiagnostics'> {
   const failureDiagnostics: RequestFailureDiagnostics = {
     category: input.category,
@@ -729,10 +741,28 @@ function buildFailureFields(input: {
     ...(input.failedAtStage === undefined
       ? {}
       : { failedAtStage: input.failedAtStage }),
+    ...(input.explanation === undefined ? {} : { explanation: input.explanation }),
   };
   return {
     message: `${describeFailureCategory(input.category)}\n${input.reason}`,
     failureDiagnostics,
+  };
+}
+
+/**
+ * Projects presentation explanation onto diagnostics without re-classifying.
+ */
+function explanationFromPresentation(
+  presentation: ResponsePresentation | undefined,
+): RequestFailureDiagnostics['explanation'] | undefined {
+  const explanation = presentation?.explanation;
+  if (explanation === undefined) {
+    return undefined;
+  }
+  return {
+    title: explanation.title,
+    facts: explanation.facts,
+    possibleCauses: explanation.possibleCauses,
   };
 }
 
@@ -750,7 +780,9 @@ function describeExecutionFailure(
   readonly reason: string;
   readonly httpRequestSent: boolean;
   readonly failedAtStage?: string;
+  readonly explanation?: RequestFailureDiagnostics['explanation'];
 } {
+  const explanation = explanationFromPresentation(presentation);
   const httpCompleted =
     runResult.execution?.success === true || runResult.statusCode !== undefined;
   if (httpCompleted) {
@@ -760,6 +792,7 @@ function describeExecutionFailure(
         reason: describeAssertionFailure(presentation),
         httpRequestSent,
         failedAtStage: 'assertions',
+        ...(explanation === undefined ? {} : { explanation }),
       };
     }
     if (hasBlockingExtractionFailure(runResult.extraction)) {
@@ -768,6 +801,7 @@ function describeExecutionFailure(
         reason: describeExtractionFailure(runResult.extraction),
         httpRequestSent,
         failedAtStage: 'extraction',
+        ...(explanation === undefined ? {} : { explanation }),
       };
     }
   }
@@ -776,6 +810,7 @@ function describeExecutionFailure(
     reason: describeTransportFailure(runResult, presentation),
     httpRequestSent,
     failedAtStage: 'transport',
+    ...(explanation === undefined ? {} : { explanation }),
   };
 }
 

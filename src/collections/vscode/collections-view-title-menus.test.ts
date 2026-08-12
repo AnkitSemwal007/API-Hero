@@ -44,6 +44,9 @@ test('Collections view/title keeps navigation + overflow only', () => {
       COMMAND_IDS.createFolder,
       COMMAND_IDS.importCollection,
       COMMAND_IDS.importOpenApi,
+      COMMAND_IDS.importPostman,
+      COMMAND_IDS.importInsomnia,
+      COMMAND_IDS.importCurl,
       COMMAND_IDS.revealActiveRequest,
     ].sort(),
   );

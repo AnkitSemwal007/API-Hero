@@ -2,7 +2,7 @@
   "name": "api-hero",
   "displayName": "API Hero",
   "description": "Git-first REST/HTTP client for VS Code. Edit .api requests in a UI Request Editor, run with assertions, orchestrate Scenarios, manage Authentication (profiles, Login API sessions, Secret Storage), collections, and environments, import OpenAPI, inspect Execution, History, and Run Reports, and expose collections to AI agents via MCP.",
-  "version": "2.8.4",
+  "version": "2.9.0",
   "publisher": "ankitsemwal",
   "license": "MIT",
   "homepage": "https://github.com/AnkitSemwal007/API-Hero",
@@ -106,6 +106,13 @@
         "icon": "$(copy)",
         "enablement": "editorLangId == api",
         "category": "API Hero"
+      },
+      {
+        "command": "apiHero.importCurl",
+        "title": "Import cURL",
+        "icon": "$(clippy)",
+        "category": "API Hero",
+        "shortTitle": "Import cURL"
       },
       {
         "command": "apiHero.runFile",
@@ -355,6 +362,20 @@
         "shortTitle": "Import OpenAPI"
       },
       {
+        "command": "apiHero.importPostman",
+        "title": "Import Postman Collection",
+        "icon": "$(cloud-download)",
+        "category": "API Hero",
+        "shortTitle": "Import Postman"
+      },
+      {
+        "command": "apiHero.importInsomnia",
+        "title": "Import Insomnia Export",
+        "icon": "$(cloud-download)",
+        "category": "API Hero",
+        "shortTitle": "Import Insomnia"
+      },
+      {
         "command": "apiHero.createCollection",
         "title": "New Collection",
         "icon": "$(new-folder)",
@@ -480,6 +501,21 @@
         "category": "API Hero"
       },
       {
+        "command": "apiHero.compareWithPreviousRun",
+        "title": "Compare with Previous Run",
+        "category": "API Hero"
+      },
+      {
+        "command": "apiHero.compareCollectionRuns",
+        "title": "Compare Runs",
+        "category": "API Hero"
+      },
+      {
+        "command": "apiHero.generateTypeScript",
+        "title": "Generate TypeScript",
+        "category": "API Hero"
+      },
+      {
         "command": "apiRunner.runRequest",
         "title": "Run Request (legacy)",
         "category": "API Hero"
@@ -492,6 +528,11 @@
       {
         "command": "apiRunner.copyAsCurl",
         "title": "Copy as cURL (legacy)",
+        "category": "API Hero"
+      },
+      {
+        "command": "apiRunner.importCurl",
+        "title": "Import cURL (legacy)",
         "category": "API Hero"
       },
       {
@@ -690,6 +731,16 @@
         "category": "API Hero"
       },
       {
+        "command": "apiRunner.importPostman",
+        "title": "Import Postman Collection (legacy)",
+        "category": "API Hero"
+      },
+      {
+        "command": "apiRunner.importInsomnia",
+        "title": "Import Insomnia Export (legacy)",
+        "category": "API Hero"
+      },
+      {
         "command": "apiRunner.createCollection",
         "title": "New Collection (legacy)",
         "category": "API Hero"
@@ -868,6 +919,10 @@
           "when": "false"
         },
         {
+          "command": "apiRunner.importCurl",
+          "when": "false"
+        },
+        {
           "command": "apiRunner.runFile",
           "when": "false"
         },
@@ -1024,6 +1079,14 @@
           "when": "false"
         },
         {
+          "command": "apiRunner.importPostman",
+          "when": "false"
+        },
+        {
+          "command": "apiRunner.importInsomnia",
+          "when": "false"
+        },
+        {
           "command": "apiRunner.createCollection",
           "when": "false"
         },
@@ -1158,6 +1221,11 @@
           "group": "navigation@10.5"
         },
         {
+          "command": "apiHero.importCurl",
+          "when": "editorTextFocus && editorHasSelection",
+          "group": "navigation@10.6"
+        },
+        {
           "command": "apiHero.revealActiveRequest",
           "when": "(editorLangId == api && editorTextFocus) || (activeCustomEditorId == 'apiHero.requestEditor' || activeCustomEditorId == 'apiRunner.requestEditor')",
           "group": "navigation@11"
@@ -1198,6 +1266,21 @@
           "command": "apiHero.importOpenApi",
           "when": "view == apiHero.collections",
           "group": "1_new@3"
+        },
+        {
+          "command": "apiHero.importPostman",
+          "when": "view == apiHero.collections",
+          "group": "1_new@4"
+        },
+        {
+          "command": "apiHero.importInsomnia",
+          "when": "view == apiHero.collections",
+          "group": "1_new@5"
+        },
+        {
+          "command": "apiHero.importCurl",
+          "when": "view == apiHero.collections",
+          "group": "1_new@6"
         },
         {
           "command": "apiHero.revealActiveRequest",
@@ -1540,7 +1623,7 @@
     "viewsWelcome": [
       {
         "view": "apiHero.collections",
-        "contents": "No collections yet.\nOpen a folder workspace, create a collection, then add a request — or import OpenAPI.\n\n[New Collection](command:apiHero.createCollection)\n[New Request](command:apiHero.createRequest)\n[Import OpenAPI](command:apiHero.importOpenApi)\n\n[Open Overview](command:apiHero.openOverview)"
+        "contents": "No collections yet.\nOpen a folder workspace, create a collection, then add a request — or import OpenAPI / Postman / Insomnia / cURL.\n\n[New Collection](command:apiHero.createCollection)\n[New Request](command:apiHero.createRequest)\n[Import OpenAPI](command:apiHero.importOpenApi)\n[Import Postman](command:apiHero.importPostman)\n[Import Insomnia](command:apiHero.importInsomnia)\n[Import cURL](command:apiHero.importCurl)\n\n[Open Overview](command:apiHero.openOverview)"
       },
       {
         "view": "apiHero.explorer",
@@ -2126,6 +2209,8 @@
   "scripts": {
     "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
     "compile": "tsc -p ./",
+    "bundle": "node ./scripts/bundle-extension.mjs --no-prune",
+    "bundle:vsix": "node ./scripts/bundle-extension.mjs",
     "build": "npm run compile",
     "check": "tsc -p ./ --noEmit",
     "lint": "eslint \"src/**/*.ts\"",
@@ -2134,8 +2219,8 @@
     "test:coverage": "npm run compile && c8 --reporter=text-summary --reporter=text node ./scripts/run-unit-tests.mjs",
     "mcp": "npm run compile && node ./dist/mcp/server.js",
     "package": "npm run clean && npm run build && npm test && node ./scripts/package-vsix.mjs",
-    "package:fast": "npm run build && node ./scripts/package-vsix.mjs",
-    "vscode:prepublish": "npm run compile"
+    "package:fast": "node ./scripts/package-vsix.mjs",
+    "vscode:prepublish": "npm run compile && npm run bundle:vsix"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
@@ -2148,6 +2233,7 @@
     "@types/vscode": "^1.90.0",
     "@vscode/vsce": "^3.9.2",
     "c8": "^10.1.3",
+    "esbuild": "^0.25.12",
     "eslint": "^10.7.0",
     "typescript": "^5.5.3",
     "typescript-eslint": "^8.64.0"

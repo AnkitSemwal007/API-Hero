@@ -452,6 +452,92 @@ describe('collection-run-report-html', () => {
     });
   });
 
+  test('projects possibleCauses from failureDiagnostics explanation', () => {
+    const base = sampleSummary();
+    const withExplanation: RunSummary = {
+      ...base,
+      results: [
+        base.results[0]!,
+        {
+          ...base.results[1]!,
+          failureDiagnostics: {
+            category: 'assertion',
+            reason: 'Expected status 200 but received 500.',
+            httpRequestSent: true,
+            failedAtStage: 'assertions',
+            explanation: {
+              title: '500 Internal Server Error',
+              facts: ['Endpoint: https://example.test/users', 'Duration: 80 ms'],
+              possibleCauses: [
+                'Upstream service error',
+                'Temporary server outage',
+                'Unhandled exception on the server',
+              ],
+            },
+          },
+        },
+      ],
+    };
+    const details = buildCollectionRunReportModel(withExplanation).rows[1]
+      ?.details;
+    assert.deepEqual(details?.failure?.possibleCauses, [
+      'Upstream service error',
+      'Temporary server outage',
+      'Unhandled exception on the server',
+    ]);
+    assert.ok(
+      details?.failure?.facts.some((f) => f.startsWith('Endpoint:')),
+    );
+  });
+
+  test('Passed 401 projects status guidance into Details without category failure', () => {
+    const base = sampleSummary();
+    const with401: RunSummary = {
+      ...base,
+      results: [
+        {
+          ...base.results[0]!,
+          statusCode: 401,
+          presentation: {
+            success: true,
+            requestId: 'req_ok',
+            method: 'GET',
+            requestUrl: 'https://example.test/secure',
+            status: { code: 401, text: 'Unauthorized' },
+            headers: [],
+            cookies: { available: false, setCookieHeaderCount: 0 },
+            statistics: {
+              durationMs: 15,
+              startedAt: '2026-07-27T10:00:00.000Z',
+              completedAt: '2026-07-27T10:00:00.015Z',
+              headerCount: 0,
+              redirected: false,
+              redirectCount: 0,
+            },
+            explanation: {
+              title: '401 Unauthorized',
+              facts: ['Endpoint: https://example.test/secure'],
+              possibleCauses: [
+                'Authorization header missing',
+                'Token unresolved',
+                'Token invalid or expired',
+              ],
+            },
+            summary: '401 Unauthorized · 15 ms · 0 B',
+          },
+        },
+        base.results[1]!,
+      ],
+    };
+    const details = buildCollectionRunReportModel(with401).rows[0]?.details;
+    assert.equal(details?.failure?.statusLabel, '401 Unauthorized');
+    assert.deepEqual(details?.failure?.possibleCauses, [
+      'Authorization header missing',
+      'Token unresolved',
+      'Token invalid or expired',
+    ]);
+  });
+
   test('passed rows keep their existing Details shape', () => {
     const model = buildCollectionRunReportModel(sampleSummary());
     assert.equal(model.rows[0]?.details, undefined);

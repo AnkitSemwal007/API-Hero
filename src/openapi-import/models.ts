@@ -53,6 +53,11 @@ export interface GeneratedAuthProfile {
 export interface ImportArtifacts {
   readonly apiName: string;
   readonly apiVersion: string;
+  /**
+   * Source format version string.
+   * OpenAPI: e.g. `3.0.3`. Postman: e.g. `postman-collection-v2.1`
+   * (field name is historical — not OpenAPI-only).
+   */
   readonly openapiVersion: string;
   /** Suggested subdirectory under the workspace folder (e.g. `imported/petstore`). */
   readonly outputDirectoryName: string;

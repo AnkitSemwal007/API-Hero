@@ -10,11 +10,19 @@ Hero artifacts:
 - authentication profile metadata (secrets as placeholders only)
 
 The importer **never executes** imported HTTP content. Specifications are
-treated as untrusted. Export, Swagger 2.0, Postman, Insomnia, and GraphQL are
-out of scope.
+treated as untrusted. Export, Swagger 2.0, and GraphQL-as-a-format are out of
+scope for OpenAPI. **Postman Collection v2 / v2.1** and **Insomnia export v3 / v4**
+import are supported via separate providers on the shared pipeline (local JSON
+file only; scripts emit diagnostics and are never executed).
 
 Command: `apiHero.importOpenApi`  
 Title: **API Hero: Import OpenAPI Specification**
+
+Postman command: `apiHero.importPostman`  
+Title: **API Hero: Import Postman Collection**
+
+Insomnia command: `apiHero.importInsomnia`  
+Title: **API Hero: Import Insomnia Export**
 
 ## Pipeline
 
@@ -34,7 +42,7 @@ Local file | URL → (URL: HttpTransport GET) → Loader → Parser → Validato
 | Generate | `generators/*` | `.api` text, env vars, auth profiles |
 | Write | `workspace-writer.ts` | Path-safe file writes under target root |
 | Orchestrate | `pipeline.ts` | Stages, `ImportSummary`, cancellation |
-| UI | `vscode/register-openapi-import.ts`, `openapi-import-wizard.ts` | **OpenAPI import wizard** webview, progress, settings, refresh |
+| UI | `vscode/import-wizard-host.ts`, `import-register-shared.ts`, format wizards | Shared wizard host + register helpers; OpenAPI HTML keeps URL source; Postman/Insomnia use parameterized collection HTML |
 
 URL import reuses `runImportPipeline({ sourceText })` — there is **no** second
 OpenAPI parser. The wizard host injects `NodeHttpTransport` (or a test fake);
@@ -57,8 +65,15 @@ Domain code under `src/openapi-import` does **not** import `vscode`.
 ## Provider extension model
 
 `SpecificationImportProvider` + `SpecificationImportProviderRegistry` allow
-future Swagger / Postman / Insomnia providers. Only
-`OpenApiImportProvider` (`id: 'openapi'`) is registered today.
+future Swagger providers. Today:
+
+- `OpenApiImportProvider` (`id: 'openapi'`) — OpenAPI 3.0/3.1
+- `PostmanImportProvider` (`id: 'postman'`) — Collection v2/v2.1 (local file)
+- `InsomniaImportProvider` (`id: 'insomnia'`) — export v3/v4 resource JSON (local file)
+
+VS Code registration and wizard hosts share `import-register-shared.ts` and
+`import-wizard-host.ts` (workspace allowlist, preview/write/progress). Format
+copy and OpenAPI URL source remain format-specific.
 
 ## Success policy
 
@@ -183,7 +198,8 @@ plaintext settings. The summary lists SecretStorage hints for the user.
 
 ## Limitations (intentionally deferred)
 
-- Swagger 2.0, export, Postman / Insomnia / GraphQL import
+- Swagger 2.0, export, GraphQL-as-a-format import
+- Insomnia Document / YAML v5, HAR, and non–resource-based Insomnia shapes
 - Authenticated OpenAPI URL fetch (401/403 or URLs with embedded credentials)
 - Response schema / assertion generation
 - OAuth2 / OpenID login flows (schemes appear as `none` profiles; details stay in import notes/summary)
@@ -206,3 +222,6 @@ URL fetch tests live in `src/openapi-import/fetch-spec-url.test.ts` (FakeTranspo
 + optional local `NodeHttpTransport` smoke) and cover protocol/credential
 rejection, HTTP errors, Content-Type fileName hints, and pipeline equivalence
 with direct `runImportPipeline({ sourceText })`.
+
+Postman tests: `src/openapi-import/postman/postman-provider.test.ts`.  
+Insomnia tests: `src/openapi-import/insomnia/insomnia-provider.test.ts`.

@@ -65,6 +65,7 @@ export function placeholderForSensitiveName(name: string): string {
 /**
  * Cheap scrub of body examples: blank sensitive object keys and clear
  * Bearer/Basic credential blobs. Does not attempt deep secret detection.
+ * Skips `__proto__` / `prototype` / `constructor` keys (prototype pollution).
  */
 export function scrubSensitiveExampleValue(value: unknown): unknown {
   if (typeof value === 'string') {
@@ -77,8 +78,15 @@ export function scrubSensitiveExampleValue(value: unknown): unknown {
     return value.map((item) => scrubSensitiveExampleValue(item));
   }
   if (typeof value === 'object' && value !== null) {
-    const result: Record<string, unknown> = {};
+    const result: Record<string, unknown> = Object.create(null);
     for (const [key, entry] of Object.entries(value)) {
+      if (
+        key === '__proto__' ||
+        key === 'prototype' ||
+        key === 'constructor'
+      ) {
+        continue;
+      }
       if (isSensitiveName(key)) {
         result[key] = typeof entry === 'string' ? '' : null;
       } else {

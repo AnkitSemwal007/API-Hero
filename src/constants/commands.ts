@@ -3,6 +3,7 @@ export const COMMAND_IDS = {
   runRequest: 'apiHero.runRequest',
   runRequestWithAssertions: 'apiHero.runRequestWithAssertions',
   copyAsCurl: 'apiHero.copyAsCurl',
+  importCurl: 'apiHero.importCurl',
   runFile: 'apiHero.runFile',
   login: 'apiHero.login',
   logout: 'apiHero.logout',
@@ -38,6 +39,8 @@ export const COMMAND_IDS = {
   revealHistoryRequest: 'apiHero.revealHistoryRequest',
   copyHistorySummary: 'apiHero.copyHistorySummary',
   importOpenApi: 'apiHero.importOpenApi',
+  importPostman: 'apiHero.importPostman',
+  importInsomnia: 'apiHero.importInsomnia',
   createCollection: 'apiHero.createCollection',
   renameCollection: 'apiHero.renameCollection',
   deleteCollection: 'apiHero.deleteCollection',
@@ -74,6 +77,9 @@ export const COMMAND_IDS = {
   useResponseAsAuthentication: 'apiHero.useResponseAsAuthentication',
   runAuthenticationLogin: 'apiHero.runAuthenticationLogin',
   setCollectionDefaultAuthentication: 'apiHero.setCollectionDefaultAuthentication',
+  compareWithPreviousRun: 'apiHero.compareWithPreviousRun',
+  compareCollectionRuns: 'apiHero.compareCollectionRuns',
+  generateTypeScript: 'apiHero.generateTypeScript',
 } as const;
 
 /** A command identifier contributed by API Hero. */
@@ -87,6 +93,7 @@ export const LEGACY_COMMAND_IDS = {
   runRequest: 'apiRunner.runRequest',
   runRequestWithAssertions: 'apiRunner.runRequestWithAssertions',
   copyAsCurl: 'apiRunner.copyAsCurl',
+  importCurl: 'apiRunner.importCurl',
   runFile: 'apiRunner.runFile',
   login: 'apiRunner.login',
   logout: 'apiRunner.logout',
@@ -122,6 +129,8 @@ export const LEGACY_COMMAND_IDS = {
   revealHistoryRequest: 'apiRunner.revealHistoryRequest',
   copyHistorySummary: 'apiRunner.copyHistorySummary',
   importOpenApi: 'apiRunner.importOpenApi',
+  importPostman: 'apiRunner.importPostman',
+  importInsomnia: 'apiRunner.importInsomnia',
   createCollection: 'apiRunner.createCollection',
   renameCollection: 'apiRunner.renameCollection',
   deleteCollection: 'apiRunner.deleteCollection',
@@ -153,6 +162,9 @@ export const LEGACY_COMMAND_IDS = {
   useResponseAsAuthentication: 'apiRunner.useResponseAsAuthentication',
   runAuthenticationLogin: 'apiRunner.runAuthenticationLogin',
   setCollectionDefaultAuthentication: 'apiRunner.setCollectionDefaultAuthentication',
+  compareWithPreviousRun: 'apiRunner.compareWithPreviousRun',
+  compareCollectionRuns: 'apiRunner.compareCollectionRuns',
+  generateTypeScript: 'apiRunner.generateTypeScript',
 } as const;
 
 /** A legacy `apiRunner.*` command alias. */

@@ -304,9 +304,7 @@ export class RuntimeParserAdapter {
             // Lucide icon names are webview-only (see `sourceLabel` detail).
             label: item.name,
             kind: 'variable' as const,
-            detail: item.sensitive
-              ? `${item.sourceLabel} · sensitive`
-              : item.sourceLabel,
+            detail: item.description ?? item.sourceLabel,
             documentation: hover?.documentation,
             insertText,
             range: {

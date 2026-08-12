@@ -209,6 +209,9 @@ The **Collection Run Report** opens after a collection (or folder / selection) r
 - Expand a request’s **Details** for Response, Headers, Cookies, Assertions,
   Variables, Execution Details, Dependencies, and Timeline — same Collection Run
   Debugger data as before (last run in memory only)
+- Failure / status guidance shows recorded facts plus labeled **Possible causes**
+  for common HTTP statuses (401/403/404/422/429/5xx) and timeout/network
+  transport errors (never speculation stated as fact; secrets stay masked)
 
 **Variables**
 

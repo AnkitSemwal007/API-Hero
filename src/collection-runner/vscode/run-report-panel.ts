@@ -11,6 +11,7 @@ import {
 } from 'vscode';
 import { createWebviewNonce } from '../../ui/webview';
 import { COMMAND_IDS } from '../../constants';
+import type { ResponsePresentation } from '../../response/presentation';
 import type { RunIdentifier, RunSummary } from '../index';
 import type { CollectionRunSessionSnapshot } from '../run-session-models';
 import {
@@ -25,6 +26,18 @@ const PANEL_VIEW_TYPE = 'apiHero.collectionRunReport';
 export interface CollectionRunReportPanelActions {
   readonly openRequest: (requestId: string) => Promise<void>;
   readonly revealRequest: (requestId: string) => Promise<void>;
+  /**
+   * Compare the current request presentation with a prior collection-run
+   * presentation (Run A vs Run B). Optional — omit when unavailable.
+   */
+  readonly compareRuns?: (
+    requestId: string,
+    current: ResponsePresentation,
+  ) => Promise<void>;
+}
+
+export interface CollectionRunReportShowOptions {
+  readonly environmentName?: string;
 }
 
 export class CollectionRunReportPanel implements Disposable {
@@ -32,6 +45,7 @@ export class CollectionRunReportPanel implements Disposable {
   private summary: RunSummary | undefined;
   private liveRunId: RunIdentifier | undefined;
   private lastLiveSnapshot: CollectionRunSessionSnapshot | undefined;
+  private environmentName: string | undefined;
 
   public constructor(
     private readonly actions: CollectionRunReportPanelActions = {
@@ -40,22 +54,32 @@ export class CollectionRunReportPanel implements Disposable {
     },
   ) {}
 
-  public show(summary: RunSummary): void {
+  public show(
+    summary: RunSummary,
+    options?: CollectionRunReportShowOptions,
+  ): void {
     this.summary = summary;
     this.liveRunId = undefined;
     this.lastLiveSnapshot = undefined;
+    this.environmentName = options?.environmentName?.trim() || undefined;
     this.ensurePanel(`Run Report: ${summary.plan.collectionName}`);
     void this.postInit();
   }
 
-  public showLive(snapshot: CollectionRunSessionSnapshot): void {
+  public showLive(
+    snapshot: CollectionRunSessionSnapshot,
+    options?: CollectionRunReportShowOptions,
+  ): void {
     if (snapshot.summary !== undefined) {
-      this.show(snapshot.summary);
+      this.show(snapshot.summary, options);
       return;
     }
     this.summary = undefined;
     this.liveRunId = snapshot.runId;
     this.lastLiveSnapshot = snapshot;
+    if (options?.environmentName !== undefined) {
+      this.environmentName = options.environmentName.trim() || undefined;
+    }
     const title =
       snapshot.status === 'running'
         ? `Live Report: ${snapshot.collectionName}`
@@ -69,7 +93,11 @@ export class CollectionRunReportPanel implements Disposable {
       return;
     }
     if (session.summary !== undefined) {
-      this.show(session.summary);
+      this.show(session.summary, {
+        ...(this.environmentName === undefined
+          ? {}
+          : { environmentName: this.environmentName }),
+      });
       return;
     }
     this.lastLiveSnapshot = session;
@@ -92,11 +120,19 @@ export class CollectionRunReportPanel implements Disposable {
 
   public showLast(): void {
     if (this.summary !== undefined) {
-      this.show(this.summary);
+      this.show(this.summary, {
+        ...(this.environmentName === undefined
+          ? {}
+          : { environmentName: this.environmentName }),
+      });
       return;
     }
     if (this.lastLiveSnapshot !== undefined) {
-      this.showLive(this.lastLiveSnapshot);
+      this.showLive(this.lastLiveSnapshot, {
+        ...(this.environmentName === undefined
+          ? {}
+          : { environmentName: this.environmentName }),
+      });
       return;
     }
     void window.showInformationMessage('No collection run report is available yet.');
@@ -108,6 +144,13 @@ export class CollectionRunReportPanel implements Disposable {
     this.summary = undefined;
     this.liveRunId = undefined;
     this.lastLiveSnapshot = undefined;
+    this.environmentName = undefined;
+  }
+
+  private reportOptions(): { readonly environmentName?: string } | undefined {
+    return this.environmentName === undefined
+      ? undefined
+      : { environmentName: this.environmentName };
   }
 
   private ensurePanel(title: string): void {
@@ -144,18 +187,55 @@ export class CollectionRunReportPanel implements Disposable {
     try {
       if (message.type === 'open') { await this.actions.openRequest(message.requestId); return; }
       if (message.type === 'reveal') { await this.actions.revealRequest(message.requestId); return; }
+      if (message.type === 'compareRuns') {
+        await this.compareRuns(message.requestId);
+        return;
+      }
       if (message.type === 'runAgain') await this.runAgain();
     } catch (cause) {
       const text = cause instanceof Error ? cause.message : String(cause);
       const fallback =
         message.type === 'runAgain'
           ? 'Unable to run that collection again.'
-          : 'Unable to open that request.';
+          : message.type === 'compareRuns'
+            ? 'Unable to compare runs for that request.'
+            : 'Unable to open that request.';
       await this.panel.webview.postMessage({
         type: 'error',
         message: text || fallback,
       });
     }
+  }
+
+  private async compareRuns(requestId: string): Promise<void> {
+    const current = this.findPresentation(requestId);
+    if (current === undefined) {
+      await window.showInformationMessage(
+        'No response presentation is available for that request in this run.',
+      );
+      return;
+    }
+    if (this.actions.compareRuns === undefined) {
+      await window.showInformationMessage(
+        'Compare Runs is not available in this host.',
+      );
+      return;
+    }
+    await this.actions.compareRuns(requestId, current);
+  }
+
+  private findPresentation(
+    requestId: string,
+  ): ResponsePresentation | undefined {
+    const fromSummary = this.summary?.results.find(
+      (result) => result.requestId === requestId,
+    )?.presentation;
+    if (fromSummary !== undefined) {
+      return fromSummary;
+    }
+    return this.lastLiveSnapshot?.results.find(
+      (result) => result.requestId === requestId,
+    )?.presentation;
   }
 
   /**
@@ -186,7 +266,10 @@ export class CollectionRunReportPanel implements Disposable {
 
   private async postInit(): Promise<void> {
     if (this.panel === undefined || this.summary === undefined) return;
-    await this.panel.webview.postMessage({ type: 'init', model: buildCollectionRunReportModel(this.summary) });
+    await this.panel.webview.postMessage({
+      type: 'init',
+      model: buildCollectionRunReportModel(this.summary, this.reportOptions()),
+    });
   }
 
   private async postInitFromLive(snapshot: CollectionRunSessionSnapshot): Promise<void> {
@@ -196,7 +279,10 @@ export class CollectionRunReportPanel implements Disposable {
       await this.postInit();
       return;
     }
-    await this.panel.webview.postMessage({ type: 'init', model: buildLiveCollectionRunReportModel(snapshot) });
+    await this.panel.webview.postMessage({
+      type: 'init',
+      model: buildLiveCollectionRunReportModel(snapshot, this.reportOptions()),
+    });
   }
 
   private async postUpdate(snapshot: CollectionRunSessionSnapshot): Promise<void> {
@@ -206,7 +292,10 @@ export class CollectionRunReportPanel implements Disposable {
       await this.postInit();
       return;
     }
-    await this.panel.webview.postMessage({ type: 'live', model: buildLiveCollectionRunReportModel(snapshot) });
+    await this.panel.webview.postMessage({
+      type: 'live',
+      model: buildLiveCollectionRunReportModel(snapshot, this.reportOptions()),
+    });
   }
 }
 

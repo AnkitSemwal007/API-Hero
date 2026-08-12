@@ -79,6 +79,18 @@ export interface RegisterCollectionRunnerOptions {
     variables: readonly VariableDefinition[],
   ) => void;
   readonly getStaticVariableNames: () => ReadonlySet<string>;
+  /** Optional response viewer for Compare / Generate TypeScript. */
+  readonly responseViewer?: {
+    compareWithPrevious(): unknown;
+    canCompareWithPrevious(): boolean;
+    canGenerateTypeScript(): boolean;
+    generateTypeScript(rootName?: string): Promise<string | undefined>;
+    showDiff(
+      left: import('../../response/presentation').ResponsePresentation,
+      right: import('../../response/presentation').ResponsePresentation,
+      labels?: { readonly leftLabel?: string; readonly rightLabel?: string },
+    ): unknown;
+  };
 }
 
 export function registerCollectionRunner(
@@ -98,6 +110,7 @@ export function registerCollectionRunner(
     collectionVariableStore,
     setActiveCollectionVariables,
     getStaticVariableNames,
+    responseViewer,
   } = options;
 
   const statusBar = new CollectionRunStatusBar(manager, setRequestStatusSuppressed);
@@ -191,7 +204,14 @@ export function registerCollectionRunner(
       }
       throw error;
     }
-    reportPanel.showLive(session.snapshot);
+    reportPanel.showLive(session.snapshot, {
+      ...((): { environmentName?: string } => {
+        const environmentName = getHistoryCaptureContext().environmentName;
+        return environmentName === undefined
+          ? {}
+          : { environmentName };
+      })(),
+    });
 
     const progressUi = new VsCodeCollectionRunProgress();
     const scoped = new RunScopedCollectionRunProgress(enrichedPlan.runId, progressUi);
@@ -235,7 +255,11 @@ export function registerCollectionRunner(
         session.abortController,
       );
       manager.complete(summary);
-      await presentSummary(summary, reportPanel);
+      await presentSummary(
+        summary,
+        reportPanel,
+        getHistoryCaptureContext().environmentName,
+      );
       const reorderedCount = countReorderedRequests(enrichedPlan.extensions?.dependencies);
       if (reorderedCount > 0) {
         void window.showInformationMessage(`Reordered ${reorderedCount} requests for dependencies`);
@@ -306,6 +330,37 @@ export function registerCollectionRunner(
         'API Hero: Run Selected Requests',
       );
     }),
+    registerCommandWithLegacyAlias(COMMAND_IDS.compareWithPreviousRun, async () => {
+      if (responseViewer === undefined) {
+        await window.showInformationMessage('Response viewer is not available.');
+        return;
+      }
+      if (!responseViewer.canCompareWithPrevious()) {
+        await window.showInformationMessage(
+          'No previous in-session response for this request. Run the request again, then Compare with Previous Run.',
+        );
+        return;
+      }
+      responseViewer.compareWithPrevious();
+    }),
+    registerCommandWithLegacyAlias(COMMAND_IDS.compareCollectionRuns, async () => {
+      await window.showInformationMessage(
+        'Open a Collection Run Report, expand a request’s Details, then choose Compare Runs.',
+      );
+    }),
+    registerCommandWithLegacyAlias(COMMAND_IDS.generateTypeScript, async () => {
+      if (responseViewer === undefined) {
+        await window.showInformationMessage('Response viewer is not available.');
+        return;
+      }
+      if (!responseViewer.canGenerateTypeScript()) {
+        await window.showInformationMessage(
+          'Generate TypeScript is available after a successful JSON response. Run a request that returns JSON, then try again.',
+        );
+        return;
+      }
+      await responseViewer.generateTypeScript();
+    }),
   ];
 
   context.subscriptions.push(...disposables);
@@ -322,8 +377,16 @@ function countReorderedRequests(dependencies: DependenciesExtension | undefined)
   return count;
 }
 
-async function presentSummary(summary: RunSummary, reportPanel: CollectionRunReportPanel): Promise<void> {
-  reportPanel.show(summary);
+async function presentSummary(
+  summary: RunSummary,
+  reportPanel: CollectionRunReportPanel,
+  environmentName?: string,
+): Promise<void> {
+  reportPanel.show(summary, {
+    ...(environmentName === undefined || environmentName.trim().length === 0
+      ? {}
+      : { environmentName: environmentName.trim() }),
+  });
   const message = formatRunSummaryMessage(summary);
   if (summary.statistics.failed > 0 || summary.statistics.assertionsFailed > 0 || summary.status === 'stopped') {
     await window.showWarningMessage(message);

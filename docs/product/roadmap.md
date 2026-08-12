@@ -1,6 +1,19 @@
 # Roadmap
 
-Honest near-term plan for **API Hero** after **2.8.4** (Collection Execution Controls, OpenAPI environment safety + sensitive server vars, header masking alignment, Collection Run Report / Variable Trace UX, Scenario menu cleanup; **2.8.3** Copy as cURL + MCP `apihero_run_scenario`; **2.8.2** OpenAPI URL import; **2.8.1** complete README + Marketplace documentation; **2.8.0** universal MCP `--workspace` + client-owned MCP docs; **2.7.0** MCP server for AI agents; **2.6.0** Scenarios progressive disclosure, project-store scenario paths, Reset Workspace, Run Report failure diagnostics; Authentication Premium UX + Scenario Experience shipped in **2.5.0**; Scenarios Phase 1 foundation in **2.4.0**). Product features through **2.3.x** already ship — Execution Center, Collection Runner / Run Report polish, dependency workflow, Collection Run Debugger, Managers (Environments, Auth), Overview, History Detail, OpenAPI wizard, Response copy/save/search, response variable extraction, and collection chaining (`@depends-on`, per-run store, collection variables). Those are not roadmap gaps.
+Honest near-term plan for **API Hero** after **2.9.0** (Postman Import, Insomnia Import, cURL→`.api`, Variable Autocomplete polish, Failure Diagnostics Possible causes, Request/Response Diff, TypeScript generation, VSIX esbuild bundling; **2.8.4** Collection Execution Controls, OpenAPI environment safety + sensitive server vars, header masking alignment, Collection Run Report / Variable Trace UX, Scenario menu cleanup; **2.8.3** Copy as cURL + MCP `apihero_run_scenario`; **2.8.2** OpenAPI URL import; **2.8.1** complete README + Marketplace documentation; **2.8.0** universal MCP `--workspace` + client-owned MCP docs; **2.7.0** MCP server for AI agents; **2.6.0** Scenarios progressive disclosure, project-store scenario paths, Reset Workspace, Run Report failure diagnostics; Authentication Premium UX + Scenario Experience shipped in **2.5.0**; Scenarios Phase 1 foundation in **2.4.0**). Product features through **2.3.x** already ship — Execution Center, Collection Runner / Run Report polish, dependency workflow, Collection Run Debugger, Managers (Environments, Auth), Overview, History Detail, OpenAPI wizard, Response copy/save/search, response variable extraction, and collection chaining (`@depends-on`, per-run store, collection variables). Those are not roadmap gaps.
+
+## Shipped in 2.9.0
+
+| Item | Notes |
+| --- | --- |
+| Postman Collection import | v2/v2.1 → Collections + `.api` via `SpecificationImportProvider`; preview + diagnostics; scripts never executed |
+| Insomnia export import | Resource-based export v3/v4 → Collections + `.api` via shared wizard host + `InsomniaImportProvider` |
+| cURL → `.api` | `apiHero.importCurl`: in-process curl parse → single `.api` file; completes Copy as cURL round trip |
+| Variable Autocomplete polish | Scope / Environment labels; secret-safe detail; catalog refresh on collection/env changes |
+| Failure Diagnostics Possible causes | Deterministic status/transport explanations on Request Editor, Run Report Details, MCP diagnostics |
+| Request/Response Diff | Compare Previous vs Current (in-session) + Compare Runs from Collection Run Manager |
+| TypeScript Type Generation | Successful JSON Response → Generate TypeScript; Copy / Create `.ts` |
+| VSIX esbuild bundling | Minified CJS entry bundles; runtime deps inlined; ~659 KB / 21 files |
 
 ## Shipped in 2.8.4
 
@@ -86,11 +99,11 @@ Honest near-term plan for **API Hero** after **2.8.4** (Collection Execution Con
 | OAuth2 / OIDC | New auth provider + secure token handling; not in 2.0.1 |
 | Cookie jar | Explicit product + security design required |
 | Code Actions | Optional language assist (not shipped) |
-| Import Hub extras | Swagger 2 / Postman / Insomnia only if provider model stays thin |
+| Import Hub extras | Swagger 2 only if provider model stays thin (Postman + Insomnia + cURL import shipped in **2.9.0**) |
 
 ## Explicitly not claiming
 
-Do not schedule "build Env Manager / Auth Manager / Overview / Extraction / collection chaining / Execution Center / Scenarios Phase 1 / Authentication Premium UX / Scenario Experience" — those exist. Prefer polish, docs, and assets before large new auth protocols.
+Do not schedule "build Env Manager / Auth Manager / Overview / Extraction / collection chaining / Execution Center / Scenarios Phase 1 / Authentication Premium UX / Scenario Experience / Postman Import / Insomnia Import / cURL→.api" — those exist. Prefer polish, docs, and assets before large new auth protocols.
 
 ## Related
 

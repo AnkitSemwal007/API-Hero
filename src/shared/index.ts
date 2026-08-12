@@ -23,3 +23,10 @@ export {
   SENSITIVE_HTTP_HEADER_NAMES,
   isSensitiveHttpHeaderName,
 } from './sensitive-headers';
+export {
+  SECRET_SCRUB_MASK,
+  isSensitiveSecretKey,
+  scrubBodyTextForDisplay,
+  scrubJsonSecrets,
+  scrubSecretTokensInText,
+} from './secret-scrub';

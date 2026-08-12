@@ -80,6 +80,8 @@ export { collectionsImportOutputDirectory } from './output-paths';
 
 export {
   OpenApiImportProvider,
+  PostmanImportProvider,
+  InsomniaImportProvider,
   SpecificationImportProviderRegistry,
   createDefaultImportProviderRegistry,
 } from './providers';
@@ -88,6 +90,27 @@ export type {
   SpecificationImportContext,
   SpecificationImportProvider,
 } from './providers';
+
+export {
+  isPostmanCollectionRoot,
+  parsePostmanCollection,
+  mapPostmanCollection,
+  mapPostmanRequest,
+  mapPostmanAuth,
+  mapPostmanVariables,
+  POSTMAN_IMPORT_LIMITS,
+} from './postman';
+
+export {
+  isInsomniaExportRoot,
+  parseInsomniaExport,
+  mapInsomniaCollection,
+  mapInsomniaRequest,
+  mapInsomniaAuth,
+  mapInsomniaEnvironmentData,
+  INSOMNIA_IMPORT_LIMITS,
+  INSOMNIA_SUPPORTED_EXPORT_FORMATS,
+} from './insomnia';
 
 export {
   generateAuthProfiles,

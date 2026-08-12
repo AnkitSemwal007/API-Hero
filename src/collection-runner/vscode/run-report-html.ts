@@ -100,7 +100,8 @@ export interface CollectionRunReportRequestDetails {
 
 /**
  * Failure facts for the Details panel. Every field is recorded data — no
- * synthesized stage history and no invented timings.
+ * synthesized stage history and no invented timings. Speculative guidance
+ * lives only under {@link possibleCauses}.
  */
 export interface CollectionRunReportFailure {
   /** Category label, e.g. `Validation Failed`. */
@@ -111,6 +112,8 @@ export interface CollectionRunReportFailure {
   readonly httpRequestSent: boolean;
   /** Factual checklist lines derived only from recorded data. */
   readonly facts: readonly string[];
+  /** Speculative guidance — always render under "Possible causes". */
+  readonly possibleCauses?: readonly string[];
 }
 
 /** Plan-derived request identity shown when no presentation exists. */
@@ -203,7 +206,8 @@ export type CollectionRunReportInboundMessage =
   | { readonly type: 'ready' }
   | { readonly type: 'open'; readonly requestId: string }
   | { readonly type: 'reveal'; readonly requestId: string }
-  | { readonly type: 'runAgain' };
+  | { readonly type: 'runAgain' }
+  | { readonly type: 'compareRuns'; readonly requestId: string };
 
 /**
  * Host → webview messages.
@@ -226,7 +230,7 @@ export const FailurePolicySettingValue = {
 export type FailurePolicySettingValue =
   (typeof FailurePolicySettingValue)[keyof typeof FailurePolicySettingValue];
 
-const INBOUND_TYPES = new Set(['ready', 'open', 'reveal', 'runAgain']);
+const INBOUND_TYPES = new Set(['ready', 'open', 'reveal', 'runAgain', 'compareRuns']);
 
 const POLICY_LABELS: Readonly<Record<FailurePolicyKindType, string>> =
   Object.freeze(
@@ -238,6 +242,7 @@ const POLICY_LABELS: Readonly<Record<FailurePolicyKindType, string>> =
 /** Builds the report model from a finished run summary. */
 export function buildCollectionRunReportModel(
   summary: RunSummary,
+  options?: { readonly environmentName?: string },
 ): CollectionRunReportModel {
   const plannedByOrdinal = new Map(
     summary.plan.requests.map((request) => [request.ordinal, request]),
@@ -248,6 +253,7 @@ export function buildCollectionRunReportModel(
   const dependencies = summary.plan.extensions?.dependencies;
   const edges = dependencies?.edges ?? [];
   const stats = summary.statistics;
+  const environmentName = options?.environmentName?.trim();
   const rows: CollectionRunReportRow[] = summary.results.map((result) => {
     const planned =
       plannedByOrdinal.get(result.ordinal) ??
@@ -260,7 +266,13 @@ export function buildCollectionRunReportModel(
       result.assertionsFailed,
       result.assertionsTotal,
     );
-    const details = buildRequestDetails(result, planned, edges, labelByRequestId);
+    const details = buildRequestDetails(
+      result,
+      planned,
+      edges,
+      labelByRequestId,
+      environmentName,
+    );
     return {
       requestId: result.requestId,
       ordinal: result.ordinal,
@@ -345,6 +357,9 @@ export function buildCollectionRunReportModel(
       }),
     ),
     variableTrace: buildVariableTrace(summary.results, edges, labelByRequestId),
+    ...(environmentName !== undefined && environmentName.length > 0
+      ? { environmentName }
+      : {}),
   };
 }
 
@@ -354,10 +369,11 @@ export function buildCollectionRunReportModel(
  */
 export function buildLiveCollectionRunReportModel(
   session: CollectionRunSessionSnapshot,
+  options?: { readonly environmentName?: string },
 ): CollectionRunReportModel {
   if (session.summary !== undefined) {
     return {
-      ...buildCollectionRunReportModel(session.summary),
+      ...buildCollectionRunReportModel(session.summary, options),
       live: false,
     };
   }
@@ -372,10 +388,17 @@ export function buildLiveCollectionRunReportModel(
     session.results.map((result) => [result.ordinal, result]),
   );
   const currentOrdinal = session.current?.ordinal;
+  const environmentName = options?.environmentName?.trim();
   const rows: CollectionRunReportRow[] = plan.requests.map((planned) => {
     const finished = resultsByOrdinal.get(planned.ordinal);
     if (finished !== undefined) {
-      return mapResultRow(finished, planned, edges, labelByRequestId);
+      return mapResultRow(
+        finished,
+        planned,
+        edges,
+        labelByRequestId,
+        environmentName,
+      );
     }
     if (
       session.status === 'running' &&
@@ -451,6 +474,9 @@ export function buildLiveCollectionRunReportModel(
     ),
     variableTrace: buildVariableTrace(session.results, edges, labelByRequestId),
     live,
+    ...(environmentName !== undefined && environmentName.length > 0
+      ? { environmentName }
+      : {}),
   };
 }
 
@@ -480,6 +506,7 @@ function mapResultRow(
   planned: PlannedRequest | undefined,
   edges: readonly DependencyEdge[],
   labelByRequestId: ReadonlyMap<string, string>,
+  environmentName?: string,
 ): CollectionRunReportRow {
   const statusBadge = resolveOutcomeBadge(result.outcome);
   const assertionsLabel = formatAssertions(
@@ -487,7 +514,13 @@ function mapResultRow(
     result.assertionsFailed,
     result.assertionsTotal,
   );
-  const details = buildRequestDetails(result, planned, edges, labelByRequestId);
+  const details = buildRequestDetails(
+    result,
+    planned,
+    edges,
+    labelByRequestId,
+    environmentName,
+  );
   return {
     requestId: result.requestId,
     ordinal: result.ordinal,
@@ -610,6 +643,7 @@ function buildRequestDetails(
   planned: PlannedRequest | undefined,
   edges: readonly DependencyEdge[],
   labelByRequestId: ReadonlyMap<string, string>,
+  environmentName?: string,
 ): CollectionRunReportRequestDetails | undefined {
   const presentation = result.presentation;
   const resolvedVariables = result.resolvedVariables;
@@ -624,7 +658,7 @@ function buildRequestDetails(
   const hasResolved =
     resolvedVariables !== undefined && resolvedVariables.length > 0;
   const hasDeps = dependencyLabels.length > 0;
-  const failure = buildFailureDetails(result);
+  const failure = buildFailureDetails(result, environmentName);
   if (!hasPresentation && !hasResolved && !hasDeps && failure === undefined) {
     return undefined;
   }
@@ -659,9 +693,11 @@ function buildRequestDetails(
 /** Projects recorded failure diagnostics — never derives new conclusions. */
 function buildFailureDetails(
   result: RequestRunResult,
+  environmentName?: string,
 ): CollectionRunReportFailure | undefined {
   const diagnostics = result.failureDiagnostics;
-  if (diagnostics === undefined) {
+  const presentationExplanation = result.presentation?.explanation;
+  if (diagnostics === undefined && presentationExplanation === undefined) {
     return undefined;
   }
   const facts: string[] = [];
@@ -671,19 +707,56 @@ function buildFailureDetails(
   ) {
     facts.push('Variables resolved');
   }
-  facts.push(
-    diagnostics.httpRequestSent ? 'HTTP request sent' : 'HTTP request not sent',
-  );
+  if (diagnostics !== undefined) {
+    facts.push(
+      diagnostics.httpRequestSent
+        ? 'HTTP request sent'
+        : 'HTTP request not sent',
+    );
+  } else {
+    facts.push('HTTP request sent');
+  }
+  const explanation = diagnostics?.explanation ?? presentationExplanation;
+  if (explanation !== undefined) {
+    for (const fact of explanation.facts) {
+      if (!facts.includes(fact)) {
+        facts.push(fact);
+      }
+    }
+    if (
+      environmentName !== undefined &&
+      environmentName.trim().length > 0 &&
+      !facts.some((fact) => fact.startsWith('Environment:'))
+    ) {
+      facts.push(`Environment: ${environmentName.trim()}`);
+    }
+  }
   const stageLabel =
-    diagnostics.failedAtStage === undefined
+    diagnostics?.failedAtStage === undefined
       ? undefined
       : describeFailureStage(diagnostics.failedAtStage);
+  const possibleCauses = explanation?.possibleCauses;
+  if (diagnostics !== undefined) {
+    return {
+      statusLabel: describeFailureCategory(diagnostics.category),
+      reason: diagnostics.reason,
+      httpRequestSent: diagnostics.httpRequestSent,
+      ...(stageLabel === undefined ? {} : { stageLabel }),
+      facts,
+      ...(possibleCauses === undefined || possibleCauses.length === 0
+        ? {}
+        : { possibleCauses }),
+    };
+  }
+  // Passed transport with 4xx/5xx — status guidance only (no failure category).
   return {
-    statusLabel: describeFailureCategory(diagnostics.category),
-    reason: diagnostics.reason,
-    httpRequestSent: diagnostics.httpRequestSent,
-    ...(stageLabel === undefined ? {} : { stageLabel }),
+    statusLabel: explanation!.title,
+    reason: explanation!.title,
+    httpRequestSent: true,
     facts,
+    ...(possibleCauses === undefined || possibleCauses.length === 0
+      ? {}
+      : { possibleCauses }),
   };
 }
 
@@ -807,7 +880,7 @@ export function parseCollectionRunReportMessage(
     }
     return { type: record.type };
   }
-  if (record.type === 'open' || record.type === 'reveal') {
+  if (record.type === 'open' || record.type === 'reveal' || record.type === 'compareRuns') {
     const keys = Object.keys(record);
     if (
       keys.length !== 2 ||
@@ -1395,6 +1468,12 @@ main { display: flex; flex-direction: column; min-height: 100vh; }
 }
 .failure-facts { margin: 8px 0 0; padding: 0 0 0 1.1em; }
 .failure-facts li { padding: 1px 0; color: var(--vscode-descriptionForeground); }
+.failure-causes-title {
+  margin: 10px 0 4px; font-size: 0.9em; font-weight: 600;
+  color: var(--vscode-descriptionForeground);
+}
+.failure-causes { margin: 0; padding: 0 0 0 1.1em; }
+.failure-causes li { padding: 1px 0; }
 .message.skip-reason { color: var(--vscode-editorWarning-foreground); }
 .attempts {
   margin-top: var(--ah-space-1);
@@ -1911,6 +1990,15 @@ const REPORT_SCRIPT = `
         }).join('') +
         '</ul>';
     }
+    const causes = failure.possibleCauses || [];
+    if (causes.length > 0) {
+      html += '<h4 class="failure-causes-title">Possible causes</h4>' +
+        '<ul class="failure-causes">' +
+        causes.map(function (cause) {
+          return '<li>' + escapeHtml(cause) + '</li>';
+        }).join('') +
+        '</ul>';
+    }
     return html;
   }
 
@@ -2074,11 +2162,17 @@ const REPORT_SCRIPT = `
   }
 
   function renderDetailActions(row) {
+    const canCompare = !!(row.details && row.details.presentation);
     return '<div class="detail-actions">' +
       '<button type="button" class="primary open-btn"' +
         (row.canOpen ? '' : ' disabled') + ' aria-label="Open request">Open</button>' +
       '<button type="button" class="reveal-btn"' +
         (row.canOpen ? '' : ' disabled') + ' aria-label="Reveal in Collections">Reveal</button>' +
+      (canCompare
+        ? '<button type="button" class="compare-runs-btn" data-compare-runs="' +
+          escapeAttribute(row.requestId) +
+          '" aria-label="Compare Runs">Compare Runs</button>'
+        : '') +
       '</div>';
   }
 
@@ -2483,6 +2577,7 @@ const REPORT_SCRIPT = `
       if (!requestId) return;
       const openBtn = slot.querySelector('.open-btn');
       const revealBtn = slot.querySelector('.reveal-btn');
+      const compareBtn = slot.querySelector('.compare-runs-btn');
       if (openBtn) {
         openBtn.addEventListener('click', function (event) {
           event.stopPropagation();
@@ -2493,6 +2588,12 @@ const REPORT_SCRIPT = `
         revealBtn.addEventListener('click', function (event) {
           event.stopPropagation();
           vscode.postMessage({ type: 'reveal', requestId: requestId });
+        });
+      }
+      if (compareBtn) {
+        compareBtn.addEventListener('click', function (event) {
+          event.stopPropagation();
+          vscode.postMessage({ type: 'compareRuns', requestId: requestId });
         });
       }
     });

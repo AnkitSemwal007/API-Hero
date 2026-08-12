@@ -84,11 +84,16 @@ Expandable per-request Details (Response / Headers / Cookies / Extracted /
 Assertions / Execution Details / Dependencies / Timeline) and report-level
 Variable Trace are derived from that presentation plus plan dependency edges.
 Non-passing rows additionally project `RequestRunResult.failureDiagnostics`
-(category, secret-free reason, `httpRequestSent`, single recorded stage) —
+(category, secret-free reason, `httpRequestSent`, single recorded stage, and
+optional additive `explanation` with factual lines + `possibleCauses`) —
 derived once in `mapOrchestratorResult` from the orchestrator's precondition
 `message` / `preconditionStage`, the presented transport failure, the first
-presented assertion failure, or the blocking extract outcome. The panel shows
-Execution Status / Failure Reason / Execution Stage and an
+presented assertion failure, or the blocking extract outcome. Successful
+transport with 4xx/5xx keeps `outcome: passed` (no diagnostics) but still
+attaches status guidance on `ResponsePresentation.explanation`, which the
+report Details panel projects. The panel shows
+Execution Status / Failure Reason / Execution Stage, **Possible causes** when
+present, and an
 `HTTP Request — Not Sent` section instead of a misleading empty response; it
 never fabricates a timestamped stage timeline.
 There is **no** run persistence, retention, or history DB for debugger state —

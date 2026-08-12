@@ -1,54 +1,22 @@
 /**
  * VS Code WebviewPanel host for the OpenAPI Import multi-step wizard.
- * Wraps the existing import pipeline — no duplicate parsers/writers.
+ * Uses the shared import wizard host; keeps OpenAPI-specific HTML (URL source).
  */
 
-import { readdir } from 'node:fs/promises';
-import { join } from 'node:path';
-
-import {
-  commands,
-  ViewColumn,
-  window,
-  workspace,
-  type Disposable,
-} from 'vscode';
-
 import type { CollectionDiscoveryService } from '../../collections';
-import {
-  COMMAND_IDS,
-  CONFIGURATION_KEYS,
-  CONFIGURATION_SECTION,
-  normalizeImportMaxFileBytes,
-} from '../../constants';
-import {
-  NodeHttpTransport,
-  type HttpTransport,
-} from '../../execution';
+import type { HttpTransport } from '../../execution';
 import type { AuthenticationProfile, Environment } from '../../models';
 import type { Logger } from '../../shared';
-import { createWebviewNonce } from '../../ui/webview';
 import {
-  evaluateImportSourceSize,
-  fetchOpenApiSpecUrl,
-  rollbackWrittenFiles,
-  runImportPipeline,
-  type ImportProgressEvent,
-  type ImportSummary,
+  OpenApiImportProvider,
   type SettingsPatch,
   type WorkspaceFileWriter,
 } from '../index';
+import { openImportWizardHost } from './import-wizard-host';
 import {
   parseOpenApiImportWizardMessage,
   renderOpenApiImportWizardHtml,
-  type OpenApiImportWizardFolder,
-  type OpenApiImportWizardPreview,
-  type OpenApiImportWizardState,
-  type OpenApiImportWizardSummaryView,
 } from './openapi-import-wizard-html';
-
-const PANEL_VIEW_TYPE = 'apiHero.openapiImportWizard';
-const PANEL_TITLE = 'Import OpenAPI';
 
 export interface OpenOpenApiImportWizardOptions {
   readonly logger: Logger;
@@ -62,7 +30,7 @@ export interface OpenOpenApiImportWizardOptions {
   /** When false, summary omits the Manage Authentication CTA. */
   readonly manageAuthAvailable?: boolean;
   /**
-   * HTTP transport used for URL import. Defaults to {@link NodeHttpTransport}.
+   * HTTP transport used for URL import. Defaults to NodeHttpTransport in the host.
    * Inject a fake transport in tests.
    */
   readonly transport?: HttpTransport;
@@ -75,498 +43,40 @@ export interface OpenOpenApiImportWizardOptions {
 export async function openOpenApiImportWizard(
   options: OpenOpenApiImportWizardOptions,
 ): Promise<boolean> {
-  const folders = workspace.workspaceFolders;
-  if (folders === undefined || folders.length === 0) {
-    void window.showErrorMessage(
-      'Open a workspace folder before importing an OpenAPI specification.',
-    );
-    return false;
-  }
-
-  const wizardFolders: OpenApiImportWizardFolder[] = folders.map((folder) => ({
-    name: folder.name,
-    path: folder.uri.fsPath,
-  }));
-  const skipWorkspaceStep = wizardFolders.length === 1;
-  const manageAuthAvailable = options.manageAuthAvailable !== false;
-
-  return new Promise((resolve) => {
-    const panel = window.createWebviewPanel(
-      PANEL_VIEW_TYPE,
-      PANEL_TITLE,
-      { viewColumn: ViewColumn.Active, preserveFocus: false },
-      {
-        enableScripts: true,
-        retainContextWhenHidden: true,
-        localResourceRoots: [],
+  return openImportWizardHost({
+    logger: options.logger,
+    discovery: options.discovery,
+    writer: options.writer,
+    readEnvironments: options.readEnvironments,
+    readActiveEnvironmentId: options.readActiveEnvironmentId,
+    readAuthProfiles: options.readAuthProfiles,
+    applySettingsPatch: options.applySettingsPatch,
+    manageAuthAvailable: options.manageAuthAvailable,
+    format: {
+      panelViewType: 'apiHero.openapiImportWizard',
+      panelTitle: 'Import OpenAPI',
+      noWorkspaceMessage:
+        'Open a workspace folder before importing an OpenAPI specification.',
+      sourceMissingMessage:
+        'Select an OpenAPI specification file or URL first.',
+      analyzeFailureMessage:
+        'Specification could not be analyzed for import.',
+      fileFilters: {
+        'OpenAPI Specification': ['json', 'yaml', 'yml'],
       },
-    );
-
-    let settled = false;
-    let importSucceeded = false;
-    let selectedFolderPath = wizardFolders[0]!.path;
-    let sourcePath = '';
-    let sourceFileName: string | undefined;
-    let sourceText = '';
-    let outputDirectoryName = '';
-    let cancelRequested = false;
-    let fetchGeneration = 0;
-    let fetchAbort: AbortController | undefined;
-    let fetchInFlight = false;
-    const disposables: Disposable[] = [];
-    const transport = options.transport ?? new NodeHttpTransport();
-
-    const abortInFlightFetch = (): void => {
-      fetchGeneration += 1;
-      fetchInFlight = false;
-      fetchAbort?.abort();
-      fetchAbort = undefined;
-    };
-
-    const finish = (success: boolean): void => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      abortInFlightFetch();
-      for (const disposable of disposables) {
-        disposable.dispose();
-      }
-      panel.dispose();
-      resolve(success);
-    };
-
-    const nonce = createWebviewNonce();
-    panel.webview.html = renderOpenApiImportWizardHtml(nonce);
-
-    const initialState = (): OpenApiImportWizardState => ({
-      folders: wizardFolders,
-      skipWorkspaceStep,
-      selectedFolderPath,
-      manageAuthAvailable,
-      step: skipWorkspaceStep ? 'file' : 'workspace',
-    });
-
-    const post = async (
-      message: Parameters<typeof panel.webview.postMessage>[0],
-    ): Promise<void> => {
-      if (settled) {
-        return;
-      }
-      await panel.webview.postMessage(message);
-    };
-
-    const maxFileBytes = (): number =>
-      normalizeImportMaxFileBytes(
-        workspace
-          .getConfiguration(CONFIGURATION_SECTION)
-          .get(CONFIGURATION_KEYS.importMaxFileBytes),
-      );
-
-    const buildPreview = (
-      summary: ImportSummary,
-      suggestedOutput: string,
-    ): OpenApiImportWizardPreview => {
-      const warnings = summary.diagnostics
-        .filter((item) => item.severity === 'warning')
-        .map((item) => item.message);
-      return {
-        apiName: summary.apiName,
-        apiVersion: summary.apiVersion,
-        openapiVersion: summary.openapiVersion,
-        folderCount: summary.folderCount,
-        requestCount: summary.requestCount,
-        environmentCount: summary.environmentCount,
-        variableCount: summary.variableCount,
-        authProfileCount: summary.authProfileCount,
-        outputDirectoryName: suggestedOutput || outputDirectoryName,
-        warningCount: warnings.length,
-        warnings: warnings.slice(0, 12),
-      };
-    };
-
-    const buildSummaryView = (
-      summary: ImportSummary,
-      patch: SettingsPatch | undefined,
-    ): OpenApiImportWizardSummaryView => {
-      const errors = summary.diagnostics
-        .filter((item) => item.severity === 'error')
-        .map((item) => item.message);
-      const warnings = summary.diagnostics
-        .filter((item) => item.severity === 'warning')
-        .map((item) => item.message);
-      return {
-        success: summary.success,
-        cancelled: summary.cancelled,
-        apiName: summary.apiName,
-        apiVersion: summary.apiVersion,
-        openapiVersion: summary.openapiVersion,
-        folderCount: summary.folderCount,
-        requestCount: summary.requestCount,
-        environmentCount: summary.environmentCount,
-        variableCount: summary.variableCount,
-        authProfileCount: summary.authProfileCount,
-        targetDirectory: summary.targetDirectory,
-        writtenFileCount: summary.writtenFiles.length,
-        warningCount: warnings.length,
-        errorCount: errors.length,
-        warnings: warnings.slice(0, 12),
-        errors: errors.slice(0, 12),
-        secretHints: patch?.secretHints.slice(0, 16) ?? [],
-        manageAuthAvailable,
-      };
-    };
-
-    const hasSource = (): boolean => sourceText.length > 0 && sourcePath.length > 0;
-
-    const sourceMissingMessage = 'Select an OpenAPI specification file or URL first.';
-
-    const runAnalyze = async (requestedOutput: string): Promise<void> => {
-      if (!hasSource()) {
-        await post({
-          type: 'previewError',
-          message: sourceMissingMessage,
-        });
-        return;
-      }
-      outputDirectoryName = requestedOutput.trim();
-      try {
-        const activeEnvironmentId = options.readActiveEnvironmentId();
-        const result = await runImportPipeline({
-          sourceText,
-          sourcePath,
-          ...(sourceFileName === undefined ? {} : { fileName: sourceFileName }),
-          targetRoot: selectedFolderPath,
-          ...(outputDirectoryName.length > 0
-            ? { outputDirectoryName }
-            : {}),
-          limits: { maxFileBytes: maxFileBytes() },
-          existingEnvironments: options.readEnvironments(),
-          existingAuthProfiles: options.readAuthProfiles(),
-          ...(activeEnvironmentId === undefined
-            ? {}
-            : { activeEnvironmentId }),
-          writer: options.writer,
-          skipWrite: true,
-        });
-
-        if (!result.summary.success) {
-          const firstError = result.summary.diagnostics.find(
-            (item) => item.severity === 'error',
-          );
-          await post({
-            type: 'previewError',
-            message:
-              firstError?.message ??
-              'Specification could not be analyzed for import.',
-          });
-          return;
-        }
-
-        const suggested =
-          result.artifacts?.outputDirectoryName ?? outputDirectoryName;
-        if (outputDirectoryName.length === 0 && suggested.length > 0) {
-          outputDirectoryName = suggested;
-        }
-        await post({
-          type: 'preview',
-          preview: buildPreview(result.summary, suggested),
-        });
-      } catch (error) {
-        const message =
-          error instanceof Error ? error.message : String(error);
-        options.logger.warning('OpenAPI import preview failed', { message });
-        await post({ type: 'previewError', message });
-      }
-    };
-
-    const runImport = async (requestedOutput: string): Promise<void> => {
-      if (!hasSource()) {
-        await post({
-          type: 'error',
-          message: sourceMissingMessage,
-        });
-        return;
-      }
-      outputDirectoryName = requestedOutput.trim();
-      cancelRequested = false;
-      const cancellation = {
-        get isCancellationRequested(): boolean {
-          return cancelRequested;
-        },
-      };
-
-      let overwrite = false;
-      if (outputDirectoryName.length > 0) {
-        const targetPath = join(
-          selectedFolderPath,
-          ...outputDirectoryName.split(/[/\\]/u).filter(Boolean),
-        );
-        try {
-          const entries = await readdir(targetPath);
-          if (entries.length > 0) {
-            const choice = await window.showWarningMessage(
-              `Import target "${outputDirectoryName}" already exists and is not empty. Overwrite?`,
-              { modal: true },
-              'Overwrite',
-            );
-            if (choice !== 'Overwrite') {
-              await post({
-                type: 'error',
-                message:
-                  'Import cancelled — choose a different collection name or confirm overwrite.',
-              });
-              return;
-            }
-            overwrite = true;
-          }
-        } catch {
-          // Target does not exist yet — proceed.
-        }
-      }
-
-      try {
-        const activeEnvironmentId = options.readActiveEnvironmentId();
-        const result = await runImportPipeline({
-          sourceText,
-          sourcePath,
-          ...(sourceFileName === undefined ? {} : { fileName: sourceFileName }),
-          targetRoot: selectedFolderPath,
-          ...(outputDirectoryName.length > 0
-            ? { outputDirectoryName }
-            : {}),
-          limits: { maxFileBytes: maxFileBytes() },
-          existingEnvironments: options.readEnvironments(),
-          existingAuthProfiles: options.readAuthProfiles(),
-          ...(activeEnvironmentId === undefined
-            ? {}
-            : { activeEnvironmentId }),
-          cancellation,
-          writer: options.writer,
-          ...(overwrite ? { overwrite: true } : {}),
-          onProgress: (event: ImportProgressEvent) => {
-            void post({
-              type: 'progress',
-              phase: event.phase,
-              message: event.message,
-            });
-          },
-        });
-
-        if (result.summary.cancelled) {
-          await post({
-            type: 'summary',
-            summary: buildSummaryView(result.summary, undefined),
-          });
-          options.logger.info('OpenAPI import cancelled from wizard');
-          return;
-        }
-
-        if (result.summary.success && result.settingsPatch !== undefined) {
-          try {
-            await options.applySettingsPatch(result.settingsPatch);
-          } catch (settingsError) {
-            const settingsMessage =
-              settingsError instanceof Error
-                ? settingsError.message
-                : String(settingsError);
-            if (result.summary.writtenFiles.length > 0) {
-              await rollbackWrittenFiles(
-                options.writer,
-                result.summary.writtenFiles,
-                result.summary.targetDirectory,
-              );
-            }
-            options.logger.warning(
-              'OpenAPI import settings patch failed; rolled back files',
-              { message: settingsMessage },
-            );
-            await post({
-              type: 'error',
-              message:
-                `Import files were rolled back because settings could not be updated: ${settingsMessage}`,
-            });
-            return;
-          }
-        }
-
-        if (result.summary.success) {
-          await post({
-            type: 'progress',
-            phase: 'refreshing',
-            message: 'Refreshing collections…',
-          });
-          await options.discovery.refresh();
-          importSucceeded = true;
-        }
-
-        await post({
-          type: 'summary',
-          summary: buildSummaryView(
-            result.summary,
-            result.summary.success ? result.settingsPatch : undefined,
-          ),
-        });
-        options.logger.info('OpenAPI import finished', {
-          success: result.summary.success,
-          requests: result.summary.requestCount,
-          target: result.summary.targetDirectory,
-        });
-      } catch (error) {
-        const message =
-          error instanceof Error ? error.message : String(error);
-        options.logger.warning('OpenAPI import failed', { message });
-        await post({ type: 'error', message: `OpenAPI import failed: ${message}` });
-      }
-    };
-
-    const runFetchUrl = async (rawUrl: string): Promise<void> => {
-      if (fetchInFlight) {
-        return;
-      }
-      fetchInFlight = true;
-      const generation = ++fetchGeneration;
-      fetchAbort?.abort();
-      fetchAbort = new AbortController();
-      const result = await fetchOpenApiSpecUrl(rawUrl, {
-        transport,
-        maxResponseBytes: maxFileBytes(),
-        signal: fetchAbort.signal,
-      });
-      if (settled || generation !== fetchGeneration) {
-        return;
-      }
-      fetchInFlight = false;
-      fetchAbort = undefined;
-      if (!result.ok) {
-        options.logger.warning('OpenAPI URL fetch failed', {
-          message: result.message,
-          code: result.code,
-        });
-        await post({ type: 'error', message: result.message });
-        return;
-      }
-      sourceText = result.text;
-      sourcePath = result.sourceUrl;
-      sourceFileName = result.fileName;
-      const name = result.fileName ?? result.sourceUrl;
-      await post({
-        type: 'fileSelected',
-        path: result.sourceUrl,
-        name,
-      });
-    };
-
-    disposables.push(
-      panel.webview.onDidReceiveMessage((raw) => {
-        void (async () => {
-          const message = parseOpenApiImportWizardMessage(raw);
-          if (message === undefined) {
-            return;
-          }
-
-          switch (message.type) {
-            case 'ready': {
-              await post({ type: 'init', state: initialState() });
-              return;
-            }
-            case 'cancel':
-            case 'close': {
-              abortInFlightFetch();
-              finish(importSucceeded);
-              return;
-            }
-            case 'selectWorkspace': {
-              const match = wizardFolders.find(
-                (folder) => folder.path === message.path,
-              );
-              if (match === undefined) {
-                await post({
-                  type: 'error',
-                  message: 'Select a valid workspace folder.',
-                });
-                return;
-              }
-              selectedFolderPath = match.path;
-              return;
-            }
-            case 'pickFile': {
-              const picked = await window.showOpenDialog({
-                canSelectFiles: true,
-                canSelectFolders: false,
-                canSelectMany: false,
-                filters: {
-                  'OpenAPI Specification': ['json', 'yaml', 'yml'],
-                },
-                title: 'Import OpenAPI Specification',
-                openLabel: 'Select',
-              });
-              if (picked === undefined || picked.length === 0) {
-                return;
-              }
-              const fileUri = picked[0]!;
-              const sizeCheck = evaluateImportSourceSize(
-                (await workspace.fs.stat(fileUri)).size,
-                maxFileBytes(),
-              );
-              if (!sizeCheck.ok) {
-                await post({
-                  type: 'error',
-                  message: sizeCheck.diagnostic.message,
-                });
-                options.logger.warning('OpenAPI import rejected before read', {
-                  message: sizeCheck.diagnostic.message,
-                });
-                return;
-              }
-              const bytes = await workspace.fs.readFile(fileUri);
-              sourceText = Buffer.from(bytes).toString('utf8');
-              sourcePath = fileUri.fsPath;
-              sourceFileName = fileUri.path.split('/').pop();
-              const name = sourceFileName ?? fileUri.fsPath;
-              await post({
-                type: 'fileSelected',
-                path: fileUri.fsPath,
-                name,
-              });
-              return;
-            }
-            case 'fetchUrl': {
-              await runFetchUrl(message.url);
-              return;
-            }
-            case 'analyze': {
-              await runAnalyze(message.outputDirectoryName);
-              return;
-            }
-            case 'startImport': {
-              await runImport(message.outputDirectoryName);
-              return;
-            }
-            case 'cancelImport': {
-              cancelRequested = true;
-              return;
-            }
-            case 'manageAuthProfiles': {
-              if (manageAuthAvailable) {
-                await commands.executeCommand(COMMAND_IDS.manageAuthProfiles);
-              }
-              return;
-            }
-            case 'back': {
-              // UI owns step visibility; host only clears transient errors.
-              return;
-            }
-            default: {
-              return;
-            }
-          }
-        })();
-      }),
-      panel.onDidDispose(() => {
-        cancelRequested = true;
-        finish(importSucceeded);
-      }),
-    );
+      fileDialogTitle: 'Import OpenAPI Specification',
+      openLabel: 'Select',
+      provider: new OpenApiImportProvider(),
+      renderHtml: renderOpenApiImportWizardHtml,
+      parseMessage: parseOpenApiImportWizardMessage,
+      logLabel: 'OpenAPI import',
+      enableUrlSource: true,
+      filePickErrorType: 'error',
+      ...(options.transport !== undefined
+        ? { transport: options.transport }
+        : {}),
+      includeUnsupportedCounters: false,
+      formatVersionField: 'openapiVersion',
+    },
   });
 }

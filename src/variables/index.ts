@@ -27,6 +27,7 @@ export {
   VariableCompletionService,
   fuzzyMatches,
   fuzzyScore,
+  formatVariableCompletionDetail,
 } from './variable-completion-service';
 export type {
   VariableCompletionContext,

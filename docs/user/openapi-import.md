@@ -48,7 +48,57 @@ If document- or operation-level `security` names a scheme that is **missing** fr
 - Max file / response size: `apiHero.import.maxFileBytes` (default 5 MiB).
 - Local `#/` `$ref` resolution with depth/cycle caps; remote `$ref` is out of scope (not fetched over the network).
 - Error diagnostics prevent writes and settings patches; warnings alone may still succeed.
-- Swagger 2.0, Postman, Insomnia, and GraphQL import are not supported.
+- Swagger 2.0 and GraphQL import are not supported (GraphQL bodies from Postman/Insomnia are best-effort stubs with warnings).
+
+## Postman Collection import
+
+Import **Postman Collection v2 / v2.1** (local JSON file) through the same
+`runImportPipeline` / `SpecificationImportProvider` path used by OpenAPI.
+
+1. **API Hero: Import Postman Collection** (Collections toolbar or palette).
+2. Choose the target workspace folder (skipped when only one folder is open).
+3. Browse to a Postman Collection `.json` export.
+4. Confirm options in the preview step (scripts and unsupported features appear
+   as diagnostics — scripts are never executed or migrated).
+5. Review the summary (files written, environments/auth metadata patched).
+
+Secrets in names, descriptions, headers, and body examples are masked or
+replaced with placeholders. Binary file bodies and GraphQL are best-effort
+stubs with warnings.
+
+## Insomnia export import
+
+Import **Insomnia resource-based export JSON** (`__export_format` **3** or **4**,
+or `_type: "export"` with a `resources` array) through the same shared pipeline
+and wizard host as Postman (local file only).
+
+1. **API Hero: Import Insomnia Export** (Collections toolbar or palette).
+2. Choose the target workspace folder (skipped when only one folder is open).
+3. Browse to an Insomnia `.json` export.
+4. Confirm options in the preview step (scripts and unsupported features appear
+   as diagnostics — scripts are never executed or migrated).
+5. Review the summary (files written, environments/auth metadata patched).
+
+### Supported
+
+- Workspace → collection name
+- `request_group` folders (nested)
+- HTTP `request` resources (method, URL, query `parameters`, headers, body)
+- Environments (`data` object variables; `{{ }}` / `{{ _.var }}` refs preserved)
+- Authentication: bearer, basic, apiKey (secrets as placeholders)
+- Descriptions on workspace / requests
+
+### Unsupported (reported via diagnostics)
+
+- Insomnia Document / YAML **v5**, HAR, and non–resource-based shapes
+- `__export_format` other than 3 / 4
+- Scripts (`preRequestScript`, `afterResponseScript`) — never executed
+- Resource types: `cookie_jar`, `api_spec`, `grpc_request`, `websocket_request`,
+  `socketio_request`, `mcp_request`, `proto_file`, `unit_test` /
+  `unit_test_suite`, `mock`
+- Auth types beyond bearer / basic / apiKey (oauth2, digest, hawk, …) —
+  metadata-only `none` profiles where applicable
+- Binary / file multipart bodies (stubs + warnings); GraphQL best-effort stub
 
 ## URL import security
 

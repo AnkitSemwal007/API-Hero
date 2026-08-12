@@ -15,6 +15,8 @@ import type {
   ResponsePresentation,
 } from './presentation';
 import { RESPONSE_TEXT_PREVIEW_LIMIT } from './presentation';
+import type { FailureExplanation } from './failure-explanations';
+import type { ResponseDiffResult } from './response-diff';
 
 export { escapeHtml };
 
@@ -32,7 +34,9 @@ export type ResponseViewerMessage =
       readonly scope: string;
       readonly sensitive: boolean;
     }
-  | { readonly type: 'useAsAuthentication' };
+  | { readonly type: 'useAsAuthentication' }
+  | { readonly type: 'comparePrevious' }
+  | { readonly type: 'generateTypeScript' };
 
 const BODY_MODES = new Set(['pretty', 'raw']);
 const CREATE_VARIABLE_SCOPES = new Set([
@@ -62,6 +66,12 @@ export function parseResponseViewerMessage(
   }
   if (keys.length === 1 && record.type === 'useAsAuthentication') {
     return { type: 'useAsAuthentication' };
+  }
+  if (keys.length === 1 && record.type === 'comparePrevious') {
+    return { type: 'comparePrevious' };
+  }
+  if (keys.length === 1 && record.type === 'generateTypeScript') {
+    return { type: 'generateTypeScript' };
   }
   if (
     keys.length === 2
@@ -116,6 +126,12 @@ export interface ResponseViewerRenderOptions {
   readonly knownVariableNames?: readonly string[];
   /** When > 0, show Detected Authentication affordance (paths counted on host). */
   readonly detectedAuthTokenCount?: number;
+  /** When true, show Compare with Previous Run. */
+  readonly canComparePrevious?: boolean;
+  /** When true, show Generate TypeScript for successful JSON bodies. */
+  readonly canGenerateTypeScript?: boolean;
+  /** Active Previous/Current (or A/B) diff to render. */
+  readonly diff?: ResponseDiffResult;
 }
 
 /** Builds a self-contained response document with no remote resource access. */
@@ -136,15 +152,20 @@ export function renderResponseViewerHtml(
 </head>
 <body data-enable-create-variable="${options.enableCreateVariable === true ? 'true' : 'false'}" data-known-variables="${escapeAttribute(JSON.stringify(options.knownVariableNames ?? []))}">
 <main>
-  ${renderStatusCard(model)}
+  ${renderStatusCard(model, options)}
   ${model.failure === undefined ? renderSuccess(model, options) : renderFailure(model)}
+  ${renderExplanation(model.explanation)}
+  ${renderDiffSection(options.diff)}
 </main>
 <script nonce="${safeNonce}">${VIEWER_SCRIPT}</script>
 </body>
 </html>`;
 }
 
-function renderStatusCard(model: ResponsePresentation): string {
+function renderStatusCard(
+  model: ResponsePresentation,
+  options: ResponseViewerRenderOptions = {},
+): string {
   const status = model.status === undefined
     ? `<span class="status-badge status-error">${escapeHtml(model.failure?.title ?? 'Failed')}</span>`
     : `<span class="status-badge status-${statusClass(model.status.code)}">${model.status.code} ${escapeHtml(model.status.text)}</span>`;
@@ -158,6 +179,9 @@ function renderStatusCard(model: ResponsePresentation): string {
   const extractionChip = model.extraction === undefined
     ? ''
     : statChip('Extract', model.extraction.chipLabel);
+  const compareButton = options.canComparePrevious === true
+    ? `<button type="button" class="compare-prev-btn" data-action="comparePrevious" title="Compare with Previous Run">Compare with Previous Run</button>`
+    : '';
   const primaryStats = model.failure === undefined
     ? `<div class="stats-summary primary-stats" aria-label="Response statistics">
         ${statChip('Duration', `${model.statistics.durationMs} ms`)}
@@ -186,6 +210,7 @@ function renderStatusCard(model: ResponsePresentation): string {
       ${status}
       <span class="summary">${escapeHtml(model.summary)}</span>
       ${primaryStats}
+      ${compareButton}
     </div>
     <div class="request-line"><span class="${methodClass}">${escapeHtml(model.method)}</span> <span>${escapeHtml(model.requestUrl)}</span></div>
     ${secondaryStats}
@@ -286,6 +311,71 @@ function renderFailure(model: ResponsePresentation): string {
   ${tabs}
   ${assertionPanel}
   ${extractionPanel}`;
+}
+
+/** Status / transport guidance — speculative lines labeled Possible causes. */
+function renderExplanation(
+  explanation: FailureExplanation | undefined,
+): string {
+  if (explanation === undefined) {
+    return '';
+  }
+  const facts =
+    explanation.facts.length === 0
+      ? ''
+      : `<ul class="explanation-facts">${explanation.facts
+          .map((fact) => `<li>${escapeHtml(fact)}</li>`)
+          .join('')}</ul>`;
+  const causes =
+    explanation.possibleCauses.length === 0
+      ? ''
+      : `<h3>Possible causes</h3><ul class="explanation-causes">${explanation.possibleCauses
+          .map((cause) => `<li>${escapeHtml(cause)}</li>`)
+          .join('')}</ul>`;
+  return `<section class="explanation-card" aria-labelledby="explanation-title">
+    <h2 id="explanation-title">${escapeHtml(explanation.title)}</h2>
+    ${facts}
+    ${causes}
+  </section>`;
+}
+
+/** Previous/A vs Current/B diff panel — presentation models only. */
+export function renderDiffSection(
+  diff: ResponseDiffResult | undefined,
+): string {
+  if (diff === undefined) {
+    return '';
+  }
+  const rows = diff.changes
+    .filter((entry) => entry.change !== 'identical')
+    .map((entry) => {
+      const changeClass =
+        entry.change === 'added'
+          ? 'diff-added'
+          : entry.change === 'removed'
+            ? 'diff-removed'
+            : 'diff-changed';
+      return `<li class="${changeClass}"><code>${escapeHtml(entry.summary)}</code></li>`;
+    })
+    .join('');
+  const body =
+    diff.identical
+      ? '<p class="muted">No differences between sides.</p>'
+      : `<ul class="diff-list" aria-label="Diff changes">${rows}</ul>`;
+  const truncated = diff.truncated === true
+    ? '<p class="notice">Diff truncated for performance — additional changes omitted.</p>'
+    : '';
+  return `<section class="diff-card" aria-labelledby="diff-title" id="diff-panel">
+    <h2 id="diff-title">Response Diff</h2>
+    <p class="diff-sides"><span class="diff-side-a">${escapeHtml(diff.leftLabel)}</span>
+      <span class="sep">vs</span>
+      <span class="diff-side-b">${escapeHtml(diff.rightLabel)}</span></p>
+    <ul class="diff-summary">${diff.summaryLines
+      .map((line) => `<li>${escapeHtml(line)}</li>`)
+      .join('')}</ul>
+    ${truncated}
+    ${body}
+  </section>`;
 }
 
 function renderHeaders(model: ResponsePresentation): string {
@@ -407,6 +497,13 @@ function renderBody(
     && body.prettyAvailable
       ? '<button type="button" data-action="saveAsVariable" id="saveAsVariableBtn" title="Save selected JSON leaf as a variable" disabled>Save as Variable</button><button type="button" data-action="useAsAuth" id="useAsAuthBtn" title="Store detected token in Authentication Session">Use as Authentication</button>'
       : '';
+  const generateTypeScript =
+    options.canGenerateTypeScript === true
+    && body.language === 'json'
+    && body.prettyAvailable
+    && !body.truncated
+      ? '<button type="button" data-action="generateTypeScript" title="Generate TypeScript types from this JSON response">Generate TypeScript</button>'
+      : '';
   const detectedAuth =
     options.enableCreateVariable === true
     && body.language === 'json'
@@ -438,6 +535,7 @@ function renderBody(
       </label>
       <span id="searchStatus" class="search-status muted" aria-live="polite"></span>
       ${saveAsVariable}
+      ${generateTypeScript}
       <button type="button" data-action="copyBody" title="Copy body">${iconHtml('copy', { decorative: true })} Copy</button>
       <button type="button" data-action="saveBody" title="${body.truncated ? 'Save unavailable for truncated preview' : 'Save body'}"${body.truncated ? ' disabled' : ''}>Save</button>
     </div>
@@ -835,6 +933,38 @@ tbody tr:hover { background: var(--vscode-list-hoverBackground); }
 }
 .failure-card h2 { margin: 0 0 var(--ah-space-2); font-size: 1.05rem; }
 .failure-card p { margin: 0 0 var(--ah-space-2); }
+.explanation-card {
+  margin: var(--ah-space-3) var(--ah-space-4); padding: var(--ah-space-3) var(--ah-space-4);
+  border: 1px solid var(--vscode-panel-border);
+  background: var(--vscode-editorWidget-background, var(--vscode-sideBar-background));
+  border-radius: var(--ah-radius);
+}
+.explanation-card h2 { margin: 0 0 var(--ah-space-2); font-size: 1.05rem; }
+.explanation-card h3 {
+  margin: var(--ah-space-2) 0 var(--ah-space-1); font-size: .9rem;
+  color: var(--vscode-descriptionForeground); font-weight: 600;
+}
+.explanation-facts, .explanation-causes {
+  margin: 0; padding-left: 1.2rem;
+}
+.explanation-facts li, .explanation-causes li { margin: 2px 0; }
+.diff-card {
+  margin: var(--ah-space-3) var(--ah-space-4); padding: var(--ah-space-3) var(--ah-space-4);
+  border: 1px solid var(--vscode-panel-border);
+  background: var(--vscode-editorWidget-background, var(--vscode-sideBar-background));
+  border-radius: var(--ah-radius);
+}
+.diff-card h2 { margin: 0 0 var(--ah-space-2); font-size: 1.05rem; }
+.diff-sides { margin: 0 0 var(--ah-space-2); display: flex; gap: var(--ah-space-2); align-items: center; flex-wrap: wrap; }
+.diff-side-a, .diff-side-b { font-weight: 600; }
+.diff-side-a { color: var(--vscode-charts-orange, var(--vscode-editorWarning-foreground)); }
+.diff-side-b { color: var(--vscode-charts-blue, var(--vscode-textLink-foreground)); }
+.diff-summary, .diff-list { margin: 0 0 var(--ah-space-2); padding-left: 1.2rem; }
+.diff-list li { margin: 3px 0; overflow-wrap: anywhere; }
+.diff-added code { color: var(--vscode-gitDecoration-addedResourceForeground, var(--vscode-testing-iconPassed)); }
+.diff-removed code { color: var(--vscode-gitDecoration-deletedResourceForeground, var(--vscode-testing-iconFailed)); }
+.diff-changed code { color: var(--vscode-gitDecoration-modifiedResourceForeground, var(--vscode-editorWarning-foreground)); }
+.compare-prev-btn { margin-left: auto; white-space: nowrap; }
 dl div { display: grid; grid-template-columns: minmax(90px, 140px) 1fr; padding: 4px 0; }
 dt { color: var(--vscode-descriptionForeground); }
 dd { margin: 0; overflow-wrap: anywhere; }
@@ -903,7 +1033,7 @@ mark.search-hit.current {
   dl div { grid-template-columns: 1fr; }
 }
 @media (forced-colors: active) {
-  .status-badge, button, .stat, .stat-chip, .notice, .table-wrap, pre, .json-tree, .failure-card, .empty-state {
+  .status-badge, button, .stat, .stat-chip, .notice, .table-wrap, pre, .json-tree, .failure-card, .explanation-card, .diff-card, .empty-state {
     border: 1px solid CanvasText;
   }
   button:focus-visible, summary:focus-visible, .tabs [role="tab"]:focus-visible { outline-color: Highlight; }
@@ -977,6 +1107,12 @@ const VIEWER_SCRIPT = `
 
   document.querySelector('[data-action="copyBody"]')?.addEventListener('click', () => {
     vscode.postMessage({ type: 'copyBody', mode: activeMode });
+  });
+  document.querySelector('[data-action="comparePrevious"]')?.addEventListener('click', () => {
+    vscode.postMessage({ type: 'comparePrevious' });
+  });
+  document.querySelector('[data-action="generateTypeScript"]')?.addEventListener('click', () => {
+    vscode.postMessage({ type: 'generateTypeScript' });
   });
   for (const button of document.querySelectorAll('[data-action="useAsAuth"]')) {
     button.addEventListener('click', () => {

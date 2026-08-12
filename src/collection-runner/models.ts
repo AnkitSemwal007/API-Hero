@@ -70,6 +70,15 @@ export interface RequestFailureDiagnostics {
    * `preconditionStage` or a derived label. Never a synthetic stage timeline.
    */
   readonly failedAtStage?: string;
+  /**
+   * Additive deterministic status/transport guidance. Speculative lines are
+   * always under `possibleCauses` (never stated as proven fact).
+   */
+  readonly explanation?: {
+    readonly title: string;
+    readonly facts: readonly string[];
+    readonly possibleCauses: readonly string[];
+  };
 }
 
 /** Terminal status of an entire collection run. */

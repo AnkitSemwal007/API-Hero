@@ -113,6 +113,7 @@ test('sensitive values never appear in completion models or hover', () => {
   const token = service.getCompletions('').find((item) => item.name === 'token');
   assert.equal(token?.sensitive, true);
   assert.equal(token?.valuePreview, undefined);
+  assert.equal(token?.description, 'Environment · Secret value');
   // Scope icon only — sensitivity is a separate flag, never baked into the icon.
   assert.equal(token?.icon, 'globe');
   assert.doesNotMatch(JSON.stringify(token), /super-secret/);
@@ -121,6 +122,7 @@ test('sensitive values never appear in completion models or hover', () => {
   assert.equal(hover?.valueDisplay, MASKED_VARIABLE_VALUE);
   assert.equal(hover?.sensitive, true);
   assert.doesNotMatch(hover?.documentation ?? '', /super-secret/);
+  assert.match(hover?.documentation ?? '', /Secret value/);
   assert.match(hover?.documentation ?? '', /Yes/);
 
   const host = service.getHoverInfo('host');
@@ -128,6 +130,107 @@ test('sensitive values never appear in completion models or hover', () => {
   assert.match(host?.documentation ?? '', /Effective source:.*Global/u);
   assert.match(host?.documentation ?? '', /Current Value/);
   assert.match(host?.documentation ?? '', /\nNo$/m);
+});
+
+test('environment detail prefers Environment: <name> and never leaks secrets', () => {
+  const service = new VariableCompletionService();
+  service.setDefinitions([
+    {
+      name: 'baseUrl',
+      value: 'https://dev.test',
+      scope: 'environment',
+      sensitive: false,
+      environmentName: 'Development',
+    },
+    {
+      name: 'apiKey',
+      value: 'sk-live-should-not-leak',
+      scope: 'environment',
+      sensitive: true,
+      environmentName: 'Development',
+    },
+  ]);
+
+  const items = service.getCompletions('');
+  const baseUrl = items.find((item) => item.name === 'baseUrl');
+  const apiKey = items.find((item) => item.name === 'apiKey');
+  assert.equal(baseUrl?.description, 'Environment: Development');
+  assert.equal(baseUrl?.sourceLabel, 'Environment');
+  assert.equal(apiKey?.description, 'Environment: Development · Secret value');
+  assert.equal(apiKey?.valuePreview, undefined);
+  assert.doesNotMatch(JSON.stringify(items), /sk-live-should-not-leak/);
+});
+
+test('run overrides document overrides environment for duplicate names', () => {
+  const service = new VariableCompletionService();
+  service.setDefinitions([
+    definition('host', 'global', 'global'),
+    definition('host', 'collection', 'collection'),
+    definition('host', 'environment', 'environment'),
+    definition('host', 'document', 'document'),
+    definition('host', 'run', 'run'),
+  ]);
+
+  const items = service.getCompletions('');
+  assert.equal(items.length, 1);
+  assert.equal(items[0]?.scope, 'run');
+  assert.equal(items[0]?.sourceLabel, 'Run');
+  assert.equal(items[0]?.valuePreview, 'run');
+});
+
+test('missing variable suggestCorrection stays undefined for empty catalog', () => {
+  const service = new VariableCompletionService();
+  assert.equal(service.suggestCorrection('baseUrl'), undefined);
+  service.setDefinitions([definition('baseUrl', 'https://x', 'global')]);
+  assert.equal(service.suggestCorrection('baseUr'), 'baseUrl');
+  assert.equal(service.getHoverInfo('missing'), undefined);
+});
+
+test('collection definition changes refresh the completion catalog', () => {
+  const service = new VariableCompletionService();
+  service.setDefinitions([
+    definition('host', 'a', 'global'),
+    definition('shared', 'from-collection', 'collection'),
+  ]);
+  assert.ok(service.getCompletions('').some((item) => item.name === 'shared'));
+  assert.equal(
+    service.getCompletions('').find((item) => item.name === 'shared')?.sourceLabel,
+    'Collection',
+  );
+
+  service.setDefinitions([
+    definition('host', 'a', 'global'),
+    definition('shared', 'updated', 'collection'),
+    definition('extra', '1', 'collection'),
+  ]);
+  assert.equal(service.getCachedCount(), 3);
+  assert.equal(
+    service.getCompletions('').find((item) => item.name === 'shared')?.valuePreview,
+    'updated',
+  );
+});
+
+test('source labels map document scope to Request', () => {
+  const service = new VariableCompletionService();
+  service.setDefinitions([
+    definition('a', '1', 'document'),
+    definition('b', '2', 'environment'),
+    definition('c', '3', 'workspace'),
+    definition('d', '4', 'global'),
+    definition('e', '5', 'collection'),
+    definition('f', '6', 'run'),
+  ]);
+  const byName = Object.fromEntries(
+    service.getCompletions('').map((item) => [item.name, item.sourceLabel]),
+  );
+  assert.deepEqual(byName, {
+    a: 'Request',
+    b: 'Environment',
+    c: 'Workspace',
+    d: 'Global',
+    e: 'Collection',
+    f: 'Run',
+  });
 });
 
 test('buildInsertText supports wrap and name-only modes', () => {
@@ -199,24 +302,5 @@ test('resolvePreview masks sensitive values and leaves unknown refs', () => {
   assert.deepEqual(preview, {
     resolved: `https://example.test/${MASKED_VARIABLE_VALUE}/{{missing}}`,
     hasSensitive: true,
-  });
-});
-
-test('source labels map document scope to Request', () => {
-  const service = new VariableCompletionService();
-  service.setDefinitions([
-    definition('a', '1', 'document'),
-    definition('b', '2', 'environment'),
-    definition('c', '3', 'workspace'),
-    definition('d', '4', 'global'),
-  ]);
-  const byName = Object.fromEntries(
-    service.getCompletions('').map((item) => [item.name, item.sourceLabel]),
-  );
-  assert.deepEqual(byName, {
-    a: 'Request',
-    b: 'Environment',
-    c: 'Workspace',
-    d: 'Global',
   });
 });

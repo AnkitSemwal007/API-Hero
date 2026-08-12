@@ -1,6 +1,6 @@
 /**
  * Pluggable specification import providers.
- * Only OpenAPI 3 is implemented; Swagger/Postman/etc. can register later.
+ * OpenAPI 3, Postman Collection, and Insomnia export are registered by default; Swagger can register later.
  */
 
 import type { AuthenticationProfile, Environment } from '../../models';
@@ -42,7 +42,7 @@ export interface SpecificationImportProvider {
   ): Promise<ImportArtifacts> | ImportArtifacts;
 }
 
-/** Registry of import providers (currently OpenAPI only). */
+/** Registry of import providers (OpenAPI, Postman, and Insomnia by default). */
 export class SpecificationImportProviderRegistry {
   private readonly providers = new Map<
     SpecificationFormatId,

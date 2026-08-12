@@ -1,6 +1,6 @@
-# Marketplace assets — 2.8.4
+# Marketplace assets — 2.9.0
 
-Guidance for listing media for **API Hero 2.8.4**.
+Guidance for listing media for **API Hero 2.9.0**.
 
 **Strategy:** README screenshots, banner, social preview, and workflow GIFs are hosted on **Cloudinary** (absolute HTTPS URLs). That keeps the VSIX small. Only in-extension chrome icons ship inside the package (`images/icon.png`, `images/api-*.svg`, `images/execution-*.svg`).
 
@@ -70,5 +70,5 @@ See [banner-placeholder.md](../marketplace/banner-placeholder.md). Gallery banne
 - [Marketplace readiness review](../marketplace/marketplace-readiness-review.md)
 - [Marketplace readiness](./marketplace-readiness.md)
 - [Product README](../product/README.md)
-- [Release notes — 2.8.4](./v2.8.4-release-notes.md)
-- [Changelog — 2.8.4](../../CHANGELOG.md)
+- [Release notes — 2.9.0](./v2.9.0-release-notes.md)
+- [Changelog — 2.9.0](../../CHANGELOG.md)

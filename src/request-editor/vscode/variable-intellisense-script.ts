@@ -115,7 +115,7 @@ export const VARIABLE_INTELLISENSE_SCRIPT = `
         icon: DOCUMENT_SCOPE_UI.icon,
         sensitive: row.sensitive === true,
         description: row.sensitive
-          ? DOCUMENT_SCOPE_UI.sourceLabel + ' · sensitive'
+          ? DOCUMENT_SCOPE_UI.sourceLabel + ' · Secret value'
           : DOCUMENT_SCOPE_UI.sourceLabel,
         valuePreview: row.sensitive ? undefined : row.value
       };
@@ -162,12 +162,12 @@ export const VARIABLE_INTELLISENSE_SCRIPT = `
     if (item.sensitive) {
       metaEl.insertAdjacentHTML('beforeend', ahIconSpan('lock', 'ah-icon--muted'));
     }
-    metaEl.appendChild(document.createTextNode(' ' + (item.sourceLabel || '')));
+    metaEl.appendChild(document.createTextNode(' ' + (item.description || item.sourceLabel || '')));
     root.querySelector('.var-suggest-value').textContent = item.sensitive
       ? MASKED_VAR
       : (item.valuePreview != null && item.valuePreview !== '' ? item.valuePreview : '(empty)');
     root.querySelector('.var-suggest-sensitive').textContent =
-      'Sensitive: ' + (item.sensitive ? 'Yes' : 'No');
+      'Sensitive: ' + (item.sensitive ? 'Yes (Secret value)' : 'No');
   }
 
   function positionVarSuggest(target) {
@@ -203,7 +203,8 @@ export const VARIABLE_INTELLISENSE_SCRIPT = `
       row.querySelector('.var-suggest-icon').innerHTML =
         ahIconSpan(item.icon) + (item.sensitive ? ahIconSpan('lock', 'ah-icon--muted') : '');
       row.querySelector('.var-suggest-label').textContent = item.name;
-      row.querySelector('.var-suggest-source').textContent = item.sourceLabel || '';
+      row.querySelector('.var-suggest-source').textContent =
+        item.description || item.sourceLabel || '';
       row.addEventListener('mousedown', function (event) {
         event.preventDefault();
         acceptVarSuggest(index);

@@ -72,15 +72,22 @@ export class VariableCompletionService {
       .sort((left, right) => left.name.localeCompare(right.name))
       .map((value) => {
         const ui = VARIABLE_SCOPE_UI[value.scope];
+        const winning = definitions.find(
+          (definition) =>
+            definition.name === value.name && definition.scope === value.scope,
+        );
+        const description = formatVariableCompletionDetail({
+          scope: value.scope,
+          sensitive: value.sensitive,
+          environmentName: winning?.environmentName,
+        });
         return deepFreeze({
           name: value.name,
           scope: value.scope,
           sourceLabel: ui.sourceLabel,
           icon: ui.iconName,
           sensitive: value.sensitive,
-          description: value.sensitive
-            ? `${ui.sourceLabel} · sensitive`
-            : `${ui.sourceLabel}`,
+          description,
           ...(value.sensitive
             ? {}
             : { valuePreview: value.value }),
@@ -163,7 +170,7 @@ export class VariableCompletionService {
       : (item.valuePreview ?? '');
     const documentation = [
       item.name,
-      `Effective source: ${item.sourceLabel}`,
+      `Effective source: ${item.description ?? item.sourceLabel}`,
       'Current Value',
       valueDisplay || '(empty)',
       'Sensitive',
@@ -235,6 +242,24 @@ export class VariableCompletionService {
   }
 }
 
+/**
+ * Completion detail / description line (never includes secret values).
+ * Environment-scoped items prefer `Environment: <name>` when a name is known.
+ */
+export function formatVariableCompletionDetail(options: {
+  readonly scope: VariableScope;
+  readonly sensitive: boolean;
+  readonly environmentName?: string;
+}): string {
+  const sourceLabel = VARIABLE_SCOPE_UI[options.scope].sourceLabel;
+  const trimmedName = options.environmentName?.trim();
+  const scopePart =
+    options.scope === 'environment' && trimmedName !== undefined && trimmedName.length > 0
+      ? `Environment: ${trimmedName}`
+      : sourceLabel;
+  return options.sensitive ? `${scopePart} · Secret value` : scopePart;
+}
+
 function fingerprintDefinitions(
   definitions: readonly VariableDefinition[],
 ): string {
@@ -245,6 +270,7 @@ function fingerprintDefinitions(
         definition.name,
         definition.sensitive ? '1' : '0',
         definition.value,
+        definition.environmentName ?? '',
       ].join('\u0001'))
     .join('\u0000');
 }

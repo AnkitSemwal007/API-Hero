@@ -120,8 +120,12 @@ cache. Configuration or active-environment changes invalidate adapters and
 refresh diagnostics. Hover and completion use the same immutable definition
 snapshot via `VariableCompletionService`: hover masks sensitive values, and
 completion exposes names, effective scopes, icons, and sensitivity but never
-secret values. Unknown references are warnings (not blockers) and may include a
-fuzzy "Did you mean" suggestion.
+secret values (detail uses `Secret value`; environment items may show
+`Environment: <name>`). Unknown references are warnings (not blockers) and may
+include a fuzzy "Did you mean" suggestion. Completion activates on open `{{`
+regions in `.api` lines including comment lines (commented-out headers remain
+editable). Collection-variable cache loads and persists notify language
+providers and open Request Editors so catalogs refresh without a document edit.
 
 ## Variable Completion Service
 
@@ -131,10 +135,12 @@ the reusable IntelliSense catalog for text editors and the Request Editor:
 - Merges scopes with resolver precedence (run → document → environment →
   collection → workspace → global)
 - Caches effective items by definition fingerprint (refresh on env/workspace/
-  global/document/project changes only)
+  global/document/collection/project changes)
 - Fuzzy-filters names without rebuilding the catalog
 - Detects open `{{` regions, builds insert text without duplicating braces, and
   resolves non-sensitive inline previews
+- Formats completion detail with scope labels, optional `Environment: <name>`,
+  and `Secret value` for sensitive entries
 
 Text language features consume it through `RuntimeParserAdapter`. The Request
 Editor host posts a safe `variableCompletions` catalog; the webview renders a

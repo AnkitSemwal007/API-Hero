@@ -1011,10 +1011,89 @@ test('transport failures prefer the presented failure title and message', async 
     reason: 'Connection refused: ECONNREFUSED 127.0.0.1:8080',
     httpRequestSent: true,
     failedAtStage: 'transport',
+    explanation: {
+      title: 'Connection refused',
+      facts: [
+        'URL: https://example.test/users',
+        'Elapsed time: 10 ms',
+        'Transport error: ECONNREFUSED 127.0.0.1:8080',
+      ],
+      possibleCauses: [
+        'Server not listening',
+        'Wrong host or port',
+      ],
+    },
   });
   assert.equal(
     summary.results[0]?.message,
     'Network Error\nConnection refused: ECONNREFUSED 127.0.0.1:8080',
+  );
+});
+
+test('HTTP 401 Passed carries presentation explanation without failureDiagnostics', async () => {
+  const timing = Object.freeze({
+    startedAt: '2026-07-27T10:00:00.000Z',
+    completedAt: '2026-07-27T10:00:00.020Z',
+    durationMs: 20,
+  });
+  const executor = new FakeExecutor();
+  executor.outcomes = [
+    {
+      outcome: 'success',
+      durationMs: 20,
+      statusCode: 401,
+      execution: {
+        success: true,
+        requestId: 'req-1',
+        request: { method: 'GET', url: 'https://example.test/secure' },
+        response: {
+          requestId: 'req-1',
+          statusCode: 401,
+          statusText: 'Unauthorized',
+          headers: [],
+          body: {
+            bytes: freezeDetachedBytes(new TextEncoder().encode('{"error":"auth"}')),
+            text: '{"error":"auth"}',
+          },
+          bodySizeBytes: 16,
+          contentType: 'application/json',
+          url: 'https://example.test/secure',
+          redirected: false,
+          redirectCount: 0,
+          timing,
+        },
+        timing,
+      },
+    },
+  ];
+  const runner = new CollectionRunnerService({
+    executor,
+    sourceReader: new FakeSourceReader(),
+  });
+  const plan = buildRunPlan({
+    aggregate: sampleAggregate(),
+    target: {
+      mode: CollectionRunModes.SelectedRequests,
+      collectionId: 'collection:ws',
+      requestIds: ['r1'],
+    },
+    failurePolicy: FailurePolicyKinds.ContinueOnError,
+  });
+
+  const summary = await runner.execute({ plan });
+  assert.equal(summary.results[0]?.outcome, RequestRunOutcomeKinds.Passed);
+  assert.equal(summary.results[0]?.failureDiagnostics, undefined);
+  assert.equal(
+    summary.results[0]?.presentation?.explanation?.title,
+    '401 Unauthorized',
+  );
+  assert.deepEqual(
+    summary.results[0]?.presentation?.explanation?.possibleCauses,
+    [
+      'Authorization header missing',
+      'Token unresolved',
+      'Token invalid or expired',
+    ],
   );
 });
 
@@ -1055,6 +1134,7 @@ test('precondition failures surface the orchestrator message, stage, and categor
     httpRequestSent: false,
     failedAtStage: 'variables',
   });
+  assert.equal(result?.failureDiagnostics?.explanation, undefined);
   assert.equal(summary.statistics.preconditionFailures, 1);
 });
 

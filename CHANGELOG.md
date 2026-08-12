@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.9.0] - 2026-08-12
+
+Postman Import, Insomnia Import, cURL→`.api`, Variable Autocomplete polish, Failure Diagnostics Possible causes, Request/Response Diff, TypeScript generation, and VSIX esbuild bundling. Backward compatible with **2.8.4**.
+
+### Added
+
+- **Variable Autocomplete polish** — Completion detail shows scope labels plus `Environment: <name>` when available and `Secret value` for sensitive entries (never cleartext). Collection variable load/persist refreshes `.api` and Request Editor catalogs; Request Editor also refreshes on environment change / in-editor env switch. Comment lines in `.api` still offer `{{` completions (commented-out headers).
+- **cURL → `.api` import** — `API Hero: Import cURL` (`apiHero.importCurl`) parses a curl command in-process (never via shell) into a single `.api` file: paste, editor selection, or open a text file → preview (method/URL/headers/body/auth notes, secrets masked) → choose destination. Completes the round trip with Copy as cURL. **Not** a `SpecificationImportProvider`.
+- **Postman Collection import** — `API Hero: Import Postman Collection` (`apiHero.importPostman`) converts Postman Collection v2 / v2.1 JSON into Collections + `.api` files via the shared import pipeline (`SpecificationImportProvider` + `runImportPipeline`). Preview/cancel before write; scripts and unsupported auth/body features are reported as diagnostics (never executed).
+- **Insomnia export import** — `API Hero: Import Insomnia Export` (`apiHero.importInsomnia`) converts Insomnia resource-based export JSON (`__export_format` 3 / 4) into Collections + `.api` files on the same pipeline. Folders, requests, environments/variables, headers/query/body, and bearer/basic/apiKey auth are mapped; scripts and Insomnia-only resource types are reported as diagnostics (never executed).
+- **Shared import wizard host** — OpenAPI, Postman, and Insomnia wizards share registration helpers (workspace writer / settings patch) and a parameterized VS Code wizard host (workspace allowlist, preview, write, progress, cancel).
+- **Failure Diagnostics polish** — Deterministic status/transport explanations (`Possible causes` for 401/403/404/422/429/5xx; URL/elapsed/timeout/transport facts for network failures) on Request Editor, Collection Run Report Details, and additive MCP/diagnostics fields. Extends existing `RequestFailureDiagnostics` + `ResponsePresentation` — no second error system; secrets stay redacted.
+- **Request/Response Diff** — Compare Previous vs Current from an in-session presentation ring (per request key), and Compare Runs from Collection Run Manager recent presentations. Diffs status, headers, JSON paths (`$.user.active`), and non-JSON text lines over already-redacted `ResponsePresentation` only (extra body-token scrub). Commands: `apiHero.compareWithPreviousRun`, `apiHero.compareCollectionRuns` (report Details button). No durable body history.
+- **TypeScript Type Generation** — **Generate TypeScript** on successful JSON Response views (`apiHero.generateTypeScript` or body toolbar). Framework-free inference in `src/codegen/typescript-from-json.ts` from one observed body (primitives, nested objects/arrays, null, mixed/empty values). Disclaimer: not a complete API schema. UX: **Copy** or **Create .ts** (choose root type name + destination; overwrite requires confirmation). Type names from JSON keys only — never from sensitive string values.
+- **VSIX / extension bundling** — Packaging uses **esbuild** (`npm run bundle:vsix`, via `vscode:prepublish`) to produce three minified CJS entry bundles: `dist/extension.js` (external: `vscode`), `dist/mcp/server.js`, and `dist/cli/main.js`. Runtime deps (`yaml`, `zod`, `@modelcontextprotocol/sdk`) are inlined; packaging prunes `dist/` to those entries and omits `node_modules` from the VSIX. Measured vs unbundled **2.8.4**: VSIX **~4.0 MB / hundreds of files** → **~659 KB / 21 files**; vsce “bundle your extension” warning gone. Dev/test keep plain `tsc` (`npm run compile` / `npm test`); `npm run bundle` overwrites entries without pruning.
+
+### Notes
+
+- **cURL import supported flags (common):** `-X`/`--request` (including `-XPOST` and `--request=POST`), `-H`/`--header` (including `--header=…`), `-G`/`--get`, `-u`/`--user`, `-b`/`--cookie`, `-d`/`--data`/`--data-raw`/`--data-binary` (including `--data=…`), `--data-urlencode`, `-F`/`--form`, `-I`/`--head`, `-A`/`--user-agent`, `-e`/`--referer`, `--url`, `--max-time`, plus URL query and JSON/raw/form/multipart bodies.
+- **cURL import unsupported (ignored with warning):** e.g. `-o`/`-O`, `-v`, `-s`, `-k`/`--insecure`, `-L`/`--location`, `-x`/`--proxy`, `--compressed`, HTTP/2 switches, cert/key/`--cacert`, `--netrc`, `--digest`/`--ntlm`, `-T` upload, parallel (`-Z`), and other transfer/TLS options. No shell execution; `@file` data/form paths are not read from disk.
+- **cURL import secrets:** Sensitive headers (Authorization, Cookie, API keys, …) are replaced with placeholders in the written `.api`. Body and query string literals are kept as pasted (not redacted) so request shape stays faithful; do not paste production secrets into bodies you plan to commit. Preview warnings mask URL userinfo and avoid embedding cleartext secrets.
+- Public CLI / CI distribution remains deferred; headless CLI implementation stays in-repo for development and is **not** a shipped public product capability in **2.9.0**.
+- **Not claimed:** GraphQL, gRPC, WebSocket, Swagger 2.0, OAuth2/OIDC live flows, Cookie jar, Insomnia Document / YAML v5, HAR, Postman/Insomnia script execution.
+
+### Docs & Marketplace
+
+- Release readiness and notes pinned to **2.9.0**
+
 ## [2.8.4] - 2026-08-12
 
 OpenAPI environment safety, Collection Execution Controls (retry + destructive skip), Collection Run Report / Variable Trace UX polish, Scenario menu cleanup, and security masking alignment. Backward compatible with **2.8.3**.

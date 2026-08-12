@@ -28,6 +28,7 @@ import {
   runImportPipeline,
   safeJoinRelative,
   sanitizePathSegment,
+  scrubSensitiveExampleValue,
   validateOpenApiDocument,
   writeImportArtifacts,
   type WorkspaceFileWriter,
@@ -566,6 +567,26 @@ test('masks secrets in diagnostic messages', () => {
     'Authorization: Bearer super-secret-token-value',
   );
   assert.ok(!masked.includes('super-secret-token-value'));
+});
+
+test('scrubSensitiveExampleValue skips prototype pollution keys', () => {
+  const scrubbed = scrubSensitiveExampleValue({
+    name: 'ok',
+    password: 'secret',
+    __proto__: { polluted: true },
+    prototype: { polluted: true },
+    constructor: { polluted: true },
+    nested: { token: 'abc', keep: 1 },
+  }) as Record<string, unknown>;
+  assert.equal(scrubbed.name, 'ok');
+  assert.equal(scrubbed.password, '');
+  assert.equal(Object.prototype.hasOwnProperty.call(scrubbed, '__proto__'), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(scrubbed, 'prototype'), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(scrubbed, 'constructor'), false);
+  const nested = scrubbed.nested as Record<string, unknown>;
+  assert.equal(nested.token, '');
+  assert.equal(nested.keep, 1);
+  assert.equal(Object.getPrototypeOf(scrubbed), null);
 });
 
 test('success is false and nothing is written when a $ref is missing', async () => {

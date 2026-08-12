@@ -146,7 +146,7 @@ test('provides variable diagnostics, effective completions, and safe hovers', ()
   );
   assert.equal(
     variableCompletions.find((item) => item.insertText?.startsWith('token'))?.detail,
-    'Request · sensitive',
+    'Request · Secret value',
   );
 
   const filtered = new RuntimeParserAdapter(incomplete + 'ho', undefined, {
@@ -195,6 +195,43 @@ test('suggests did-you-mean for unknown variable diagnostics', () => {
   const missing = diagnostics.find((item) => item.code === 'variables.missing');
   assert.equal(missing?.severity, 'warning');
   assert.match(missing?.message ?? '', /Did you mean: baseUrl/);
+});
+
+test('variable completion detail includes environment name and secret label', () => {
+  const source = 'GET {{';
+  const completions = new RuntimeParserAdapter(source, undefined, {
+    definitions: [
+      {
+        name: 'host',
+        value: 'example.test',
+        scope: 'environment',
+        sensitive: false,
+        environmentName: 'Staging',
+      },
+      {
+        name: 'token',
+        value: 'should-not-appear',
+        scope: 'environment',
+        sensitive: true,
+        environmentName: 'Staging',
+      },
+      {
+        name: 'shared',
+        value: 'from-collection',
+        scope: 'collection',
+        sensitive: false,
+      },
+    ],
+  }).getCompletions(positionAt(source, 'GET {{', 6));
+  const byLabel = Object.fromEntries(
+    completions
+      .filter((item) => item.kind === 'variable')
+      .map((item) => [item.label, item.detail]),
+  );
+  assert.equal(byLabel.host, 'Environment: Staging');
+  assert.equal(byLabel.token, 'Environment: Staging · Secret value');
+  assert.equal(byLabel.shared, 'Collection');
+  assert.doesNotMatch(JSON.stringify(completions), /should-not-appear/);
 });
 
 test('combines canonical parser and semantic validation diagnostics once', () => {

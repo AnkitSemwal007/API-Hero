@@ -1,3 +1,7 @@
+import {
+  generateTypeScriptFromJsonText,
+  sanitizeTypeName,
+} from '../codegen';
 import type { TestReport } from '../assertions';
 import { detectAuthTokensInJson } from '../auth/detect-auth-tokens';
 import type { ExecutionResult } from '../execution';
@@ -21,9 +25,15 @@ import {
 } from './create-variable';
 import {
   presentExecutionResult,
+  type PresentExecutionOptions,
   type ResponseBodyPresentation,
   type ResponsePresentation,
 } from './presentation';
+import { PresentationRing } from './presentation-ring';
+import {
+  responseDiff,
+  type ResponseDiffResult,
+} from './response-diff';
 import {
   parseResponseViewerMessage,
   type ResponseViewerMessage,
@@ -82,6 +92,18 @@ export interface ResponseViewerHostActions {
   notifyCreateVariableError?(message: string): void | Promise<void>;
   /** Apply JSON body tokens to Authentication Session (host-side; no webview secrets). */
   useResponseAsAuthentication?(body: unknown): void | Promise<void>;
+  /**
+   * Present Copy / Create .ts UX for generated TypeScript (host-owned dialogs).
+   * `regenerate` rebuilds source when the user picks a custom root name.
+   */
+  presentGeneratedTypeScript?(input: {
+    readonly code: string;
+    readonly rootName: string;
+    readonly suggestedFileName: string;
+    readonly regenerate: (rootName: string) => string;
+  }): void | Promise<void>;
+  /** Surface generation failures (no JSON body, parse errors, etc.). */
+  notifyGenerateTypeScriptError?(message: string): void | Promise<void>;
 }
 
 export interface ResponseViewerServiceOptions {
@@ -89,6 +111,13 @@ export interface ResponseViewerServiceOptions {
     context?: ResponseViewerExecutionContext,
   ) => readonly string[];
   readonly variableWriter?: VariableWriter;
+  /**
+   * Optional fallback PresentExecutionOptions when callers omit the explicit
+   * argument (e.g. environment label from the active environment).
+   */
+  readonly getPresentOptions?: () => PresentExecutionOptions | undefined;
+  /** In-session presentation ring capacity (Previous vs Current). Default 8. */
+  readonly presentationRingCapacity?: number;
 }
 
 const NOOP_HOST_ACTIONS: ResponseViewerHostActions = {
@@ -110,6 +139,8 @@ export class ResponseViewerService implements ResponseViewerDisposable {
   private lastExtraction: ExtractionReport | undefined;
   private lastResult: ExecutionResult | undefined;
   private lastContext: ResponseViewerExecutionContext | undefined;
+  private lastDiff: ResponseDiffResult | undefined;
+  private readonly ring: PresentationRing;
 
   public constructor(
     private readonly panelFactory: ResponseViewerPanelFactory,
@@ -117,7 +148,11 @@ export class ResponseViewerService implements ResponseViewerDisposable {
       createWebviewNonce(),
     private readonly hostActions: ResponseViewerHostActions = NOOP_HOST_ACTIONS,
     private readonly options: ResponseViewerServiceOptions = {},
-  ) {}
+  ) {
+    this.ring = new PresentationRing({
+      capacity: options.presentationRingCapacity,
+    });
+  }
 
   /** Shows the result, creating or revealing the shared panel as needed. */
   public show(
@@ -125,6 +160,7 @@ export class ResponseViewerService implements ResponseViewerDisposable {
     assertions?: TestReport,
     extraction?: ExtractionReport,
     context?: ResponseViewerExecutionContext,
+    presentOptions?: PresentExecutionOptions,
   ): void {
     if (context !== undefined) {
       this.lastContext = context;
@@ -146,10 +182,10 @@ export class ResponseViewerService implements ResponseViewerDisposable {
           return this.handleMessage(parsed);
         }),
       ];
-      this.update(result, assertions, extraction, context);
+      this.update(result, assertions, extraction, context, presentOptions);
     } else {
       // Set the new response before revealing to avoid flashing stale content.
-      this.update(result, assertions, extraction, context);
+      this.update(result, assertions, extraction, context, presentOptions);
       this.panel.reveal();
     }
   }
@@ -160,25 +196,193 @@ export class ResponseViewerService implements ResponseViewerDisposable {
     assertions?: TestReport,
     extraction?: ExtractionReport,
     context?: ResponseViewerExecutionContext,
+    presentOptions?: PresentExecutionOptions,
   ): void {
     if (context !== undefined) {
       this.lastContext = context;
     }
     if (this.panel === undefined) {
-      this.show(result, assertions, extraction, context);
+      this.show(result, assertions, extraction, context, presentOptions);
       return;
     }
     this.lastResult = result;
     this.lastExtraction = extraction;
-    const model = presentExecutionResult(result, assertions, extraction);
+    this.lastDiff = undefined;
+    const resolvedOptions = this.resolvePresentOptions(presentOptions);
+    const model = presentExecutionResult(
+      result,
+      assertions,
+      extraction,
+      resolvedOptions,
+    );
     this.lastModel = model;
+    const ringKey = this.ringKey();
+    if (ringKey !== undefined) {
+      this.ring.push(ringKey, model);
+    }
     this.panel.setHtml(
       renderResponseViewerHtml(model, this.createNonce(), this.renderOptions()),
     );
   }
 
+  /**
+   * Compares the newest presentation for the active request with the previous
+   * in-session snapshot and re-renders the Diff section.
+   */
+  public compareWithPrevious(): ResponseDiffResult | undefined {
+    const ringKey = this.ringKey();
+    const current = this.lastModel;
+    if (ringKey === undefined || current === undefined) {
+      return undefined;
+    }
+    const previous = this.ring.previous(ringKey);
+    if (previous === undefined) {
+      return undefined;
+    }
+    const diff = responseDiff(previous, current, {
+      leftLabel: 'Previous',
+      rightLabel: 'Current',
+    });
+    this.lastDiff = diff;
+    if (this.panel !== undefined) {
+      this.panel.setHtml(
+        renderResponseViewerHtml(current, this.createNonce(), this.renderOptions()),
+      );
+      this.panel.reveal();
+    }
+    return diff;
+  }
+
+  /** True when the active request has a prior in-session presentation. */
+  public canCompareWithPrevious(): boolean {
+    const ringKey = this.ringKey();
+    return ringKey !== undefined && this.ring.hasPrevious(ringKey);
+  }
+
+  /**
+   * True when the last successful response has a non-truncated JSON body suitable
+   * for TypeScript generation.
+   */
+  public canGenerateTypeScript(): boolean {
+    return this.resolveJsonForTypeScript() !== undefined;
+  }
+
+  /**
+   * Infers TypeScript from the last successful JSON response and hands off to
+   * the host for Copy / Create .ts. Returns the generated source, or undefined
+   * when generation is unavailable.
+   */
+  public async generateTypeScript(
+    rootName = 'Root',
+  ): Promise<string | undefined> {
+    const jsonText = this.resolveJsonForTypeScript();
+    if (jsonText === undefined) {
+      await this.notifyGenerateTypeScriptError(
+        'Generate TypeScript is available for successful JSON responses only.',
+      );
+      return undefined;
+    }
+    const parsed = generateTypeScriptFromJsonText(jsonText, {
+      rootName: sanitizeTypeName(rootName),
+    });
+    if (!parsed.ok) {
+      await this.notifyGenerateTypeScriptError(parsed.message);
+      return undefined;
+    }
+    const regenerate = (nextRootName: string): string => {
+      const again = generateTypeScriptFromJsonText(jsonText, {
+        rootName: sanitizeTypeName(nextRootName),
+      });
+      return again.ok ? again.result.code : parsed.result.code;
+    };
+    if (this.hostActions.presentGeneratedTypeScript !== undefined) {
+      await this.hostActions.presentGeneratedTypeScript({
+        code: parsed.result.code,
+        rootName: parsed.result.rootName,
+        suggestedFileName: `${toKebabFileStem(parsed.result.rootName)}.ts`,
+        regenerate,
+      });
+    } else {
+      await this.hostActions.copyText(parsed.result.code);
+    }
+    return parsed.result.code;
+  }
+
+  /**
+   * Renders a diff between two arbitrary presentations (e.g. collection Run A
+   * vs Run B) in the response panel.
+   */
+  public showDiff(
+    left: ResponsePresentation,
+    right: ResponsePresentation,
+    labels?: { readonly leftLabel?: string; readonly rightLabel?: string },
+  ): ResponseDiffResult {
+    const diff = responseDiff(left, right, {
+      leftLabel: labels?.leftLabel ?? 'A',
+      rightLabel: labels?.rightLabel ?? 'B',
+    });
+    this.lastDiff = diff;
+    this.lastModel = right;
+    // Diff-only mode may show presentations that are not the last execution.
+    // Clear execution bindings so Create Variable / Detected Auth / path copy
+    // cannot target a different result than the shown presentation.
+    this.lastResult = undefined;
+    this.lastContext = undefined;
+    this.lastExtraction = undefined;
+    if (this.panel === undefined) {
+      this.panel = this.panelFactory.create();
+      const ownedPanel = this.panel;
+      this.panelDisposables = [
+        ownedPanel.onDidDispose(() => {
+          if (this.panel === ownedPanel) {
+            this.releasePanel(false);
+          }
+        }),
+        ownedPanel.onDidReceiveMessage((message) => {
+          const parsed = parseResponseViewerMessage(message);
+          if (parsed === undefined) {
+            return;
+          }
+          return this.handleMessage(parsed);
+        }),
+      ];
+    }
+    this.panel.setHtml(
+      renderResponseViewerHtml(right, this.createNonce(), this.renderOptions()),
+    );
+    this.panel.reveal();
+    return diff;
+  }
+
   public dispose(): void {
     this.releasePanel(true);
+  }
+
+  private resolvePresentOptions(
+    explicit?: PresentExecutionOptions,
+  ): PresentExecutionOptions | undefined {
+    let fromProvider: PresentExecutionOptions | undefined;
+    try {
+      fromProvider = this.options.getPresentOptions?.();
+    } catch {
+      fromProvider = undefined;
+    }
+    if (explicit === undefined && fromProvider === undefined) {
+      return undefined;
+    }
+    return {
+      ...(fromProvider ?? {}),
+      ...(explicit ?? {}),
+    };
+  }
+
+  private ringKey(): string | undefined {
+    const fromContext = this.lastContext?.requestKey?.trim();
+    if (fromContext !== undefined && fromContext.length > 0) {
+      return fromContext;
+    }
+    const fromModel = this.lastModel?.requestId?.trim();
+    return fromModel !== undefined && fromModel.length > 0 ? fromModel : undefined;
   }
 
   private renderOptions(): ResponseViewerRenderOptions {
@@ -191,10 +395,15 @@ export class ResponseViewerService implements ResponseViewerDisposable {
       knownVariableNames = [];
     }
     const detectedAuthTokenCount = countDetectedAuthTokens(this.lastResult);
+    const canComparePrevious = this.canCompareWithPrevious();
+    const canGenerateTypeScript = this.canGenerateTypeScript();
     return {
       enableCreateVariable: this.lastContext !== undefined,
       knownVariableNames,
       ...(detectedAuthTokenCount > 0 ? { detectedAuthTokenCount } : {}),
+      ...(canComparePrevious ? { canComparePrevious: true } : {}),
+      ...(canGenerateTypeScript ? { canGenerateTypeScript: true } : {}),
+      ...(this.lastDiff === undefined ? {} : { diff: this.lastDiff }),
     };
   }
 
@@ -203,6 +412,10 @@ export class ResponseViewerService implements ResponseViewerDisposable {
       switch (message.type) {
         case 'ready':
           return;
+        case 'comparePrevious': {
+          this.compareWithPrevious();
+          return;
+        }
         case 'copyBody': {
           const text = bodyTextForMode(this.lastModel?.body, message.mode);
           if (text !== undefined) {
@@ -256,6 +469,10 @@ export class ResponseViewerService implements ResponseViewerDisposable {
           await this.handleUseAsAuthentication();
           return;
         }
+        case 'generateTypeScript': {
+          await this.generateTypeScript();
+          return;
+        }
       }
     } catch (error: unknown) {
       if (message.type === 'createVariable') {
@@ -263,6 +480,13 @@ export class ResponseViewerService implements ResponseViewerDisposable {
           error instanceof Error ? error.message : 'Unexpected error.';
         await this.notifyCreateVariableError(
           `Could not create variable: ${detail}`,
+        );
+      }
+      if (message.type === 'generateTypeScript') {
+        const detail =
+          error instanceof Error ? error.message : 'Unexpected error.';
+        await this.notifyGenerateTypeScriptError(
+          `Could not generate TypeScript: ${detail}`,
         );
       }
       // Host clipboard/FS failures must not crash the message loop.
@@ -367,6 +591,57 @@ export class ResponseViewerService implements ResponseViewerDisposable {
     }
   }
 
+  private async notifyGenerateTypeScriptError(message: string): Promise<void> {
+    if (this.hostActions.notifyGenerateTypeScriptError !== undefined) {
+      await this.hostActions.notifyGenerateTypeScriptError(message);
+    } else if (this.hostActions.notifyCreateVariableError !== undefined) {
+      await this.hostActions.notifyCreateVariableError(message);
+    }
+  }
+
+  /** JSON body text for type generation, or undefined when unavailable. */
+  private resolveJsonForTypeScript(): string | undefined {
+    const model = this.lastModel;
+    const result = this.lastResult;
+    if (model === undefined || model.failure !== undefined) {
+      return undefined;
+    }
+    const body = model.body;
+    if (
+      body === undefined
+      || body.language !== 'json'
+      || body.truncated
+      || !body.prettyAvailable
+    ) {
+      return undefined;
+    }
+    if (result !== undefined && result.success) {
+      const fromResult =
+        result.response.body.text
+        ?? (result.response.body.json !== undefined
+          ? JSON.stringify(result.response.body.json)
+          : undefined);
+      if (fromResult !== undefined && fromResult.trim().length > 0) {
+        try {
+          JSON.parse(fromResult);
+          return fromResult;
+        } catch {
+          // Fall through to presentation pretty text.
+        }
+      }
+    }
+    const pretty = body.pretty?.trim();
+    if (pretty === undefined || pretty.length === 0) {
+      return undefined;
+    }
+    try {
+      JSON.parse(pretty);
+      return pretty;
+    } catch {
+      return undefined;
+    }
+  }
+
   private async handleUseAsAuthentication(): Promise<void> {
     const result = this.lastResult;
     if (result === undefined || !result.success) {
@@ -408,6 +683,7 @@ export class ResponseViewerService implements ResponseViewerDisposable {
     this.lastExtraction = undefined;
     this.lastResult = undefined;
     this.lastContext = undefined;
+    this.lastDiff = undefined;
     for (const disposable of this.panelDisposables) {
       disposable.dispose();
     }
@@ -502,4 +778,13 @@ function suggestedBodyFileName(
     default:
       return 'response.txt';
   }
+}
+
+function toKebabFileStem(typeName: string): string {
+  const stem = typeName
+    .replace(/([a-z0-9])([A-Z])/gu, '$1-$2')
+    .replace(/[^A-Za-z0-9]+/gu, '-')
+    .replace(/^-+|-+$/gu, '')
+    .toLowerCase();
+  return stem.length > 0 ? stem : 'response';
 }

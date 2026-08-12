@@ -4,7 +4,7 @@
 
 Author `.api` requests beside your code, organize them in Git-friendly collections, run with assertions, and expose the same collections to AI agents via a standalone MCP server — without leaving your editor workflow.
 
-> Extension ID: **`ankitsemwal.api-hero`** · Version: **2.8.4** · License: [MIT](LICENSE)
+> Extension ID: **`ankitsemwal.api-hero`** · Version: **2.9.0** · License: [MIT](LICENSE)
 
 [Documentation](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/README.md) · [Changelog](CHANGELOG.md) · [Support](SUPPORT.md)
 
@@ -29,6 +29,7 @@ Author `.api` requests beside your code, organize them in Git-friendly collectio
 - **Collection Runner** — run collection / folder / selected requests with failure policies and optional **Run Options** (retries + DELETE skip)
 - **Collection Run Reports** — compact summary and rows, filters, folder grouping, and drill-down Details
 - **Copy as cURL** — resolve variables + auth and copy a redacted POSIX cURL command (no HTTP)
+- **Import cURL** — paste/select/open a curl command → preview → create a `.api` file (parsed in-process; never via shell)
 - **Request History** — metadata in VS Code global storage (`request-history.json`)
 - **Scenarios (advanced)** — multi-step workflows under `.apihero/scenarios/`
 - **OpenAPI 3.x import** — local file or **HTTP(S) URL** wizard → Collections + `.api` files
@@ -59,7 +60,7 @@ No context switching. No binary collections. Same workflow as the rest of your c
    ```bash
    npm install
    npm run package
-   code --install-extension release/api-hero-2.8.4.vsix
+   code --install-extension release/api-hero-2.9.0.vsix
    ```
 
    Requires VS Code **1.90+**.
@@ -405,14 +406,17 @@ Scenarios automate **one multi-step API workflow** (branches, shared data). They
 
 ---
 
-## OpenAPI
+## OpenAPI, Postman, Insomnia & cURL import
 
-- **Supported:** OpenAPI **3.0.x** / **3.1.x** JSON or YAML from a **local file** or **HTTP(S) URL**
+- **Supported:** OpenAPI **3.0.x** / **3.1.x** JSON or YAML from a **local file** or **HTTP(S) URL**; Postman Collection **v2 / v2.1** JSON (local file); Insomnia resource-based export **v3 / v4** JSON (local file); single **cURL** command → one `.api` file
 - **API Hero: Import OpenAPI Specification** — wizard → Collections + `.api` files (same serializer as the Request Editor; URL fetch uses the same importer)
-- **Environments:** imported server environments are created and selectable; an **existing active environment is preserved** (not replaced)
-- **Size limit:** `apiHero.import.maxFileBytes` (default 5 MiB)
+- **API Hero: Import Postman Collection** — wizard → Collections + `.api` files; preserves folders, methods, URLs, `{{variables}}`, headers/query/body (raw JSON, form-urlencoded, form-data), and bearer/basic/apiKey auth profiles; scripts are **not** executed or migrated (warnings only)
+- **API Hero: Import Insomnia Export** — wizard → Collections + `.api` files; preserves nested folders (`request_group`), methods, URLs, `{{ }}` refs, headers/query/body, environments, and bearer/basic/apiKey auth; scripts and Insomnia-only resource types are **not** executed or migrated (warnings only)
+- **API Hero: Import cURL** — paste, editor selection, or text file → in-process parse (no shell) → masked preview → save one `.api` file (round trip with **Copy as cURL**). Unsupported transfer/TLS flags are ignored with warnings; `@file` bodies are not read from disk
+- **Environments:** imported server / collection / Insomnia environments are created and selectable; an **existing active environment is preserved** (not replaced)
+- **Size limit:** `apiHero.import.maxFileBytes` (default 5 MiB) for OpenAPI/Postman/Insomnia; cURL paste capped at 256 KiB
 
-**Not supported:** Swagger 2.0, Postman/Insomnia import, GraphQL, remote `$ref`, OAuth2 as a live auth flow, automatic assertion generation from the spec, authenticated specification URLs.
+**Not supported:** Swagger 2.0, Insomnia Document / YAML v5, HAR, GraphQL (best-effort stub only from Postman/Insomnia), remote `$ref`, OAuth2 as a live auth flow, automatic assertion generation from the spec, authenticated specification URLs, Postman/Insomnia script execution, gRPC / WebSocket / GraphQL request resources from Insomnia, curl proxy/`-k`/`-L`/output/cert flags (ignored), shell execution of pasted curl.
 
 → [OpenAPI Import](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/openapi-import.md)
 
@@ -519,7 +523,7 @@ Installing the extension ≠ MCP registered. Add:
 [mcp_servers.api-hero]
 command = "node"
 args = [
-  "C:/Users/<you>/.vscode/extensions/ankitsemwal.api-hero-2.8.4/dist/mcp/server.js",
+  "C:/Users/<you>/.vscode/extensions/ankitsemwal.api-hero-2.9.0/dist/mcp/server.js",
   "--workspace",
   "D:/path/to/your-api-workspace"
 ]
@@ -700,7 +704,7 @@ Notable keys:
 | MCP for AI agents | [mcp.md](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/mcp.md) |
 | Product overview | [product/README.md](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/product/README.md) |
 | Marketplace assets | [marketplace-assets.md](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/release/marketplace-assets.md) |
-| Release notes 2.8.4 | [v2.8.4-release-notes.md](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/release/v2.8.4-release-notes.md) |
+| Release notes 2.9.0 | [v2.9.0-release-notes.md](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/release/v2.9.0-release-notes.md) |
 
 Listing media (hero, screenshots, banner, social preview, workflow GIF) is hosted on **Cloudinary** so the VSIX stays small. Extension icons still ship in-package.
 

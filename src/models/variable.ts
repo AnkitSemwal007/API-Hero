@@ -18,6 +18,12 @@ export interface VariableDefinition {
   readonly value: string;
   readonly scope: VariableScope;
   readonly sensitive: boolean;
+  /**
+   * Optional active-environment display name for IntelliSense detail only.
+   * Present on environment-scoped definitions when the host knows the name;
+   * never required for resolution.
+   */
+  readonly environmentName?: string;
 }
 
 /** A fully expanded variable value. */

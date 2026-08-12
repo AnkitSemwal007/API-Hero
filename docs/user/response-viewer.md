@@ -67,6 +67,32 @@ On confirm, API Hero:
 
 These actions post messages to the extension host. Body Pretty/Raw and the JSON tree show response content for display (including leaf scalars). Sensitive **headers** and the **Extracted** tab remain masked; Copy Value for extractable paths is re-resolved on the host from the last execution result rather than trusting arbitrary webview plaintext.
 
+## Compare with Previous Run
+
+After you run the same request more than once in this session, the Response panel offers **Compare with Previous Run** (also Command Palette: `API Hero: Compare with Previous Run`). The diff uses the in-session presentation ring only — not History — and compares already-redacted presentations:
+
+- Status code
+- Headers (sensitive values stay masked)
+- JSON body fields as `$.path` (added / removed / changed)
+- Non-JSON bodies as a simple text line diff
+
+Sides are labeled **Previous** vs **Current**. Collection Run Report Details also offers **Compare Runs** when a prior recent collection-run presentation exists for that request (**A** vs **B** / Current).
+
+## Generate TypeScript
+
+For **successful JSON** responses (non-truncated Pretty body), the Response panel offers **Generate TypeScript** (also Command Palette: `API Hero: Generate TypeScript`).
+
+API Hero infers interfaces / types from **this one observed body** — not a complete API schema. Nested objects become nested interfaces; arrays, null, empty values, and mixed element types are handled conservatively.
+
+Then choose:
+
+| Action | Behavior |
+| --- | --- |
+| Copy | Copies the generated TypeScript to the clipboard |
+| Create .ts | Asks for a root interface/type name, then a save destination. Existing `.ts` files require an explicit overwrite confirmation |
+
+Type names come from JSON **keys** only (never from string values such as tokens).
+
 ## Related
 
 - [Creating requests](./creating-requests.md)

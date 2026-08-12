@@ -94,6 +94,31 @@ test('renders accessible pretty/raw and JSON expansion controls', () => {
   assert.match(html, /var\(--vscode-editor-background\)/u);
 });
 
+test('renders Possible causes for successful 401 responses', () => {
+  const base = result('{"error":"unauthorized"}');
+  assert.equal(base.success, true);
+  if (!base.success) {
+    return;
+  }
+  const unauthorized: ExecutionResult = {
+    ...base,
+    response: {
+      ...base.response,
+      statusCode: 401,
+      statusText: 'Unauthorized',
+    },
+  };
+  const html = renderResponseViewerHtml(
+    presentExecutionResult(unauthorized),
+    'nonce',
+  );
+  assert.match(html, /explanation-card/u);
+  assert.match(html, /401 Unauthorized/u);
+  assert.match(html, /Possible causes/u);
+  assert.match(html, /Authorization header missing/u);
+  assert.doesNotMatch(html, /Bearer\s+\w+/u);
+});
+
 test('renders status card, tabs, copy/save/search without cookies placeholder', () => {
   const html = renderResponseViewerHtml(
     presentExecutionResult(result()),
@@ -109,6 +134,10 @@ test('renders status card, tabs, copy/save/search without cookies placeholder', 
   assert.match(html, /data-action="copyBody"/u);
   assert.match(html, /data-action="saveBody"/u);
   assert.match(html, /data-action="copyHeaders"/u);
+  assert.equal(
+    /<button[^>]*data-action="generateTypeScript"/u.test(html),
+    false,
+  );
   assert.match(html, /id="bodySearch"/u);
   assert.match(html, /SEARCH_MATCH_LIMIT = 500/u);
   assert.match(html, /Showing first /u);
@@ -148,6 +177,9 @@ test('validates webview messages against a closed schema', () => {
   assert.deepEqual(parseResponseViewerMessage({ type: 'copyHeaders' }), {
     type: 'copyHeaders',
   });
+  assert.deepEqual(parseResponseViewerMessage({ type: 'generateTypeScript' }), {
+    type: 'generateTypeScript',
+  });
   assert.deepEqual(
     parseResponseViewerMessage({ type: 'copyBody', mode: 'raw' }),
     { type: 'copyBody', mode: 'raw' },
@@ -167,6 +199,7 @@ test('validates webview messages against a closed schema', () => {
     { type: 'copyBody', mode: 'hex' },
     { type: 'saveBody', mode: 'pretty', extra: true },
     { type: 'copyHeaders', mode: 'pretty' },
+    { type: 'generateTypeScript', extra: true },
   ]) {
     assert.equal(parseResponseViewerMessage(value), undefined);
   }
@@ -300,6 +333,75 @@ test('copies and saves body/headers through host actions from the presentation m
   assert.equal(saved.length, 1);
   assert.equal(saved[0]?.fileName, 'response.json');
   assert.equal(saved[0]?.content, '{"ok":true}');
+});
+
+test('offers Generate TypeScript for successful JSON and presents via host', async () => {
+  const factory = new MockPanelFactory();
+  const presented: {
+    code: string;
+    rootName: string;
+    suggestedFileName: string;
+  }[] = [];
+  const viewer = new ResponseViewerService(
+    factory,
+    () => 'nonce',
+    {
+      copyText: () => undefined,
+      saveText: () => undefined,
+      presentGeneratedTypeScript: (input) => {
+        presented.push({
+          code: input.code,
+          rootName: input.rootName,
+          suggestedFileName: input.suggestedFileName,
+        });
+      },
+    },
+  );
+
+  viewer.show(result('{"id":1,"name":"Ada"}'));
+  assert.equal(viewer.canGenerateTypeScript(), true);
+  assert.match(
+    factory.panels[0]!.html,
+    /<button[^>]*data-action="generateTypeScript"/u,
+  );
+
+  await factory.panels[0]!.emitMessage({ type: 'generateTypeScript' });
+  assert.equal(presented.length, 1);
+  assert.equal(presented[0]?.rootName, 'Root');
+  assert.match(presented[0]!.code, /export interface Root \{/u);
+  assert.match(presented[0]!.code, /id: number;/u);
+  assert.match(presented[0]!.suggestedFileName, /\.ts$/u);
+
+  const code = await viewer.generateTypeScript('User');
+  assert.match(code ?? '', /export interface User \{/u);
+  assert.equal(presented.length, 2);
+  assert.equal(presented[1]?.rootName, 'User');
+});
+
+test('Generate TypeScript is unavailable for non-JSON bodies', () => {
+  const factory = new MockPanelFactory();
+  const viewer = new ResponseViewerService(factory, () => 'nonce');
+  const plain = result('hello');
+  assert.equal(plain.success, true);
+  if (!plain.success) {
+    return;
+  }
+  viewer.show({
+    ...plain,
+    response: {
+      ...plain.response,
+      contentType: 'text/plain',
+      body: {
+        bytes: plain.response.body.bytes,
+        text: 'hello',
+      },
+    },
+  });
+  assert.equal(viewer.canGenerateTypeScript(), false);
+  assert.equal(
+    /<button[^>]*data-action="generateTypeScript"/u.test(factory.panels[0]!.html),
+    false,
+  );
 });
 
 function deeplyNestedResult(depth: number): ExecutionResult {
@@ -656,6 +758,72 @@ test('createVariable and copyJsonPathValue succeed for array-root body paths', a
   });
   assert.equal(errors.length, 0);
   assert.equal(created.length, 1);
+});
+
+test('showDiff clears execution bindings so actions cannot target a stale result', async () => {
+  const factory = new MockPanelFactory();
+  const copied: string[] = [];
+  const errors: string[] = [];
+  const authBodies: unknown[] = [];
+  const viewer = new ResponseViewerService(
+    factory,
+    () => 'nonce',
+    {
+      copyText: (text) => {
+        copied.push(text);
+      },
+      saveText: () => undefined,
+      notifyCreateVariableError: (message) => {
+        errors.push(message);
+      },
+      useResponseAsAuthentication: (body) => {
+        authBodies.push(body);
+      },
+    },
+  );
+
+  viewer.show(
+    result('{"access_token":"stale-secret","id":1}'),
+    undefined,
+    undefined,
+    {
+      sourceId: 'file:///ws/a.api',
+      requestKey: 'request:file:///ws/a.api#0',
+      offset: 0,
+    },
+  );
+  const panel = factory.panels[0]!;
+  assert.match(panel.html, /data-enable-create-variable="true"/u);
+  assert.match(panel.html, /Detected Authentication/u);
+
+  const left = presentExecutionResult(result('{"run":"a"}'));
+  const right = presentExecutionResult(result('{"run":"b"}'));
+  viewer.showDiff(left, right, { leftLabel: 'Run A', rightLabel: 'Run B' });
+
+  assert.match(panel.html, /data-enable-create-variable="false"/u);
+  assert.equal(panel.html.includes('Detected Authentication'), false);
+  assert.match(panel.html, /Run A|Run B|diff/iu);
+
+  await panel.emitMessage({
+    type: 'copyJsonPathValue',
+    path: 'body.access_token',
+  });
+  assert.deepEqual(copied, []);
+
+  await panel.emitMessage({
+    type: 'createVariable',
+    name: 'token',
+    path: 'body.access_token',
+    scope: 'environment',
+    sensitive: true,
+  });
+  assert.equal(errors.length, 1);
+  assert.match(errors[0]!, /no active response context/iu);
+
+  await panel.emitMessage({ type: 'useAsAuthentication' });
+  assert.equal(authBodies.length, 0);
+  assert.equal(errors.length, 2);
+  assert.match(errors[1]!, /no successful response body/iu);
 });
 
 test('getKnownVariableNames throw does not block opening the response panel', () => {

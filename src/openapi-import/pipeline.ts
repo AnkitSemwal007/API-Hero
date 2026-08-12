@@ -136,7 +136,7 @@ export async function runImportPipeline(
       code: 'no-provider',
       severity: 'error',
       message:
-        'No import provider could handle this specification. Only OpenAPI 3.0/3.1 is supported.',
+        'No import provider could handle this specification. OpenAPI 3.0/3.1, Postman Collection v2/v2.1, and Insomnia export v3/v4 are supported.',
     });
     return {
       summary: failureSummary(options.targetRoot, diagnostics),
@@ -148,7 +148,7 @@ export async function runImportPipeline(
       code: 'unsupported-specification',
       severity: 'error',
       message:
-        'Specification is not a supported OpenAPI 3.0/3.1 document. Swagger 2.0 and other formats are not imported.',
+        'Specification is not a supported OpenAPI 3.0/3.1, Postman Collection, or Insomnia export document. Swagger 2.0 and other formats are not imported.',
     });
     return {
       summary: failureSummary(options.targetRoot, diagnostics),

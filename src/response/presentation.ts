@@ -12,6 +12,10 @@ import {
   redactUrlUserinfo,
 } from '../shared';
 import { MASKED_VARIABLE_VALUE } from '../variables';
+import {
+  buildFailureExplanation,
+  type FailureExplanation,
+} from './failure-explanations';
 
 export const RESPONSE_TEXT_PREVIEW_LIMIT = 256 * 1024;
 export const RESPONSE_BINARY_PREVIEW_LIMIT = 4 * 1024;
@@ -85,6 +89,15 @@ export interface ResponseFailurePresentation {
   };
 }
 
+/**
+ * Optional context for deterministic failure explanations (environment label,
+ * configured timeout). Never carries secrets.
+ */
+export interface PresentExecutionOptions {
+  readonly environmentLabel?: string;
+  readonly timeoutMs?: number;
+}
+
 export interface PresentedAssertionFailure {
   readonly assertionText: string;
   readonly expected?: string;
@@ -155,6 +168,11 @@ export interface ResponsePresentation {
   readonly statistics: ResponseStatistics;
   readonly body?: ResponseBodyPresentation;
   readonly failure?: ResponseFailurePresentation;
+  /**
+   * Deterministic status/transport guidance (including successful transport
+   * with 4xx/5xx). Speculative lines live under `possibleCauses`.
+   */
+  readonly explanation?: FailureExplanation;
   readonly assertions?: PresentedAssertions;
   readonly extraction?: PresentedExtraction;
   readonly summary: string;
@@ -179,6 +197,7 @@ export function presentExecutionResult(
   result: ExecutionResult,
   assertions?: TestReport,
   extraction?: ExtractionReport,
+  options?: PresentExecutionOptions,
 ): ResponsePresentation {
   const method = result.request?.method ?? 'Unknown method';
   const requestUrl = result.request === undefined
@@ -187,6 +206,17 @@ export function presentExecutionResult(
   const presentedAssertions = presentAssertions(assertions);
   const presentedExtraction = presentExtraction(extraction);
   if (!result.success) {
+    const explanation = buildFailureExplanation({
+      url: requestUrl === 'Unknown URL' ? undefined : requestUrl,
+      elapsedMs: result.timing.durationMs,
+      ...(options?.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
+      transportCode: result.error.code,
+      transportMessage: result.error.message,
+      ...(options?.environmentLabel === undefined
+        ? {}
+        : { environmentLabel: options.environmentLabel }),
+      requestId: result.requestId,
+    });
     return deepFreeze({
       success: false,
       requestId: result.requestId,
@@ -211,6 +241,7 @@ export function presentExecutionResult(
           ? {}
           : { cause: { ...result.error.cause } }),
       },
+      ...(explanation === undefined ? {} : { explanation }),
       ...(presentedAssertions === undefined
         ? {}
         : { assertions: presentedAssertions }),
@@ -243,6 +274,21 @@ export function presentExecutionResult(
     presentedExtraction === undefined
       ? ''
       : ` · ${presentedExtraction.chipLabel}`;
+  const explanation = buildFailureExplanation({
+    statusCode: response.statusCode,
+    statusText: response.statusText,
+    url: requestUrl === 'Unknown URL' ? undefined : requestUrl,
+    elapsedMs: result.timing.durationMs,
+    ...(options?.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
+    ...(options?.environmentLabel === undefined
+      ? {}
+      : { environmentLabel: options.environmentLabel }),
+    requestId: result.requestId,
+    ...(response.contentType === undefined
+      ? {}
+      : { contentType: response.contentType }),
+    bodySizeBytes: response.bodySizeBytes,
+  });
   return deepFreeze({
     success: true,
     requestId: result.requestId,
@@ -267,6 +313,7 @@ export function presentExecutionResult(
       finalUrl: redactUrlUserinfo(response.url),
     },
     body,
+    ...(explanation === undefined ? {} : { explanation }),
     ...(presentedAssertions === undefined
       ? {}
       : { assertions: presentedAssertions }),
