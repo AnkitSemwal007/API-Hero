@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.10.0] - 2026-08-13
+
+Public headless CLI / CI distribution via npm (`apihero` bin) on the shared headless runtime. Backward compatible with **2.9.1**.
+
+### Added
+
+- **Public `apihero` CLI packaging** — `package.json` `files` allowlist + `prepack` (`compile` + esbuild `bundle`) ships `bin/apihero.js` with bundled `dist/cli/main.js` (and MCP/extension entry bundles). Clean `npm pack` / `npm install` / `npx apihero` / Windows `apihero.cmd` verified without repository `src/` or VS Code.
+- **CLI scenario CI policy** — CLI-only exit/`Result`/`ok` treatment: precondition-skipped steps (skipped with error) or zero completed steps are **not** exit **0**, without changing ScenarioEngine or MCP tool semantics.
+- **`engines.node`: `>=18`** alongside existing `engines.vscode`.
+
+### Changed
+
+- README / CLI user guide advertise the npm CLI only after packaged install acceptance.
+- Roadmap: Headless CLI / CI Runner moved from Planned to shipped for **2.10.0**.
+
+### Notes
+
+- Installing the VS Code Marketplace extension does **not** put `apihero` on PATH — install the `api-hero` npm package (or use `npx`).
+- Deferred: `--var`, OS env → `{{variable}}`, scenario `--inputs` on CLI, parent-directory workspace discovery.
+
 ## [2.9.1] - 2026-08-12
 
 Marketplace icon restoration and complete README / Marketplace documentation coverage for capabilities already shipped in **2.9.0**. Backward compatible with **2.9.0**.

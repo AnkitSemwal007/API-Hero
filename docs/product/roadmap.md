@@ -92,7 +92,7 @@ Honest near-term plan for **API Hero** after **2.9.1** (docs + Marketplace icon 
 
 | Item | Notes |
 | --- | --- |
-| **Headless CLI / CI Runner — Planned / In Development** | Not currently distributed or shipped as a public product capability; implementation may exist in-repo |
+| **Headless CLI / CI Runner** | Shipped in **2.10.0** — `apihero` npm bin; shared headless runtime with MCP |
 | Marketplace asset refresh | Capture Auth Manager + Scenario Editor screenshots; keep README section images in sync |
 | Scenarios Phase 2+ | Deeper step types / orchestration polish after Experience feedback |
 | Run File | Implement multi-request file execution (today: stub, palette-hidden) |
@@ -119,5 +119,5 @@ Do not schedule "build Env Manager / Auth Manager / Overview / Extraction / coll
 - [Vision](./vision.md)
 - [User guide](../user/getting-started.md)
 - [Scenarios](../user/scenarios.md)
-- [CLI (not publicly distributed)](../user/cli.md)
+- [CLI](../user/cli.md)
 - [ADR-0001](../architecture/adr/0001-variables-extraction-auth-dependencies.md)

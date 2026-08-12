@@ -1,26 +1,45 @@
 {
   "name": "api-hero",
   "displayName": "API Hero",
-  "description": "Git-first REST/HTTP client for VS Code. Edit .api requests in a UI Request Editor, run with assertions, orchestrate Scenarios, manage Authentication (profiles, Login API sessions, Secret Storage), collections, and environments, import OpenAPI / Postman / Insomnia / cURL, inspect Execution, History, and Run Reports, and expose collections to AI agents via MCP.",
-  "version": "2.9.1",
+  "description": "Git-first REST/HTTP client for VS Code plus headless apihero CLI and MCP. Edit .api requests in a UI Request Editor, run with assertions, orchestrate Scenarios, manage Authentication (profiles, Login API sessions, Secret Storage), collections, and environments, import OpenAPI / Postman / Insomnia / cURL, inspect Execution, History, and Run Reports, and run the same collections from CI or AI agents.",
+  "version": "2.10.0",
   "publisher": "ankitsemwal",
   "license": "MIT",
   "homepage": "https://github.com/AnkitSemwal007/API-Hero",
   "repository": {
     "type": "git",
-    "url": "https://github.com/AnkitSemwal007/API-Hero.git"
+    "url": "git+https://github.com/AnkitSemwal007/API-Hero.git"
   },
   "bugs": {
     "url": "https://github.com/AnkitSemwal007/API-Hero/issues"
   },
   "engines": {
-    "vscode": "^1.90.0"
+    "vscode": "^1.90.0",
+    "node": ">=18"
   },
+  "files": [
+    "bin/",
+    "dist/cli/main.js",
+    "dist/mcp/server.js",
+    "dist/extension.js",
+    "language-configuration.json",
+    "syntaxes/",
+    "snippets/",
+    "images/icon.png",
+    "images/api-dark.svg",
+    "images/api-light.svg",
+    "images/execution-dark.svg",
+    "images/execution-light.svg",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
   "categories": [
     "Testing",
     "Programming Languages"
   ],
   "keywords": [
+    "cli",
+    "ci",
     "api hero",
     "rest client",
     "http client",
@@ -52,8 +71,8 @@
   "icon": "images/icon.png",
   "main": "./dist/extension.js",
   "bin": {
-    "api-hero-mcp": "./bin/api-hero-mcp.js",
-    "apihero": "./bin/apihero.js"
+    "api-hero-mcp": "bin/api-hero-mcp.js",
+    "apihero": "bin/apihero.js"
   },
   "contributes": {
     "languages": [
@@ -2218,6 +2237,8 @@
     "test:unit": "npm test",
     "test:coverage": "npm run compile && c8 --reporter=text-summary --reporter=text node ./scripts/run-unit-tests.mjs",
     "mcp": "npm run compile && node ./dist/mcp/server.js",
+    "prepack": "npm run compile && npm run bundle",
+    "pack:cli": "npm pack",
     "package": "npm run clean && npm run build && npm test && node ./scripts/package-vsix.mjs",
     "package:fast": "node ./scripts/package-vsix.mjs",
     "vscode:prepublish": "npm run compile && npm run bundle:vsix"

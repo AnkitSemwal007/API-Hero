@@ -1,9 +1,6 @@
 # API Hero CLI (`apihero`)
 
-> **Not currently distributed / not a public shipped product capability.**  
-> The headless CLI implementation is retained in-repo for development. This guide is for contributors and internal use. API Hero does **not** currently ship a Marketplace- or npm-distributed global `apihero` CLI as a public product feature.
-
-Run API Hero requests, collections, and scenarios from the terminal or CI — **without VS Code** (development / in-repo only).
+Run API Hero requests, collections, and scenarios from the terminal or CI — **without VS Code**.
 
 The CLI reuses the same headless composition as MCP: `ExecutionOrchestrator`, `CollectionRunnerService`, and `ScenarioEngine`. It does **not** start an MCP server and does **not** import `vscode`.
 
@@ -11,28 +8,41 @@ The CLI reuses the same headless composition as MCP: `ExecutionOrchestrator`, `C
 
 - Node.js 18+
 - A workspace folder with `Collections/<Name>/` (standard API Hero layout)
-- Built package output: `npm run compile` (produces `dist/cli/main.js`)
 
-## Install / build
+## Installation
 
-From the API Hero repo root:
+The CLI ships in the **`api-hero`** npm package (same package as the VS Code extension metadata; the published tarball contains bundled CLI/MCP/extension entry points only).
 
 ```bash
-npm install
-npm run compile
+npm install -g api-hero
+apihero --version
+apihero --help
 ```
 
-Bin entry after local compile (development / in-repo only — not a public npm global product):
+Or without a global install:
 
 ```bash
 npx apihero --help
-# or
-node ./bin/apihero.js --help
-# or (after local npm link in this repo)
-apihero run request Hello --workspace "/absolute/path/to/your-api-workspace"
 ```
 
-Without `--workspace`, set `APIHERO_WORKSPACE` or run with cwd at the workspace root (same priority as MCP).
+If the release is not yet on the registry, install from a local pack:
+
+```bash
+npm pack
+npm install -g ./api-hero-*.tgz
+```
+
+From a local checkout (contributors):
+
+```bash
+npm install
+npm run compile   # or: npm run bundle
+npx apihero --help
+# or
+node ./bin/apihero.js --help
+```
+
+Installing the VS Code extension from the Marketplace does **not** put `apihero` on your PATH. Install the npm package (or use `npx`) for the CLI.
 
 ## Commands
 
@@ -63,9 +73,23 @@ Unknown options exit with code **2**.
 - **collection** — collection display name or id
 - **scenario** — scenario name, id, or `.scenario.json` path under `.apihero/scenarios/`
 
+## Workspace selection
+
+Priority (same as MCP):
+
+1. `--workspace <path>`
+2. `APIHERO_WORKSPACE`
+3. Current working directory (`cwd`)
+
+There is **no** parent-directory walk. Run from the workspace root, or pass `--workspace` / set `APIHERO_WORKSPACE`.
+
+If `cwd` is a nested folder under `Collections/<Name>/`, a request might still resolve via the Legacy `.api` layout, but collection lookup by name will fail until you point at the real workspace root. Prefer an explicit `--workspace`.
+
+Invalid / empty workspaces return configuration errors (exit **3**), e.g. `EMPTY_WORKSPACE` / `REQUEST_NOT_FOUND` / `COLLECTION_NOT_FOUND`.
+
 ## Environments
 
-When `.apihero` exists, the CLI loads environments, workspace variables, and auth **profiles** from the Project Store (same as the enhanced headless MCP composition). Global VS Code settings variables are empty in headless.
+When `.apihero` exists, the CLI loads environments, workspace variables, and auth **profiles** from the Project Store (same as headless MCP). Global VS Code settings variables are empty in headless.
 
 ```bash
 apihero run collection Demo --workspace . --environment staging
@@ -84,22 +108,34 @@ Headless hosts do **not** use VS Code Secret Storage. Provide secrets via proces
 
 Auth profiles still use `{ kind: "secret" }` metadata; only the SecretStore backend differs.
 
+The CLI does **not** map arbitrary `process.env` names to `{{variable}}` substitution, and does **not** support `--var` yet.
+
 ## Exit codes
 
 | Code | Meaning |
 | --- | --- |
 | 0 | Successful execution |
-| 1 | Execution failure (HTTP / assertions / failed scenario or collection counts) |
+| 1 | Execution failure (HTTP / assertions / failed scenario or collection counts / CI-unsafe scenario skips) |
 | 2 | Invalid arguments / usage |
 | 3 | Project / configuration / validation (unknown env, not found, unbound, empty plan, …) |
 | 4 | Auth / secret resolution (when detectable) |
 
-Note: `runScenario` may return an ok MCP payload when `report.status === 'failed'`. The CLI checks domain status and exits **1**.
+### Scenario CI semantics
+
+The ScenarioEngine / MCP report may still show an overall non-`failed` status when steps are skipped for preconditions. For **CLI / CI**, a run is **not** exit **0** when:
+
+- any step failed, or
+- the run `status` is `failed` or `cancelled`, or
+- `statistics.cancelled > 0`, or
+- any step is **skipped with an error** (e.g. “Request precondition failed.”), or
+- `total > 0` and `completed === 0`
+
+Dependent skips after a real failure already yield exit **1** via `failed > 0`. This CLI policy does **not** change ScenarioEngine or MCP tool behavior.
 
 ## Output
 
-Human (default) prints a short step/request summary with ✓ / ✗ and a final `Result:` line.  
-`--json` prints a redacted envelope:
+Human (default) prints a short step/request summary with ✓ / ✗ / ○ and a final `Result:` line.  
+`--json` prints a redacted envelope on **stdout** (no human progress mixed in). Verbose logs go to **stderr**.
 
 ```json
 {
@@ -119,9 +155,9 @@ Secrets and Authorization values are always redacted (same helpers as MCP).
 ### Generic shell
 
 ```bash
-npm run compile
+npm install -g api-hero
 export APIHERO_SECRET_apiHero_auth_profile_demo_token="$DEMO_TOKEN"
-node ./bin/apihero.js run scenario checkout \
+apihero run scenario checkout \
   --workspace "$PWD" \
   --environment staging \
   --json
@@ -130,13 +166,21 @@ node ./bin/apihero.js run scenario checkout \
 ### GitHub Actions
 
 ```yaml
-- name: Compile API Hero
-  run: npm ci && npm run compile
+- name: Install API Hero CLI
+  run: npm install -g api-hero
 
 - name: Run scenario
   env:
     APIHERO_SECRET_apiHero_auth_profile_demo_token: ${{ secrets.DEMO_TOKEN }}
-  run: node ./bin/apihero.js run scenario checkout --workspace . --environment staging --json
+  run: apihero run scenario checkout --workspace . --environment staging --json
+```
+
+### From a packed tarball (release verification)
+
+```bash
+npm pack
+npm install -g ./api-hero-*.tgz
+apihero --version
 ```
 
 ## Limitations
@@ -144,6 +188,8 @@ node ./bin/apihero.js run scenario checkout \
 - No VS Code Secret Storage (use env vars above)
 - No interactive prompts or UI failure-policy ask
 - Headless **global** variables are empty (workspace / environment / collection / scenario scopes still apply)
+- No `--var` / OS-env → `{{variable}}` mapping
+- No scenario `--inputs` flag yet (MCP `apihero_run_scenario` supports `inputs`; CLI may gain parity later)
 - No remote runner, watch mode, parallel runs, Docker image, or GraphQL
 
 ## Related

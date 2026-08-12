@@ -4,7 +4,7 @@
 
 Author `.api` requests beside your code, organize them in Git-friendly collections, run with assertions, and expose the same collections to AI agents via a standalone MCP server — without leaving your editor workflow.
 
-> Extension ID: **`ankitsemwal.api-hero`** · Version: **2.9.1** · License: [MIT](LICENSE)
+> Extension ID: **`ankitsemwal.api-hero`** · Version: **2.10.0** · License: [MIT](LICENSE)
 
 [Documentation](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/README.md) · [Changelog](CHANGELOG.md) · [Support](SUPPORT.md)
 
@@ -14,7 +14,7 @@ Author `.api` requests beside your code, organize them in Git-friendly collectio
 
 | Question | Answer |
 | --- | --- |
-| **What?** | A VS Code extension for editing and running HTTP requests as plain `.api` files, plus a standalone MCP server for AI clients |
+| **What?** | A VS Code extension for editing and running HTTP requests as plain `.api` files, plus a headless `apihero` CLI and MCP server for CI / AI clients |
 | **Why?** | Keep APIs in Git, review them in PRs, and stay in the editor — no proprietary collection cloud |
 | **Different?** | File-first collections, VS Code Secret Storage for credentials, Collection Runner + Scenarios, MCP reuses the same execution pipeline |
 | **How to start?** | Install → open a folder workspace → create a `.api` request → Run (`Ctrl+Alt+R` / `Cmd+Alt+R`) |
@@ -37,6 +37,7 @@ Author `.api` requests beside your code, organize them in Git-friendly collectio
 - **TypeScript generation** — infer types from a successful JSON response body; Copy or Create `.ts`
 - **Request History** — metadata in VS Code global storage (`request-history.json`)
 - **AI / MCP** — nine `apihero_*` tools (including `apihero_run_scenario`) over the same runner (client-owned configuration)
+- **CLI / CI** — `apihero` npm bin runs request / collection / scenario headless (same orchestrator; `--json` for CI)
 
 ---
 
@@ -504,6 +505,25 @@ Never commit real secrets in README examples or committed `api-hero.variables.js
 - **Variable autocomplete** — `{{` in `.api` and Request Editor
 - **Diff / TypeScript** — from Response Viewer and report Details
 - **MCP** — standalone stdio server; client-owned configuration (installing the extension does not register MCP)
+- **CLI** — `apihero` on npm (`npm install -g api-hero` / `npx apihero`); Marketplace install does not put the CLI on PATH
+
+---
+
+## CLI / CI (`apihero`)
+
+Headless runner for CI and terminals — **same** Orchestrator / Collection Runner / ScenarioEngine as the extension and MCP (no VS Code UI).
+
+```bash
+npm install -g api-hero
+apihero --help
+apihero run request Login --workspace . --environment local
+apihero run collection Demo --workspace . --json
+apihero run scenario checkout --workspace . --quiet
+```
+
+Workspace priority: `--workspace` → `APIHERO_WORKSPACE` → `cwd`. Exit codes: **0** success · **1** execution failure · **2** usage · **3** config/not found · **4** auth/secrets. Use `--json` for redacted machine-readable output.
+
+→ [CLI guide](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/cli.md)
 
 ---
 
@@ -795,7 +815,7 @@ No. MCP registration is client-owned. Configure each client yourself.
 No — not implemented.
 
 **Is there a headless CLI / CI runner?**  
-**Headless CLI / CI Runner — Planned.** Not a shipped public product capability today. Use the VS Code extension and MCP for execution. See [roadmap](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/product/roadmap.md).
+Yes. Install the `api-hero` npm package (`npm install -g api-hero` or `npx apihero`) and run `apihero run request|collection|scenario`. Same headless runtime as MCP (no VS Code required). See [CLI guide](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/cli.md).
 
 **Where are settings documented?**  
 [Configuration](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/reference/configuration.md) · [Commands](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/reference/commands.md) · [FAQ](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/faq.md)

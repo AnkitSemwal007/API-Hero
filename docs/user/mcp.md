@@ -28,7 +28,7 @@ If `--workspace` is present without a value, the process exits immediately with 
 
 ## Project Store (environments / auth)
 
-Headless MCP composition loads **`.apihero` Project Store** environments, workspace variables, and authentication **profiles** when present (shared headless runtime with in-repo CLI tooling; the CLI is **not** publicly distributed). VS Code settings-backed globals and VS Code Secret Storage are still unavailable in headless hosts — supply secrets via process env (exact Secret Storage key or `APIHERO_SECRET_*`).
+Headless MCP composition loads **`.apihero` Project Store** environments, workspace variables, and authentication **profiles** when present (shared headless runtime with the public `apihero` CLI — see [CLI guide](./cli.md)). VS Code settings-backed globals and VS Code Secret Storage are still unavailable in headless hosts — supply secrets via process env (exact Secret Storage key or `APIHERO_SECRET_*`).
 
 ## Install / build
 
@@ -305,7 +305,7 @@ This command is **not available yet** — do not look for it in the Command Pale
 
 - Tool responses **never** dump VS Code Secret Storage or cleartext API keys / passwords / bearer tokens when redaction applies.
 - Response presentation already masks sensitive headers; MCP adds defense-in-depth redaction before JSON is returned.
-- Headless MCP loads **`.apihero` Project Store** environments, workspace variables, and auth profiles when present. VS Code settings globals and VS Code Secret Storage are not available — use process-env secrets (`APIHERO_SECRET_*` or exact Secret Storage keys). The in-repo CLI shares this headless composition but is **not** publicly distributed.
+- Headless MCP loads **`.apihero` Project Store** environments, workspace variables, and auth profiles when present. VS Code settings globals and VS Code Secret Storage are not available — use process-env secrets (`APIHERO_SECRET_*` or exact Secret Storage keys). The public `apihero` CLI shares this headless composition ([CLI guide](./cli.md)).
 - Prefer collection variables / environment variables for agent-driven workspaces when secrets are not injected.
 - Do not commit secrets into `api-hero.variables.json`; use `.apihero/local/` overlays locally when needed.
 

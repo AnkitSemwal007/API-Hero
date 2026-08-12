@@ -27,6 +27,7 @@ import {
   formatScenarioHuman,
 } from './format';
 import type { ParsedCliArgs } from './parse-args';
+import { resolveScenarioCliExitCode } from './scenario-result';
 
 export interface CliRunResult {
   readonly exitCode: number;
@@ -127,19 +128,9 @@ export async function executeCliRun(
   if (!result.ok) {
     return formatMcpError(command, result.error);
   }
-  const authFail = result.data.steps.some((step) =>
-    isAuthenticationFailureMessage(step.error?.message),
-  );
-  const ok =
-    result.data.status !== 'failed' && result.data.statistics.failed === 0;
-  if (authFail && !ok) {
-    return emit(command, EXIT_AUTH, result.data, (data) =>
-      formatScenarioHuman(data, { quiet: command.quiet }),
-    );
-  }
   return emit(
     command,
-    ok ? EXIT_SUCCESS : EXIT_EXECUTION_FAILURE,
+    resolveScenarioCliExitCode(result.data),
     result.data,
     (data) => formatScenarioHuman(data, { quiet: command.quiet }),
   );

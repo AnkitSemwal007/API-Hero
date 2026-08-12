@@ -7,6 +7,7 @@
 import { redactForMcp } from '../mcp/redact';
 import type { McpRequestRunDto, McpRunSummaryDto, McpScenarioRunDto } from '../mcp/dto';
 import type { CliRunTargetType } from './parse-args';
+import { isScenarioCliSuccess } from './scenario-result';
 
 export interface CliEnvelope {
   readonly ok: boolean;
@@ -120,7 +121,7 @@ export function formatScenarioHuman(
   data: McpScenarioRunDto,
   options: { readonly quiet: boolean },
 ): string {
-  const ok = data.status !== 'failed' && data.statistics.failed === 0;
+  const ok = isScenarioCliSuccess(data);
   if (options.quiet && ok) {
     return `Result: PASSED\n`;
   }
@@ -134,10 +135,8 @@ export function formatScenarioHuman(
     const skipped = step.status === 'skipped';
     const mark = skipped ? '○' : passed ? '✓' : '✗';
     lines.push(`${mark} ${step.stepName} ${padDuration(step.durationMs)}`);
-    if (!passed && !skipped) {
-      if (step.error?.message !== undefined) {
-        lines.push(`  ${step.error.message}`);
-      }
+    if (!passed && step.error?.message !== undefined) {
+      lines.push(`  ${step.error.message}`);
     }
   }
   lines.push('');
@@ -192,7 +191,7 @@ export function buildScenarioEnvelope(
   target: string,
   data: McpScenarioRunDto,
 ): CliEnvelope {
-  const ok = data.status !== 'failed' && data.statistics.failed === 0;
+  const ok = isScenarioCliSuccess(data);
   return redactForMcp({
     ok,
     target: { type: 'scenario', name: target },
