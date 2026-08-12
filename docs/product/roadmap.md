@@ -1,12 +1,20 @@
 # Roadmap
 
-Honest near-term plan for **API Hero** after **2.8.3** (headless CLI / CI runner, Copy as cURL, MCP `apihero_run_scenario`; **2.8.2** OpenAPI URL import; **2.8.1** complete README + Marketplace documentation; **2.8.0** universal MCP `--workspace` + client-owned MCP docs; **2.7.0** MCP server for AI agents; **2.6.0** Scenarios progressive disclosure, project-store scenario paths, Reset Workspace, Run Report failure diagnostics; Authentication Premium UX + Scenario Experience shipped in **2.5.0**; Scenarios Phase 1 foundation in **2.4.0**). Product features through **2.3.x** already ship — Execution Center, Collection Runner / Run Report polish, dependency workflow, Collection Run Debugger, Managers (Environments, Auth), Overview, History Detail, OpenAPI wizard, Response copy/save/search, response variable extraction, and collection chaining (`@depends-on`, per-run store, collection variables). Those are not roadmap gaps.
+Honest near-term plan for **API Hero** after **2.8.4** (OpenAPI environment safety, Collection Run Report / Variable Trace UX, Scenario menu cleanup; **2.8.3** Copy as cURL + MCP `apihero_run_scenario`; **2.8.2** OpenAPI URL import; **2.8.1** complete README + Marketplace documentation; **2.8.0** universal MCP `--workspace` + client-owned MCP docs; **2.7.0** MCP server for AI agents; **2.6.0** Scenarios progressive disclosure, project-store scenario paths, Reset Workspace, Run Report failure diagnostics; Authentication Premium UX + Scenario Experience shipped in **2.5.0**; Scenarios Phase 1 foundation in **2.4.0**). Product features through **2.3.x** already ship — Execution Center, Collection Runner / Run Report polish, dependency workflow, Collection Run Debugger, Managers (Environments, Auth), Overview, History Detail, OpenAPI wizard, Response copy/save/search, response variable extraction, and collection chaining (`@depends-on`, per-run store, collection variables). Those are not roadmap gaps.
+
+## Shipped in 2.8.4
+
+| Item | Notes |
+| --- | --- |
+| OpenAPI environment safety | Preserve active env on import; imported envs selectable; undefined security schemes warn without inventing auth |
+| Collection Run Report UX | Compact summary/rows, filters, folder grouping, drill-down Details |
+| Variable Trace UX | Compact Variables status; expand for full trace / unresolved |
+| Scenario menu cleanup | Create Scenario removed from Collections top-level `…`; dedicated Scenario UX unchanged |
 
 ## Shipped in 2.8.3
 
 | Item | Notes |
 | --- | --- |
-| Headless CLI / CI runner (`apihero`) | Same Orchestrator / CollectionRunner / ScenarioEngine as UI + MCP; ProjectStore env/auth + process-env secrets; exit codes for CI |
 | Copy as cURL | Resolve without HTTP; secrets redacted by default |
 | MCP `apihero_run_scenario` | Existing ScenarioEngine (same path as UI Run Scenario) |
 
@@ -60,6 +68,7 @@ Honest near-term plan for **API Hero** after **2.8.3** (headless CLI / CI runner
 
 | Item | Notes |
 | --- | --- |
+| **Headless CLI / CI Runner — Planned / In Development** | Not currently distributed or shipped as a public product capability; implementation may exist in-repo |
 | Marketplace asset refresh | Capture Auth Manager + Scenario Editor screenshots; keep README section images in sync |
 | Scenarios Phase 2+ | Deeper step types / orchestration polish after Experience feedback |
 | Run File | Implement multi-request file execution (today: stub, palette-hidden) |
@@ -86,5 +95,5 @@ Do not schedule "build Env Manager / Auth Manager / Overview / Extraction / coll
 - [Vision](./vision.md)
 - [User guide](../user/getting-started.md)
 - [Scenarios](../user/scenarios.md)
-- [CLI](../user/cli.md)
+- [CLI (not publicly distributed)](../user/cli.md)
 - [ADR-0001](../architecture/adr/0001-variables-extraction-auth-dependencies.md)

@@ -143,11 +143,45 @@ export class CollectionRunReportPanel implements Disposable {
     }
     try {
       if (message.type === 'open') { await this.actions.openRequest(message.requestId); return; }
-      if (message.type === 'reveal') await this.actions.revealRequest(message.requestId);
+      if (message.type === 'reveal') { await this.actions.revealRequest(message.requestId); return; }
+      if (message.type === 'runAgain') await this.runAgain();
     } catch (cause) {
       const text = cause instanceof Error ? cause.message : String(cause);
-      await this.panel.webview.postMessage({ type: 'error', message: text || 'Unable to open that request.' });
+      const fallback =
+        message.type === 'runAgain'
+          ? 'Unable to run that collection again.'
+          : 'Unable to open that request.';
+      await this.panel.webview.postMessage({
+        type: 'error',
+        message: text || fallback,
+      });
     }
+  }
+
+  /**
+   * Re-runs the reported collection via {@link COMMAND_IDS.runCollection}.
+   * Uses plan/session `collectionId` from the host — not a webview-supplied id.
+   */
+  private async runAgain(): Promise<void> {
+    const collectionId =
+      this.summary?.plan.collectionId ?? this.lastLiveSnapshot?.collectionId;
+    const collectionName =
+      this.summary?.plan.collectionName ?? this.lastLiveSnapshot?.collectionName ?? '';
+    if (collectionId === undefined || collectionId.trim().length === 0) {
+      if (this.panel !== undefined) {
+        await this.panel.webview.postMessage({
+          type: 'error',
+          message: 'Unable to run that collection again.',
+        });
+      }
+      return;
+    }
+    await commands.executeCommand(COMMAND_IDS.runCollection, {
+      id: collectionId,
+      kind: 'collection',
+      label: collectionName,
+      collapsible: true,
+    });
   }
 
   private async postInit(): Promise<void> {

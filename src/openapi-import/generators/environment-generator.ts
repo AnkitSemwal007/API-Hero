@@ -3,7 +3,9 @@
  *
  * Strategy:
  * - First server → primary environment `{apiName}` with `baseUrl` (and host/port
- *   when parseable), activated by default.
+ *   when parseable). `activate: true` marks the preferred primary only;
+ *   `buildSettingsPatch` decides whether to set `activeEnvironmentId` based on
+ *   any already-active workspace environment.
  * - Additional servers (up to 5) → separate environments with distinct ids.
  * - Server `{variables}` become environment variables; URL placeholders use
  *   `{{varName}}` syntax in `baseUrl`.

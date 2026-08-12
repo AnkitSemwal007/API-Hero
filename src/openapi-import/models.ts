@@ -24,7 +24,10 @@ export interface GeneratedEnvironment {
   readonly id: string;
   readonly name: string;
   readonly variables: readonly GeneratedVariable[];
-  /** When true, the writer should set this environment as active. */
+  /**
+   * Preferred primary environment marker for settings-patch logic.
+   * Does not force activation when the workspace already has an active env.
+   */
   readonly activate: boolean;
 }
 

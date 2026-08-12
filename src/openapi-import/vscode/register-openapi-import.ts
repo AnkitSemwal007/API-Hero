@@ -16,12 +16,13 @@ import {
   CONFIGURATION_SECTION,
 } from '../../constants';
 import { NodeHttpTransport } from '../../execution';
-import type { AuthenticationProfile, Environment } from '../../models';
+import type { AuthenticationProfile } from '../../models';
 import type { Logger } from '../../shared';
 import {
   getActiveProjectStoreCoordinator,
 } from '../../project-store/vscode/project-store-coordinator';
 import { resolveProjectStoreFolderPath } from '../../project-store/vscode/resolve-project-folder';
+import type { EnvironmentManager } from '../../variables';
 import type { SettingsPatch, WorkspaceFileWriter } from '../index';
 import { openOpenApiImportWizard } from './openapi-import-wizard';
 
@@ -29,6 +30,7 @@ export interface RegisterOpenApiImportOptions {
   readonly context: ExtensionContext;
   readonly logger: Logger;
   readonly discovery: CollectionDiscoveryService;
+  readonly environmentManager: EnvironmentManager;
 }
 
 export interface OpenApiImportRegistration {
@@ -42,7 +44,7 @@ export interface OpenApiImportRegistration {
 export function registerOpenApiImport(
   options: RegisterOpenApiImportOptions,
 ): OpenApiImportRegistration {
-  const { context, logger, discovery } = options;
+  const { context, logger, discovery, environmentManager } = options;
 
   const registration = registerCommandWithLegacyAlias(
     COMMAND_IDS.importOpenApi,
@@ -51,7 +53,10 @@ export function registerOpenApiImport(
         logger,
         discovery,
         writer: createVsCodeWorkspaceWriter(),
-        readEnvironments,
+        // Same source as active id (project-aware EnvironmentManager), not
+        // settings-only — keeps append + activate gating consistent.
+        readEnvironments: () => environmentManager.list(),
+        readActiveEnvironmentId: () => environmentManager.activeId,
         readAuthProfiles,
         applySettingsPatch,
         manageAuthAvailable: true,
@@ -90,38 +95,6 @@ function createVsCodeWorkspaceWriter(): WorkspaceFileWriter {
       return readdir(absolutePath);
     },
   };
-}
-
-function readEnvironments(): readonly Environment[] {
-  const raw = workspace
-    .getConfiguration(CONFIGURATION_SECTION)
-    .get<unknown>(CONFIGURATION_KEYS.environments, []);
-  if (!Array.isArray(raw)) {
-    return [];
-  }
-  return raw.map((item, index) => {
-    const record = asRecord(item);
-    const id =
-      typeof record.id === 'string' && record.id.length > 0
-        ? record.id
-        : `env-${index}`;
-    const variables = Array.isArray(record.variables)
-      ? record.variables.map((variable) => {
-          const entry = asRecord(variable);
-          return {
-            name: typeof entry.name === 'string' ? entry.name : '',
-            value: typeof entry.value === 'string' ? entry.value : '',
-            sensitive: entry.sensitive === true,
-            scope: 'environment' as const,
-          };
-        })
-      : [];
-    return {
-      id,
-      name: typeof record.name === 'string' ? record.name : id,
-      variables,
-    };
-  });
 }
 
 function readAuthProfiles(): readonly AuthenticationProfile[] {
@@ -238,10 +211,4 @@ function sanitizeProfileForSettings(
     }
   }
   return result;
-}
-
-function asRecord(value: unknown): Record<string, unknown> {
-  return typeof value === 'object' && value !== null
-    ? (value as Record<string, unknown>)
-    : {};
 }

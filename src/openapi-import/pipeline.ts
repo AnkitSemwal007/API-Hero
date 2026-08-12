@@ -8,6 +8,7 @@
  */
 
 import type { AuthenticationProfile, Environment } from '../models';
+import { normalizeOptionalEnvironmentId } from '../variables';
 import { loadSpecification } from './loader';
 import type {
   ImportArtifacts,
@@ -48,6 +49,13 @@ export interface ImportPipelineOptions {
   readonly limits?: Partial<ImportLimits>;
   readonly existingEnvironments?: readonly Environment[];
   readonly existingAuthProfiles?: readonly AuthenticationProfile[];
+  /**
+   * Current workspace active environment id when import starts.
+   * When set (non-empty), the settings patch omits `activeEnvironmentId` so
+   * an existing selection is preserved. When unset, the imported preferred
+   * primary environment may become active.
+   */
+  readonly activeEnvironmentId?: string;
   readonly cancellation?: ImportCancellation;
   readonly onProgress?: (event: ImportProgressEvent) => void;
   readonly writer: WorkspaceFileWriter;
@@ -281,6 +289,7 @@ export async function runImportPipeline(
     artifacts,
     options.existingEnvironments ?? [],
     options.existingAuthProfiles ?? [],
+    options.activeEnvironmentId,
   );
 
   const variableCount = artifacts.environments.reduce(
@@ -341,6 +350,7 @@ function buildSettingsPatch(
   artifacts: ImportArtifacts,
   existingEnvironments: readonly Environment[],
   existingAuthProfiles: readonly AuthenticationProfile[],
+  existingActiveEnvironmentId?: string,
 ): SettingsPatch {
   const environments: Environment[] = [
     ...existingEnvironments,
@@ -356,7 +366,19 @@ function buildSettingsPatch(
     })),
   ];
 
-  const active = artifacts.environments.find((item) => item.activate);
+  // GeneratedEnvironment.activate marks the preferred primary only.
+  // Honor it in the settings patch solely when the workspace has no active
+  // environment; otherwise omit activeEnvironmentId so the existing selection
+  // is preserved while imported envs are still appended.
+  const preferredPrimary = artifacts.environments.find(
+    (item) => item.activate,
+  );
+  const hasExistingActive =
+    normalizeOptionalEnvironmentId(existingActiveEnvironmentId) !== undefined;
+  const activeEnvironmentId =
+    !hasExistingActive && preferredPrimary !== undefined
+      ? preferredPrimary.id
+      : undefined;
 
   const authenticationProfiles: AuthenticationProfile[] = [
     ...existingAuthProfiles,
@@ -369,7 +391,9 @@ function buildSettingsPatch(
 
   return {
     environments,
-    ...(active === undefined ? {} : { activeEnvironmentId: active.id }),
+    ...(activeEnvironmentId === undefined
+      ? {}
+      : { activeEnvironmentId }),
     authenticationProfiles,
     secretHints,
   };

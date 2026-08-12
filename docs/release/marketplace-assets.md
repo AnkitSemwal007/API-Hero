@@ -1,6 +1,6 @@
-# Marketplace assets — 2.8.3
+# Marketplace assets — 2.8.4
 
-Guidance for listing media for **API Hero 2.8.3**.
+Guidance for listing media for **API Hero 2.8.4**.
 
 **Strategy:** README screenshots, banner, social preview, and workflow GIFs are hosted on **Cloudinary** (absolute HTTPS URLs). That keeps the VSIX small. Only in-extension chrome icons ship inside the package (`images/icon.png`, `images/api-*.svg`, `images/execution-*.svg`).
 
@@ -47,7 +47,7 @@ Cloud: `iaojzqjd` · Folder: `api-hero` · Base: `https://res.cloudinary.com/iao
 
 Root `README.md` embeds these CDN URLs beside the sections they describe (hero first; screenshots not stacked in one gallery). Use the same links for Marketplace portal media / GitHub social cards.
 
-**Follow-up:** capture and host **Auth Manager** and **Scenario Editor** screenshots when ready. Existing screenshots remain valid for Collections, Response, History, Execution, Environments, Run Report, and MCP.
+**Follow-up:** capture and host **Auth Manager** and **Scenario Editor** screenshots when ready. Existing screenshots remain valid for Collections, Response, History, Execution, Environments, Run Report, and MCP. Prefer a refreshed Run Report shot when compact summary/filters ship in listing media.
 
 ## Banner
 
@@ -58,6 +58,7 @@ See [banner-placeholder.md](../marketplace/banner-placeholder.md). Gallery banne
 - [x] Screenshots reflect **2.3.3+** product UI (Execution view, Dependencies, Run Report Debugger, Env Manager)
 - [ ] Auth Manager screenshot (recommended for listing; text coverage in README)
 - [ ] Scenarios / Scenario Editor screenshot (recommended for listing; text coverage in README)
+- [ ] Optional: refreshed Collection Run Report screenshot (compact summary / filters)
 - [x] No GraphQL / OAuth screenshots implying support
 - [x] Icon and banner contrast well in Marketplace dark/light cards
 - [x] README listing media uses Cloudinary HTTPS URLs (VSIX stays lean)
@@ -69,5 +70,5 @@ See [banner-placeholder.md](../marketplace/banner-placeholder.md). Gallery banne
 - [Marketplace readiness review](../marketplace/marketplace-readiness-review.md)
 - [Marketplace readiness](./marketplace-readiness.md)
 - [Product README](../product/README.md)
-- [Release notes — 2.8.1](./v2.8.1-release-notes.md)
-- [Changelog — 2.8.1](../../CHANGELOG.md)
+- [Release notes — 2.8.4](./v2.8.4-release-notes.md)
+- [Changelog — 2.8.4](../../CHANGELOG.md)

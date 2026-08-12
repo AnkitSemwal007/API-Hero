@@ -1,4 +1,4 @@
-export { generateAuthProfiles } from './auth-generator';
+export { generateAuthProfiles, collectUndefinedSecuritySchemeDiagnostics } from './auth-generator';
 export type { AuthGenerationResult } from './auth-generator';
 export { generateCollectionFiles } from './collection-generator';
 export type { CollectionGenerationResult } from './collection-generator';

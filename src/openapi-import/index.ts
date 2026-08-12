@@ -91,6 +91,7 @@ export type {
 
 export {
   generateAuthProfiles,
+  collectUndefinedSecuritySchemeDiagnostics,
   generateCollectionFiles,
   generateEnvironments,
   generateRequestSource,

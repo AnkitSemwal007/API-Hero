@@ -37,7 +37,7 @@ Environments and authentication are optional for a first public GET — configur
 
 - [Creating requests](./creating-requests.md)
 - [Collections](./collections.md)
-- [CLI / CI runner](./cli.md)
 - [Environments](./environments.md)
 - [Authentication](./authentication.md)
+- [MCP for AI agents](./mcp.md)
 - [Troubleshooting](./troubleshooting.md)

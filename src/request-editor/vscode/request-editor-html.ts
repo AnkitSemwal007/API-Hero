@@ -51,7 +51,7 @@ export function renderRequestEditorHtml(nonce: string): string {
       <p id="urlResolved" class="var-resolved" hidden></p>
       <p id="urlVarHint" class="var-hint" hidden></p>
     </label>
-    <button type="button" id="envShortcut" class="chip" title="Switch Environment" aria-label="Switch Environment">Env: None</button>
+    <button type="button" id="envShortcut" class="chip" title="Switch workspace environment" aria-label="Switch workspace environment">Workspace Env: None</button>
     <button type="button" id="authShortcut" class="chip" title="Session default Authentication" aria-label="Session default Authentication">Authentication</button>
     <button type="button" id="run" class="primary run-btn">${iconHtml('play', { decorative: true })} Run</button>
   </div>
@@ -243,7 +243,7 @@ export function renderRequestEditorHtml(nonce: string): string {
     </div>
   </section>
   <section id="tab-variables" class="panel" role="tabpanel" hidden>
-    <p id="variablesActiveEnv" class="hint" aria-live="polite">Active environment: None</p>
+    <p id="variablesActiveEnv" class="hint" aria-live="polite">Active workspace environment: None</p>
     <p class="hint" id="variablesScopeHint">These are <strong>${escapeHtml(VARIABLE_SCOPE_UI.document.sourceLabel)}</strong> variables (highest precedence). They override Environment, Workspace, and Global.</p>
     <p class="hint" id="variablesPrecedenceLegend">${escapeHtml(VARIABLE_PRECEDENCE_LEGEND)}</p>
     <div class="table-toolbar">
@@ -1983,15 +1983,15 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
     const envShortcut = el('envShortcut');
     const variablesActiveEnv = el('variablesActiveEnv');
     if (label) {
-      envShortcut.textContent = 'Env: ' + label;
-      envShortcut.title = 'Active environment: ' + label + ' — click to switch';
-      envShortcut.setAttribute('aria-label', 'Active environment ' + label + '. Switch Environment');
-      variablesActiveEnv.textContent = 'Active environment: ' + label;
+      envShortcut.textContent = 'Workspace Env: ' + label;
+      envShortcut.title = 'Active workspace environment: ' + label + ' — click to switch';
+      envShortcut.setAttribute('aria-label', 'Active workspace environment ' + label + '. Switch workspace environment');
+      variablesActiveEnv.textContent = 'Active workspace environment: ' + label;
     } else {
-      envShortcut.textContent = 'Env: None';
-      envShortcut.title = 'No active environment — click to switch';
-      envShortcut.setAttribute('aria-label', 'No active environment. Switch Environment');
-      variablesActiveEnv.textContent = 'Active environment: None';
+      envShortcut.textContent = 'Workspace Env: None';
+      envShortcut.title = 'No active workspace environment — click to switch';
+      envShortcut.setAttribute('aria-label', 'No active workspace environment. Switch workspace environment');
+      variablesActiveEnv.textContent = 'Active workspace environment: None';
     }
   }
 

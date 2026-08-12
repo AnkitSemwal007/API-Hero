@@ -15,6 +15,7 @@ import {
   escapeAttribute,
   escapeHtml,
   formatDuration,
+  formatFolderGroupLabel,
   normalizeFailurePolicySetting,
   parseCollectionRunReportMessage,
   renderCollectionRunReportHtml,
@@ -36,7 +37,11 @@ describe('collection-run-report-html', () => {
       /Collection Run Debugger \/ Details inspect the last in-memory run \(not History\)\./u,
     );
     assert.match(html, /--vscode-editor-background/u);
-    assert.match(html, /Failed only/u);
+    assert.match(html, /data-outcome-filter/u);
+    assert.match(html, /id="report-filters"/u);
+    assert.match(html, /failed-section/u);
+    assert.match(html, /folder-group/u);
+    assert.doesNotMatch(html, /Failed only/u);
     assert.doesNotMatch(html, /connect-src [^']*https/u);
   });
 
@@ -48,6 +53,9 @@ describe('collection-run-report-html', () => {
   test('parseCollectionRunReportMessage accepts allowlisted actions only', () => {
     assert.deepEqual(parseCollectionRunReportMessage({ type: 'ready' }), {
       type: 'ready',
+    });
+    assert.deepEqual(parseCollectionRunReportMessage({ type: 'runAgain' }), {
+      type: 'runAgain',
     });
     assert.deepEqual(
       parseCollectionRunReportMessage({
@@ -76,12 +84,17 @@ describe('collection-run-report-html', () => {
       }),
       undefined,
     );
+    assert.equal(
+      parseCollectionRunReportMessage({ type: 'runAgain', extra: true }),
+      undefined,
+    );
     assert.equal(parseCollectionRunReportMessage(null), undefined);
   });
 
   test('buildCollectionRunReportModel maps per-request rows', () => {
     const model = buildCollectionRunReportModel(sampleSummary());
     assert.equal(model.collectionName, 'Demo');
+    assert.equal(model.collectionId, 'collection:demo');
     assert.equal(model.status, CollectionRunStatus.Completed);
     assert.equal(model.passed, 1);
     assert.equal(model.failed, 1);
@@ -101,6 +114,31 @@ describe('collection-run-report-html', () => {
     assert.deepEqual(model.variableTrace, []);
   });
 
+  test('buildCollectionRunReportModel projects folder fields from the plan', () => {
+    const model = buildCollectionRunReportModel(sampleFolderSummary());
+    assert.equal(model.rows[0]?.folderId, undefined);
+    assert.equal(model.rows[0]?.folderRelativePath, '');
+    assert.equal(formatFolderGroupLabel(model.rows[0]?.folderRelativePath), 'Root');
+    assert.equal(model.rows[1]?.folderId, 'folder:assistants');
+    assert.equal(model.rows[1]?.folderRelativePath, 'Assistants');
+    assert.equal(formatFolderGroupLabel(model.rows[1]?.folderRelativePath), 'Assistants');
+    assert.equal(model.rows[2]?.folderRelativePath, 'Chat/Threads');
+    assert.equal(formatFolderGroupLabel(model.rows[2]?.folderRelativePath), 'Chat/Threads');
+  });
+
+  test('formatFolderGroupLabel maps empty paths to Root', () => {
+    assert.equal(formatFolderGroupLabel(undefined), 'Root');
+    assert.equal(formatFolderGroupLabel(''), 'Root');
+    assert.equal(formatFolderGroupLabel('  '), 'Root');
+    assert.equal(formatFolderGroupLabel('Assistants'), 'Assistants');
+  });
+
+  test('skipped rows use skipped duration label', () => {
+    const model = buildCollectionRunReportModel(sampleDependencySummary());
+    assert.equal(model.rows[1]?.durationLabel, 'skipped');
+    assert.equal(model.rows[1]?.statusCode, undefined);
+  });
+
   test('buildCollectionRunReportModel surfaces dependency order, produced vars, and skip reasons', () => {
     const model = buildCollectionRunReportModel(sampleDependencySummary());
     assert.equal(model.reordered, true);
@@ -109,7 +147,11 @@ describe('collection-run-report-html', () => {
       ['Login → Products (accessToken)'],
     );
     assert.deepEqual(model.unresolvedConsumes, [
-      { variable: 'orderId', requestLabel: 'Invoice' },
+      {
+        variable: 'orderId',
+        requestId: 'req_invoice',
+        requestLabel: 'Invoice',
+      },
     ]);
     assert.equal(model.rows[0]?.producedVariablesLabel, undefined);
     assert.equal(model.rows[0]?.outcomeLabel, 'Failed');
@@ -423,16 +465,65 @@ describe('collection-run-report-html', () => {
 
   test('renderCollectionRunReportHtml shell includes dependency report hooks', () => {
     const html = renderCollectionRunReportHtml('reportNonce');
-    assert.match(html, /Execution order/);
-    assert.match(html, /Reordered/);
+    assert.match(html, /Execution order may differ from folder order/u);
+    assert.match(html, /Reordered/u);
     assert.match(html, /Dependencies/);
-    assert.match(html, /Unresolved/);
-    assert.match(html, /Variable Trace/);
-    assert.match(html, /toggle-details/);
     assert.match(html, /renderDetailPanel/);
     assert.match(html, /vars-produced/);
     assert.match(html, /vars-consumed/);
     assert.match(html, /skip-reason/);
+    assert.match(html, /expandedRequestId/u);
+    assert.match(html, /runAgain/u);
+    assert.match(html, /filter-chip/u);
+    assert.match(html, /folder-group-header/u);
+  });
+
+  test('Variable Trace UX is compact in header with expand hooks', () => {
+    const html = renderCollectionRunReportHtml('reportNonce');
+    assert.match(html, /function renderVariablesStatus/u);
+    assert.match(html, /function renderVariablesSection/u);
+    assert.match(html, /function renderFullVariableTraceBody/u);
+    assert.match(html, /Variables ✓/u);
+    assert.match(html, /unresolved variables/u);
+    assert.match(html, /View Variables/u);
+    assert.match(html, /vars-expand/u);
+    assert.match(html, /hasRequestVariableErrors/u);
+    assert.match(html, /entry\.requestId === row\.requestId/u);
+    // Healthy runs still get collapsed View Variables when trace exists
+    assert.match(
+      html,
+      /unresolved\.length === 0[\s\S]*View Variables[\s\S]*renderFullVariableTraceBody/u,
+    );
+    // Full Variable Trace / Unresolved headings exist only inside expand body helper
+    assert.match(html, /function renderFullVariableTraceBody[\s\S]*Variable Trace/u);
+    assert.match(html, /function renderFullVariableTraceBody[\s\S]*Unresolved/u);
+    assert.match(html, /Unresolved variable names/u);
+    // Role labels live under Variables, not Overview extras
+    assert.match(html, /vars-role-labels/u);
+    assert.match(
+      html,
+      /function renderOverviewExtras[\s\S]*?return renderRowMessage\(row\);/u,
+    );
+    // Header render uses compact status, not always-on Variable Trace dump
+    assert.match(html, /variablesStatusSection = renderVariablesStatus/u);
+    assert.doesNotMatch(
+      html,
+      /variablesStatusSection[\s\S]{0,80}section-label">Variable Trace/u,
+    );
+    // Per-request Variables owns resolved lines; Execution Details keeps depends-on
+    assert.match(
+      html,
+      /renderVariablesSection\(row, details\)[\s\S]*id: 'variables'[\s\S]*label: 'Variables'/u,
+    );
+    assert.match(
+      html,
+      /Resolved variables are listed under Variables/u,
+    );
+    assert.match(html, /request-vars-list/u);
+    assert.match(
+      html,
+      /function renderExecutionDetails[\s\S]*?Depends on/u,
+    );
   });
 
   test('Assertions section surfaces Expected/Actual without nested expanders', () => {
@@ -495,10 +586,10 @@ describe('collection-run-report-html', () => {
   test('renderCollectionRunReportHtml includes running-row shimmer CSS and class wiring', () => {
     const html = renderCollectionRunReportHtml('reportNonce');
     assert.match(html, /row\.outcome === 'running' \? 'row-running'/u);
-    assert.match(html, /tr\.row-running td:first-child/u);
+    assert.match(html, /\.req-row\.row-running/u);
     assert.match(
       html,
-      /@media \(prefers-reduced-motion: no-preference\) \{[\s\S]*?tr\.row-running td \{[\s\S]*?animation: ah-row-shimmer[\s\S]*?@keyframes ah-row-shimmer/u,
+      /@media \(prefers-reduced-motion: no-preference\) \{[\s\S]*?\.req-row\.row-running \{[\s\S]*?animation: ah-row-shimmer[\s\S]*?@keyframes ah-row-shimmer/u,
     );
   });
 
@@ -661,7 +752,126 @@ describe('collection-run-report-html', () => {
     );
     assert.equal(prompted, 1);
   });
+
+  test('buildLiveCollectionRunReportModel projects folder fields onto placeholders', () => {
+    const summary = sampleFolderSummary();
+    const model = buildLiveCollectionRunReportModel({
+      runId: summary.runId,
+      status: 'running',
+      plan: summary.plan,
+      collectionId: summary.plan.collectionId,
+      collectionName: summary.plan.collectionName,
+      mode: summary.plan.mode,
+      failurePolicy: summary.plan.failurePolicy,
+      total: summary.plan.requests.length,
+      completed: 0,
+      remaining: summary.plan.requests.length,
+      elapsedMs: 5,
+      startedAt: summary.plan.createdAt,
+      current: summary.plan.requests[0],
+      results: [],
+    });
+    assert.equal(model.collectionId, 'collection:demo');
+    assert.equal(model.rows[1]?.folderId, 'folder:assistants');
+    assert.equal(model.rows[1]?.folderRelativePath, 'Assistants');
+    assert.equal(model.rows[0]?.outcome, 'running');
+  });
 });
+
+function sampleFolderSummary(): RunSummary {
+  return {
+    runId: 'run_folders',
+    plan: {
+      runId: 'run_folders',
+      mode: CollectionRunMode.Collection,
+      collectionId: 'collection:demo',
+      collectionName: 'Demo',
+      failurePolicy: FailurePolicyKind.ContinueOnError,
+      createdAt: '2026-07-21T10:00:00.000Z',
+      requests: [
+        {
+          requestId: 'req_root',
+          collectionId: 'collection:demo',
+          filePath: 'file:///demo/root.api',
+          offset: 0,
+          label: 'Health',
+          method: 'GET',
+          url: 'https://example.test/health',
+          ordinal: 0,
+          folderRelativePath: '',
+        },
+        {
+          requestId: 'req_assistants',
+          collectionId: 'collection:demo',
+          folderId: 'folder:assistants',
+          filePath: 'file:///demo/assistants.api',
+          offset: 0,
+          label: 'List Assistants',
+          method: 'GET',
+          url: 'https://example.test/assistants',
+          ordinal: 1,
+          folderRelativePath: 'Assistants',
+        },
+        {
+          requestId: 'req_threads',
+          collectionId: 'collection:demo',
+          folderId: 'folder:threads',
+          filePath: 'file:///demo/threads.api',
+          offset: 0,
+          label: 'List Threads',
+          method: 'GET',
+          url: 'https://example.test/threads',
+          ordinal: 2,
+          folderRelativePath: 'Chat/Threads',
+        },
+      ],
+    },
+    results: [
+      {
+        requestId: 'req_root',
+        ordinal: 0,
+        label: 'Health',
+        outcome: RequestRunOutcomeKind.Passed,
+        durationMs: 40,
+        statusCode: 200,
+      },
+      {
+        requestId: 'req_assistants',
+        ordinal: 1,
+        label: 'List Assistants',
+        outcome: RequestRunOutcomeKind.Passed,
+        durationMs: 55,
+        statusCode: 200,
+      },
+      {
+        requestId: 'req_threads',
+        ordinal: 2,
+        label: 'List Threads',
+        outcome: RequestRunOutcomeKind.Failed,
+        durationMs: 70,
+        statusCode: 500,
+      },
+    ],
+    statistics: {
+      total: 3,
+      passed: 2,
+      failed: 1,
+      skipped: 0,
+      cancelled: 0,
+      durationMs: 165,
+      averageResponseTimeMs: 55,
+      assertionsPassed: 0,
+      assertionsFailed: 0,
+      assertionsTotal: 0,
+      preconditionFailures: 0,
+      transportFailures: 0,
+      assertionFailures: 0,
+      extractionFailures: 0,
+    },
+    completedAt: '2026-07-21T10:00:01.000Z',
+    status: CollectionRunStatus.Completed,
+  };
+}
 
 function sampleDependencySummary(): RunSummary {
   return {

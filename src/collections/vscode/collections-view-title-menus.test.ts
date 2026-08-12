@@ -42,7 +42,6 @@ test('Collections view/title keeps navigation + overflow only', () => {
     [...overflow].sort(),
     [
       COMMAND_IDS.createFolder,
-      COMMAND_IDS.createScenario,
       COMMAND_IDS.importCollection,
       COMMAND_IDS.importOpenApi,
       COMMAND_IDS.revealActiveRequest,
@@ -50,6 +49,7 @@ test('Collections view/title keeps navigation + overflow only', () => {
   );
 
   for (const removed of [
+    COMMAND_IDS.createScenario,
     COMMAND_IDS.manageEnvironments,
     COMMAND_IDS.manageAuthProfiles,
     COMMAND_IDS.openSettings,

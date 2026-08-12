@@ -55,6 +55,8 @@ export interface OpenOpenApiImportWizardOptions {
   readonly discovery: CollectionDiscoveryService;
   readonly writer: WorkspaceFileWriter;
   readonly readEnvironments: () => readonly Environment[];
+  /** Current workspace active environment id (undefined when none). */
+  readonly readActiveEnvironmentId: () => string | undefined;
   readonly readAuthProfiles: () => readonly AuthenticationProfile[];
   readonly applySettingsPatch: (patch: SettingsPatch) => Promise<void>;
   /** When false, summary omits the Manage Authentication CTA. */
@@ -229,6 +231,7 @@ export async function openOpenApiImportWizard(
       }
       outputDirectoryName = requestedOutput.trim();
       try {
+        const activeEnvironmentId = options.readActiveEnvironmentId();
         const result = await runImportPipeline({
           sourceText,
           sourcePath,
@@ -240,6 +243,9 @@ export async function openOpenApiImportWizard(
           limits: { maxFileBytes: maxFileBytes() },
           existingEnvironments: options.readEnvironments(),
           existingAuthProfiles: options.readAuthProfiles(),
+          ...(activeEnvironmentId === undefined
+            ? {}
+            : { activeEnvironmentId }),
           writer: options.writer,
           skipWrite: true,
         });
@@ -320,6 +326,7 @@ export async function openOpenApiImportWizard(
       }
 
       try {
+        const activeEnvironmentId = options.readActiveEnvironmentId();
         const result = await runImportPipeline({
           sourceText,
           sourcePath,
@@ -331,6 +338,9 @@ export async function openOpenApiImportWizard(
           limits: { maxFileBytes: maxFileBytes() },
           existingEnvironments: options.readEnvironments(),
           existingAuthProfiles: options.readAuthProfiles(),
+          ...(activeEnvironmentId === undefined
+            ? {}
+            : { activeEnvironmentId }),
           cancellation,
           writer: options.writer,
           ...(overwrite ? { overwrite: true } : {}),

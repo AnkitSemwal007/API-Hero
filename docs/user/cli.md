@@ -1,6 +1,9 @@
 # API Hero CLI (`apihero`)
 
-Run API Hero requests, collections, and scenarios from the terminal or CI — **without VS Code**.
+> **Not currently distributed / not a public shipped product capability.**  
+> The headless CLI implementation is retained in-repo for development. This guide is for contributors and internal use. API Hero does **not** currently ship a Marketplace- or npm-distributed global `apihero` CLI as a public product feature.
+
+Run API Hero requests, collections, and scenarios from the terminal or CI — **without VS Code** (development / in-repo only).
 
 The CLI reuses the same headless composition as MCP: `ExecutionOrchestrator`, `CollectionRunnerService`, and `ScenarioEngine`. It does **not** start an MCP server and does **not** import `vscode`.
 
@@ -19,13 +22,13 @@ npm install
 npm run compile
 ```
 
-Bin entry after install/link (same package as MCP):
+Bin entry after local compile (development / in-repo only — not a public npm global product):
 
 ```bash
 npx apihero --help
 # or
 node ./bin/apihero.js --help
-# or (after npm link / global install)
+# or (after local npm link in this repo)
 apihero run request Hello --workspace "/absolute/path/to/your-api-workspace"
 ```
 

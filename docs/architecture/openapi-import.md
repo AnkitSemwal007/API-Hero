@@ -120,8 +120,11 @@ Generated content includes:
 
 ### Environments
 
-- First `servers[]` entry → primary environment `imported-<api-slug>`,
-  **activated** via `apiHero.activeEnvironment`.
+- First `servers[]` entry → primary environment `imported-<api-slug>`
+  (preferred primary via `activate: true`).
+- The settings patch sets `apiHero.activeEnvironment` to that primary **only
+  when the workspace has no active environment**; an existing active
+  environment is preserved. Imported environments are always appended.
 - Up to four additional servers → separate environments.
 - Server `{variables}` become environment variables; URL templates use
   `{{var}}` inside `baseUrl`.
@@ -138,6 +141,11 @@ Generated content includes:
 | `apiKey` header/query | `apiKey` + secret value |
 | `apiKey` cookie | approximated as header `apiKey` + warning |
 | `oauth2` / `openIdConnect` / `mutualTLS` | `providerId: 'none'` profile + diagnostic notes (no non-schema keys; no login flow) |
+
+Document- and operation-level `security` requirements that name a scheme
+**missing** from `components.securitySchemes` produce a warning
+(`undefined-security-scheme`) and do **not** invent an auth profile. Import
+continues. Valid schemes still import normally.
 
 Secret values from the specification are **never** written into `.api` files or
 plaintext settings. The summary lists SecretStorage hints for the user.

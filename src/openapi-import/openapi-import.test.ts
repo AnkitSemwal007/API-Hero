@@ -779,3 +779,257 @@ test('handles duplicate operationIds, empty paths, invalid YAML, and absolute tr
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test('import with no existing active env may activate the imported primary', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'api-hero-activate-empty-'));
+  try {
+    const result = await runImportPipeline({
+      sourceText: MINIMAL_JSON,
+      fileName: 'petstore.json',
+      targetRoot: root,
+      writer: memoryWriter(root),
+    });
+    assert.equal(result.summary.success, true);
+    assert.ok(result.settingsPatch);
+    const imported = result.settingsPatch!.environments.find((item) =>
+      item.id.startsWith('imported-'),
+    );
+    assert.ok(imported);
+    assert.equal(result.settingsPatch!.activeEnvironmentId, imported!.id);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('import with existing envs but none active may activate the imported primary', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'api-hero-activate-none-'));
+  try {
+    const existing = {
+      id: 'dormant',
+      name: 'Dormant',
+      variables: [
+        {
+          name: 'baseUrl',
+          value: 'https://dormant.example',
+          sensitive: false,
+          scope: 'environment' as const,
+        },
+      ],
+    };
+    const result = await runImportPipeline({
+      sourceText: MINIMAL_JSON,
+      fileName: 'petstore.json',
+      targetRoot: root,
+      writer: memoryWriter(root),
+      existingEnvironments: [existing],
+      // No activeEnvironmentId — selection cleared / none active.
+    });
+    assert.equal(result.summary.success, true);
+    assert.ok(result.settingsPatch);
+    const imported = result.settingsPatch!.environments.find((item) =>
+      item.id.startsWith('imported-'),
+    );
+    assert.ok(imported);
+    assert.equal(result.settingsPatch!.activeEnvironmentId, imported!.id);
+    assert.ok(
+      result.settingsPatch!.environments.some((item) => item.id === 'dormant'),
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('import while another env is active preserves active and still creates imported envs', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'api-hero-preserve-active-'));
+  try {
+    const existing = {
+      id: 'dummyjson',
+      name: 'DummyJSON',
+      variables: [
+        {
+          name: 'baseUrl',
+          value: 'https://dummyjson.com',
+          sensitive: false,
+          scope: 'environment' as const,
+        },
+      ],
+    };
+    const result = await runImportPipeline({
+      sourceText: MINIMAL_JSON,
+      fileName: 'petstore.json',
+      targetRoot: root,
+      writer: memoryWriter(root),
+      existingEnvironments: [existing],
+      activeEnvironmentId: 'dummyjson',
+    });
+    assert.equal(result.summary.success, true);
+    assert.ok(result.settingsPatch);
+    assert.equal(result.settingsPatch!.activeEnvironmentId, undefined);
+    assert.ok(
+      result.settingsPatch!.environments.some((item) => item.id === 'dummyjson'),
+    );
+    const imported = result.settingsPatch!.environments.find((item) =>
+      item.id.startsWith('imported-'),
+    );
+    assert.ok(imported, 'imported environment must still be created');
+    assert.notEqual(imported!.id, 'dummyjson');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('multiple imports while one env is active never replace activeEnvironmentId', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'api-hero-multi-preserve-'));
+  try {
+    const existing = {
+      id: 'dummyjson',
+      name: 'DummyJSON',
+      variables: [
+        {
+          name: 'baseUrl',
+          value: 'https://dummyjson.com',
+          sensitive: false,
+          scope: 'environment' as const,
+        },
+      ],
+    };
+    const first = await runImportPipeline({
+      sourceText: MINIMAL_JSON,
+      fileName: 'petstore.json',
+      targetRoot: root,
+      writer: memoryWriter(root),
+      existingEnvironments: [existing],
+      activeEnvironmentId: 'dummyjson',
+    });
+    assert.equal(first.settingsPatch?.activeEnvironmentId, undefined);
+    const afterFirst = first.settingsPatch!.environments;
+
+    const secondSpec = JSON.stringify({
+      openapi: '3.0.3',
+      info: { title: 'OpenAI', version: '1.0.0' },
+      servers: [{ url: 'https://api.openai.com/v1' }],
+      paths: {
+        '/models': {
+          get: {
+            operationId: 'listModels',
+            responses: { '200': { description: 'ok' } },
+          },
+        },
+      },
+    });
+    const secondRoot = await mkdtemp(join(tmpdir(), 'api-hero-multi-preserve-2-'));
+    try {
+      const second = await runImportPipeline({
+        sourceText: secondSpec,
+        fileName: 'openai.json',
+        targetRoot: secondRoot,
+        writer: memoryWriter(secondRoot),
+        existingEnvironments: afterFirst,
+        activeEnvironmentId: 'dummyjson',
+      });
+      assert.equal(second.summary.success, true);
+      assert.equal(second.settingsPatch?.activeEnvironmentId, undefined);
+      assert.ok(
+        second.settingsPatch!.environments.some((item) =>
+          item.id.startsWith('imported-openai'),
+        ),
+      );
+      assert.ok(
+        second.settingsPatch!.environments.some((item) => item.id === 'dummyjson'),
+      );
+    } finally {
+      await rm(secondRoot, { recursive: true, force: true });
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('undefined security scheme warns without inventing auth profiles', async () => {
+  const spec = JSON.stringify({
+    openapi: '3.1.0',
+    info: { title: 'OpenAI-like', version: '1.0.0' },
+    servers: [{ url: 'https://api.openai.com/v1' }],
+    security: [{ ApiKeyAuth: [] }],
+    paths: {
+      '/models': {
+        get: {
+          operationId: 'listModels',
+          security: [{ ApiKeyAuth: [] }, { MissingAlso: [] }],
+          responses: { '200': { description: 'ok' } },
+        },
+      },
+    },
+  });
+
+  const root = await mkdtemp(join(tmpdir(), 'api-hero-undef-scheme-'));
+  try {
+    const result = await runImportPipeline({
+      sourceText: spec,
+      fileName: 'openai-like.json',
+      targetRoot: root,
+      writer: memoryWriter(root),
+    });
+    assert.equal(result.summary.success, true);
+    assert.equal(result.summary.authProfileCount, 0);
+    const undef = result.summary.diagnostics.filter(
+      (item) => item.code === 'undefined-security-scheme',
+    );
+    assert.equal(undef.length, 2);
+    assert.ok(
+      undef.some(
+        (item) =>
+          item.message.includes("'ApiKeyAuth'") &&
+          item.message.includes('undefined security scheme'),
+      ),
+    );
+    assert.ok(undef.some((item) => item.message.includes("'MissingAlso'")));
+    assert.equal(
+      undef.filter((item) => item.message.includes("'ApiKeyAuth'")).length,
+      1,
+      'duplicate ApiKeyAuth warnings must be deduped',
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('valid security schemes still import; specs without security still work', async () => {
+  const withSchemesRoot = await mkdtemp(join(tmpdir(), 'api-hero-valid-schemes-'));
+  try {
+    const withSchemes = await runImportPipeline({
+      sourceText: MINIMAL_JSON,
+      fileName: 'petstore.json',
+      targetRoot: withSchemesRoot,
+      writer: memoryWriter(withSchemesRoot),
+    });
+    assert.equal(withSchemes.summary.success, true);
+    assert.ok(withSchemes.summary.authProfileCount >= 3);
+    assert.ok(
+      !withSchemes.summary.diagnostics.some(
+        (item) => item.code === 'undefined-security-scheme',
+      ),
+    );
+  } finally {
+    await rm(withSchemesRoot, { recursive: true, force: true });
+  }
+
+  const noSecurityRoot = await mkdtemp(join(tmpdir(), 'api-hero-no-security-'));
+  try {
+    const noSecurity = await runImportPipeline({
+      sourceText: MINIMAL_YAML,
+      fileName: 'api.yaml',
+      targetRoot: noSecurityRoot,
+      writer: memoryWriter(noSecurityRoot),
+    });
+    assert.equal(noSecurity.summary.success, true);
+    assert.equal(noSecurity.summary.authProfileCount, 0);
+    assert.ok(
+      !noSecurity.summary.diagnostics.some(
+        (item) => item.code === 'undefined-security-scheme',
+      ),
+    );
+  } finally {
+    await rm(noSecurityRoot, { recursive: true, force: true });
+  }
+});

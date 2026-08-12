@@ -50,6 +50,18 @@ export interface CollectionRunReportRow {
   readonly message?: string;
   readonly canOpen: boolean;
   readonly isFailure: boolean;
+  /**
+   * Plan folder id when the request lives under a folder.
+   * Presentation-only — projected from {@link PlannedRequest.folderId}.
+   * Grouping uses {@link folderRelativePath}; `folderId` is kept for stable
+   * plan identity / tests / future consumers.
+   */
+  readonly folderId?: string;
+  /**
+   * Plan folder relative path (`''` / omitted for collection root).
+   * Presentation-only — projected from {@link PlannedRequest.folderRelativePath}.
+   */
+  readonly folderRelativePath?: string;
   /** `+accessToken, +userId` — extracted variable names only, never values (§10.1). */
   readonly producedVariablesLabel?: string;
   readonly consumedVariablesLabel?: string;
@@ -126,12 +138,16 @@ export interface CollectionRunReportEdge {
 /** One unresolved-consume entry rendered as `variable — request` text (§10.1). */
 export interface CollectionRunReportUnresolvedConsume {
   readonly variable: string;
+  /** Plan request id — used to associate unresolved vars with a report row. */
+  readonly requestId: string;
   readonly requestLabel: string;
 }
 
 /** Serializable view model posted to the Collection Run Report webview. */
 export interface CollectionRunReportModel {
   readonly runId: string;
+  /** Plan collection id — used for Run Again (presentation host wiring only). */
+  readonly collectionId: string;
   readonly collectionName: string;
   readonly status:
     | (typeof CollectionRunStatus)[keyof typeof CollectionRunStatus]
@@ -148,6 +164,12 @@ export interface CollectionRunReportModel {
   readonly skipped: number;
   readonly cancelled: number;
   readonly total: number;
+  /**
+   * Environment name is not on {@link RunSummary} / {@link RunPlan}.
+   * Optional presentation-only field — omit unless a host wires it without
+   * changing execution models. The report UI does not invent it.
+   */
+  readonly environmentName?: string;
   /**
    * Categorized failure breakdown (additive to {@link failed} / {@link skipped}).
    * Chips render only for non-zero counts.
@@ -172,7 +194,8 @@ export interface CollectionRunReportModel {
 export type CollectionRunReportInboundMessage =
   | { readonly type: 'ready' }
   | { readonly type: 'open'; readonly requestId: string }
-  | { readonly type: 'reveal'; readonly requestId: string };
+  | { readonly type: 'reveal'; readonly requestId: string }
+  | { readonly type: 'runAgain' };
 
 /**
  * Host → webview messages.
@@ -195,7 +218,7 @@ export const FailurePolicySettingValue = {
 export type FailurePolicySettingValue =
   (typeof FailurePolicySettingValue)[keyof typeof FailurePolicySettingValue];
 
-const INBOUND_TYPES = new Set(['ready', 'open', 'reveal']);
+const INBOUND_TYPES = new Set(['ready', 'open', 'reveal', 'runAgain']);
 
 const POLICY_LABELS: Readonly<Record<FailurePolicyKindType, string>> =
   Object.freeze(
@@ -223,7 +246,7 @@ export function buildCollectionRunReportModel(
       summary.plan.requests.find(
         (request) => request.requestId === result.requestId,
       );
-    const statusBadge = resolveOutcomeBadge(result.outcome, result.statusCode);
+    const statusBadge = resolveOutcomeBadge(result.outcome);
     const assertionsLabel = formatAssertions(
       result.assertionsPassed,
       result.assertionsFailed,
@@ -241,7 +264,7 @@ export function buildCollectionRunReportModel(
       outcomeLabel: outcomeLabel(result.outcome),
       statusBadgeText: statusBadge.text,
       statusBadgeClass: statusBadge.className,
-      durationLabel: formatDuration(result.durationMs),
+      durationLabel: formatRowDuration(result.outcome, result.durationMs),
       assertionsLabel,
       ...(result.statusCode === undefined
         ? {}
@@ -249,6 +272,7 @@ export function buildCollectionRunReportModel(
       ...(result.message === undefined ? {} : { message: result.message }),
       canOpen: result.requestId.trim().length > 0,
       isFailure: result.outcome === RequestRunOutcomeKind.Failed,
+      ...projectFolderFields(planned),
       ...((): Partial<CollectionRunReportRow> => {
         const producedVariablesLabel = formatProducedVariablesLabel(
           result.producedVariables,
@@ -280,6 +304,7 @@ export function buildCollectionRunReportModel(
 
   return {
     runId: summary.runId,
+    collectionId: summary.plan.collectionId,
     collectionName: summary.plan.collectionName,
     status: summary.status,
     statusLabel: statusLabel(summary.status),
@@ -306,6 +331,7 @@ export function buildCollectionRunReportModel(
     unresolvedConsumes: (dependencies?.unresolvedConsumes ?? []).map(
       (entry) => ({
         variable: entry.variable,
+        requestId: entry.requestId,
         requestLabel: labelByRequestId.get(entry.requestId) ?? entry.requestId,
       }),
     ),
@@ -380,6 +406,7 @@ export function buildLiveCollectionRunReportModel(
 
   return {
     runId: session.runId,
+    collectionId: session.collectionId,
     collectionName: session.collectionName,
     status,
     statusLabel: liveStatusLabel(status),
@@ -405,6 +432,7 @@ export function buildLiveCollectionRunReportModel(
     unresolvedConsumes: (dependencies?.unresolvedConsumes ?? []).map(
       (entry) => ({
         variable: entry.variable,
+        requestId: entry.requestId,
         requestLabel: labelByRequestId.get(entry.requestId) ?? entry.requestId,
       }),
     ),
@@ -440,7 +468,7 @@ function mapResultRow(
   edges: readonly DependencyEdge[],
   labelByRequestId: ReadonlyMap<string, string>,
 ): CollectionRunReportRow {
-  const statusBadge = resolveOutcomeBadge(result.outcome, result.statusCode);
+  const statusBadge = resolveOutcomeBadge(result.outcome);
   const assertionsLabel = formatAssertions(
     result.assertionsPassed,
     result.assertionsFailed,
@@ -458,12 +486,13 @@ function mapResultRow(
     outcomeLabel: outcomeLabel(result.outcome),
     statusBadgeText: statusBadge.text,
     statusBadgeClass: statusBadge.className,
-    durationLabel: formatDuration(result.durationMs),
+    durationLabel: formatRowDuration(result.outcome, result.durationMs),
     assertionsLabel,
     ...(result.statusCode === undefined ? {} : { statusCode: result.statusCode }),
     ...(result.message === undefined ? {} : { message: result.message }),
     canOpen: result.requestId.trim().length > 0,
     isFailure: result.outcome === RequestRunOutcomeKind.Failed,
+    ...projectFolderFields(planned),
     ...((): Partial<CollectionRunReportRow> => {
       const producedVariablesLabel = formatProducedVariablesLabel(
         result.producedVariables,
@@ -498,13 +527,14 @@ function mapPlaceholderRow(
     url: planned.url,
     outcome: phase,
     outcomeLabel: phase === 'running' ? 'Running' : 'Pending',
-    statusBadgeText: phase === 'running' ? 'Running' : 'Pending',
+    statusBadgeText: phase === 'running' ? '●' : '○',
     statusBadgeClass: phase === 'running' ? 'status-running' : 'status-pending',
     durationLabel: '—',
     assertionsLabel: '—',
     ...(phase === 'running' ? { message: 'Executing request...' } : {}),
     canOpen: planned.requestId.trim().length > 0,
     isFailure: false,
+    ...projectFolderFields(planned),
   };
 }
 
@@ -720,11 +750,11 @@ export function parseCollectionRunReportMessage(
   if (typeof record.type !== 'string' || !INBOUND_TYPES.has(record.type)) {
     return undefined;
   }
-  if (record.type === 'ready') {
+  if (record.type === 'ready' || record.type === 'runAgain') {
     if (Object.keys(record).length !== 1) {
       return undefined;
     }
-    return { type: 'ready' };
+    return { type: record.type };
   }
   if (record.type === 'open' || record.type === 'reveal') {
     const keys = Object.keys(record);
@@ -792,6 +822,44 @@ export function formatDuration(durationMs: number | undefined): string {
     return `${Math.round(durationMs)} ms`;
   }
   return `${(durationMs / 1000).toFixed(2)} s`;
+}
+
+/**
+ * Display label for a folder group from plan `folderRelativePath`.
+ * Empty / omitted → `Root` (collection root). Nested paths use the full path
+ * (`a/b`) so deep folders stay distinct.
+ */
+export function formatFolderGroupLabel(
+  folderRelativePath: string | undefined,
+): string {
+  if (folderRelativePath === undefined || folderRelativePath.trim() === '') {
+    return 'Root';
+  }
+  return folderRelativePath;
+}
+
+function projectFolderFields(
+  planned: PlannedRequest | undefined,
+): Pick<CollectionRunReportRow, 'folderId' | 'folderRelativePath'> {
+  if (planned === undefined) {
+    return {};
+  }
+  return {
+    ...(planned.folderId === undefined ? {} : { folderId: planned.folderId }),
+    ...(planned.folderRelativePath === undefined
+      ? {}
+      : { folderRelativePath: planned.folderRelativePath }),
+  };
+}
+
+function formatRowDuration(
+  outcome: OutcomeKind | 'running' | 'pending',
+  durationMs: number | undefined,
+): string {
+  if (outcome === RequestRunOutcomeKind.Skipped) {
+    return 'skipped';
+  }
+  return formatDuration(durationMs);
 }
 
 function formatAssertions(
@@ -886,27 +954,26 @@ function statusLabel(
 
 function resolveOutcomeBadge(
   outcome: OutcomeKind | 'running' | 'pending',
-  statusCode: number | undefined,
 ): { readonly text: string; readonly className: string } {
   switch (outcome) {
     case RequestRunOutcomeKind.Passed:
       return {
-        text: statusCode === undefined ? 'Pass' : String(statusCode),
+        text: '✓',
         className: 'status-success',
       };
     case RequestRunOutcomeKind.Failed:
       return {
-        text: statusCode === undefined ? 'Fail' : String(statusCode),
+        text: '✕',
         className: 'status-error',
       };
     case RequestRunOutcomeKind.Skipped:
-      return { text: 'Skipped', className: 'status-neutral' };
+      return { text: '⊘', className: 'status-neutral' };
     case RequestRunOutcomeKind.Cancelled:
-      return { text: 'Cancelled', className: 'status-cancelled' };
+      return { text: '■', className: 'status-cancelled' };
     case 'running':
-      return { text: 'Running', className: 'status-running' };
+      return { text: '●', className: 'status-running' };
     case 'pending':
-      return { text: 'Pending', className: 'status-pending' };
+      return { text: '○', className: 'status-pending' };
     default:
       return { text: '—', className: 'status-neutral' };
   }
@@ -926,32 +993,54 @@ body {
 }
 main { display: flex; flex-direction: column; min-height: 100vh; }
 .loading { padding: var(--ah-space-4); }
-.toolbar {
-  display: flex; align-items: center; gap: var(--ah-space-2); flex-wrap: wrap;
-  padding: var(--ah-space-2) var(--ah-space-4);
-  border-bottom: 1px solid var(--vscode-panel-border);
-  background: var(--vscode-sideBar-background);
-}
-.toolbar label {
-  display: inline-flex; align-items: center; gap: 6px;
-  color: var(--vscode-descriptionForeground);
-  cursor: pointer; user-select: none; font-size: .92em;
-}
 .header {
-  padding: var(--ah-space-4);
+  padding: var(--ah-space-3) var(--ah-space-4);
   border-bottom: 1px solid var(--vscode-panel-border);
   background: var(--vscode-sideBar-background);
 }
-.header h1 {
-  margin: 0 0 var(--ah-space-1); font-size: 1.05em; font-weight: 600;
+.header-top {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: var(--ah-space-3); flex-wrap: wrap;
 }
-.meta-line {
-  margin: 0 0 var(--ah-space-3);
+.header-titles { min-width: 0; flex: 1 1 12rem; }
+.header h1 {
+  margin: 0; font-size: 1.05em; font-weight: 600; overflow-wrap: anywhere;
+}
+.header-kicker {
+  margin: 2px 0 0;
   color: var(--vscode-descriptionForeground);
-  font-size: .9em;
+  font-size: .85em;
+}
+.header-actions {
+  display: flex; align-items: center; gap: var(--ah-space-2); flex-wrap: wrap;
+}
+.outcome-line {
+  display: flex; align-items: center; gap: var(--ah-space-3); flex-wrap: wrap;
+  margin: var(--ah-space-2) 0 0;
+  font-variant-numeric: tabular-nums;
+}
+.outcome-pill {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-weight: 600; font-size: .92em;
+}
+.outcome-pill .outcome-icon { font-size: 1em; line-height: 1; }
+.outcome-pill.pass .outcome-icon { color: var(--vscode-testing-iconPassed, #89d185); }
+.outcome-pill.fail .outcome-icon { color: var(--vscode-testing-iconFailed, var(--vscode-errorForeground)); }
+.outcome-pill.skip .outcome-icon { color: var(--vscode-testing-iconSkipped, var(--vscode-descriptionForeground)); }
+.meta-line {
+  margin: var(--ah-space-1) 0 0;
+  color: var(--vscode-descriptionForeground);
+  font-size: .85em;
+}
+.meta-line .sep { opacity: .55; margin: 0 2px; }
+.debugger-note {
+  margin: var(--ah-space-1) 0 0;
+  color: var(--vscode-descriptionForeground);
+  font-size: .78em; opacity: .9;
 }
 .stats-summary {
   display: flex; align-items: center; gap: var(--ah-space-2); flex-wrap: wrap;
+  margin-top: var(--ah-space-2);
 }
 .stats-summary .stat-chip.primary-metric strong { font-size: 1.05em; }
 .section-label {
@@ -966,12 +1055,11 @@ main { display: flex; flex-direction: column; min-height: 100vh; }
   color: var(--vscode-charts-blue);
   border-color: color-mix(in srgb, var(--vscode-charts-blue) 45%, transparent);
 }
-tr.row-running td:first-child {
-  /* Static cue that remains under prefers-reduced-motion (on td for collapsed tables) */
+.req-row.row-running {
   box-shadow: inset 3px 0 0 0 color-mix(in srgb, var(--vscode-charts-blue) 55%, transparent);
 }
 @media (prefers-reduced-motion: no-preference) {
-  tr.row-running td {
+  .req-row.row-running {
     background-image: linear-gradient(
       90deg,
       transparent 0%,
@@ -991,90 +1079,181 @@ tr.row-running td:first-child {
   color: var(--vscode-descriptionForeground);
   opacity: 0.85;
 }
-.table-wrap { overflow: auto; padding: 0 0 var(--ah-space-4); }
-table {
-  width: 100%; border-collapse: collapse;
+.failed-section {
+  padding: var(--ah-space-2) var(--ah-space-4) var(--ah-space-3);
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+.failed-list {
+  margin: 0; padding: 0; list-style: none;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.failed-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: var(--ah-space-2);
+  align-items: baseline;
+  padding: 4px 8px;
+  border-radius: var(--ah-radius);
+  cursor: pointer;
+  font-size: .92em;
   font-variant-numeric: tabular-nums;
 }
-th, td {
-  text-align: left; padding: 6px 12px;
-  border-bottom: 1px solid var(--vscode-panel-border);
-  vertical-align: top;
-}
-th {
-  position: sticky; top: 0;
-  background: var(--vscode-editor-background);
-  color: var(--vscode-descriptionForeground);
-  font-weight: 600; font-size: .75em;
-  text-transform: uppercase; letter-spacing: .03em;
-  z-index: 1;
-}
-tbody tr { cursor: pointer; }
-tbody tr:hover { background: var(--vscode-list-hoverBackground); }
-tbody tr:focus-visible {
+.failed-item:hover { background: var(--vscode-list-hoverBackground); }
+.failed-item:focus-visible {
   outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px;
 }
-td.assertions-fail { color: var(--vscode-testing-iconFailed, var(--vscode-errorForeground)); font-weight: 600; }
-.request-cell { min-width: 12rem; }
-.request-cell .label { font-weight: 600; overflow-wrap: anywhere; }
-.request-cell .meta {
+.failed-item .name { font-weight: 600; overflow-wrap: anywhere; min-width: 0; }
+.failed-item .code {
+  color: var(--vscode-testing-iconFailed, var(--vscode-errorForeground));
+  font-family: var(--vscode-editor-font-family, var(--vscode-font-family));
+}
+.failed-item .dur { color: var(--vscode-descriptionForeground); }
+.filters {
+  display: flex; align-items: center; gap: var(--ah-space-2); flex-wrap: wrap;
+  padding: var(--ah-space-2) var(--ah-space-4);
+  border-bottom: 1px solid var(--vscode-panel-border);
+  background: var(--vscode-sideBar-background);
+}
+.filter-chips {
+  display: inline-flex; align-items: center; gap: 2px; flex-wrap: wrap;
+}
+.filter-chip {
+  padding: 2px 8px; font-size: .85em; min-height: 22px;
+  color: var(--vscode-foreground);
+  background: transparent;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: var(--ah-radius);
+}
+.filter-chip[aria-pressed="true"] {
+  background: var(--vscode-button-secondaryBackground);
+  border-color: var(--vscode-focusBorder);
+  font-weight: 600;
+}
+.filter-search {
+  flex: 1 1 10rem; min-width: 8rem; max-width: 20rem;
+  height: var(--ah-control-height);
+  padding: 2px 8px;
+  color: var(--vscode-input-foreground);
+  background: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
+  border-radius: var(--ah-radius);
+  font: inherit; font-size: .9em;
+}
+.filter-search:focus {
+  outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px;
+}
+.filter-method {
+  height: var(--ah-control-height);
+  padding: 2px 6px;
+  color: var(--vscode-dropdown-foreground, var(--vscode-foreground));
+  background: var(--vscode-dropdown-background, var(--vscode-input-background));
+  border: 1px solid var(--vscode-dropdown-border, var(--vscode-panel-border));
+  border-radius: var(--ah-radius);
+  font: inherit; font-size: .85em;
+}
+.list-wrap { padding: 0 0 var(--ah-space-4); }
+.folder-group { border-bottom: 1px solid var(--vscode-panel-border); }
+.folder-group-header {
+  display: flex; align-items: center; gap: var(--ah-space-2);
+  width: 100%; padding: 6px var(--ah-space-4);
+  background: var(--vscode-sideBar-background);
+  border: none; border-radius: 0;
+  color: var(--vscode-foreground);
+  text-align: left; cursor: pointer;
+  font: inherit; font-weight: 600; font-size: .9em;
+  min-height: 28px;
+}
+.folder-group-header:hover { background: var(--vscode-list-hoverBackground); }
+.folder-group-header .chev {
+  color: var(--vscode-descriptionForeground); width: 1em; flex-shrink: 0;
+}
+.folder-group-header .group-name { flex: 1 1 auto; overflow-wrap: anywhere; }
+.folder-group-header .group-counts {
   color: var(--vscode-descriptionForeground);
-  font-size: .88em; overflow-wrap: anywhere; margin-top: 2px;
-  font-family: var(--vscode-editor-font-family, var(--vscode-font-family));
+  font-weight: 500; font-variant-numeric: tabular-nums; font-size: .92em;
+  white-space: nowrap;
 }
-.message {
+.folder-group-header .group-mark.pass { color: var(--vscode-testing-iconPassed, #89d185); }
+.folder-group-header .group-mark.fail { color: var(--vscode-testing-iconFailed, var(--vscode-errorForeground)); }
+.folder-group-header .group-mark.skip { color: var(--vscode-testing-iconSkipped, var(--vscode-descriptionForeground)); }
+.folder-group-body { display: none; }
+.folder-group[data-open="true"] .folder-group-body { display: block; }
+.folder-group[data-open="true"] .folder-group-header .chev::before { content: '▾'; }
+.folder-group:not([data-open="true"]) .folder-group-header .chev::before { content: '▸'; }
+.reorder-note {
+  margin: 0; padding: 4px var(--ah-space-4) 8px;
+  color: var(--vscode-descriptionForeground); font-size: .78em;
+}
+.req-row {
+  display: grid;
+  grid-template-columns: 1.25rem 3.25rem minmax(6rem, 1fr) 2.75rem 4.25rem;
+  gap: var(--ah-space-2);
+  align-items: baseline;
+  padding: 5px var(--ah-space-4);
+  border-bottom: 1px solid color-mix(in srgb, var(--vscode-panel-border) 70%, transparent);
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+.req-row:hover { background: var(--vscode-list-hoverBackground); }
+.req-row:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px;
+}
+.req-row.expanded {
+  background: color-mix(in srgb, var(--vscode-list-hoverBackground) 55%, transparent);
+}
+.req-row.row-fail .outcome-icon {
+  color: var(--vscode-testing-iconFailed, var(--vscode-errorForeground));
+}
+.req-row .outcome-icon {
+  font-weight: 700; line-height: 1;
+  color: var(--vscode-testing-iconPassed, #89d185);
+  text-align: center;
+}
+.req-row .outcome-icon.skip,
+.req-row .outcome-icon.neutral {
+  color: var(--vscode-testing-iconSkipped, var(--vscode-descriptionForeground));
+}
+.req-row .outcome-icon.cancelled {
+  color: var(--vscode-testing-iconUnset, var(--vscode-descriptionForeground));
+}
+.req-row .outcome-icon.running { color: var(--vscode-charts-blue); }
+.req-row .outcome-icon.pending { color: var(--vscode-descriptionForeground); opacity: .85; }
+.req-row .method {
+  font-family: var(--vscode-editor-font-family, var(--vscode-font-family));
+  font-size: .85em; font-weight: 600;
+}
+.req-row .label { font-weight: 600; overflow-wrap: anywhere; min-width: 0; }
+.req-row .http-status {
+  text-align: right;
+  font-family: var(--vscode-editor-font-family, var(--vscode-font-family));
   color: var(--vscode-descriptionForeground);
-  font-size: .88em; overflow-wrap: anywhere; margin-top: var(--ah-space-1);
-  /* Failure summaries are two lines (category then reason) — keep the break. */
-  white-space: pre-line;
 }
-.message .message-title {
-  display: block; font-weight: 600;
-  color: var(--vscode-errorForeground);
-}
-.failure-facts { margin: 8px 0 0; padding: 0 0 0 1.1em; }
-.failure-facts li { padding: 1px 0; color: var(--vscode-descriptionForeground); }
-.message.skip-reason { color: var(--vscode-editorWarning-foreground); }
-.vars-produced {
-  color: var(--vscode-charts-green, var(--vscode-terminal-ansiGreen, #89d185));
-  font-size: .85em; overflow-wrap: anywhere; margin-top: 2px;
-  font-family: var(--vscode-editor-font-family, var(--vscode-font-family));
-}
-.vars-consumed {
+.req-row .duration {
+  text-align: right;
   color: var(--vscode-descriptionForeground);
-  font-size: .85em; overflow-wrap: anywhere; margin-top: 2px;
-  font-family: var(--vscode-editor-font-family, var(--vscode-font-family));
+  font-size: .9em;
 }
-.row-actions { display: flex; gap: var(--ah-space-1); flex-wrap: wrap; white-space: nowrap; }
-.row-actions button { padding: 2px 8px; font-size: .9em; }
-input[type="checkbox"] { accent-color: var(--vscode-focusBorder); }
-.dependency-list, .unresolved-list {
-  margin: 0 0 var(--ah-space-2); padding: 0; list-style: none;
-  color: var(--vscode-descriptionForeground); font-size: .88em;
-}
-.dependency-list li, .unresolved-list li {
-  padding: 2px 0; overflow-wrap: anywhere;
-  font-family: var(--vscode-editor-font-family, var(--vscode-font-family));
-}
-.unresolved-list li { color: var(--vscode-editorWarning-foreground); }
-.variable-trace {
-  margin: 0 0 var(--ah-space-2); padding: 0; list-style: none;
-  color: var(--vscode-descriptionForeground); font-size: .88em;
-}
-.variable-trace li {
-  padding: 4px 0; overflow-wrap: anywhere;
-  font-family: var(--vscode-editor-font-family, var(--vscode-font-family));
-}
-.variable-trace .var-name { font-weight: 600; color: var(--vscode-foreground); }
-.variable-trace .var-meta { margin-top: 2px; font-size: .92em; }
-tr.detail-row { cursor: default; }
-tr.detail-row:hover { background: transparent; }
-tr.detail-row td {
+.detail-slot {
   padding: 0 var(--ah-space-4) var(--ah-space-3);
   background: var(--vscode-sideBar-background);
   border-bottom: 1px solid var(--vscode-panel-border);
 }
 .detail-panel { padding: var(--ah-space-2) 0; }
+.detail-overview {
+  display: flex; align-items: center; gap: var(--ah-space-2); flex-wrap: wrap;
+  margin: 0 0 var(--ah-space-2);
+  padding: 6px 10px;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: var(--ah-radius);
+  background: var(--vscode-editor-background);
+  font-size: .9em; font-variant-numeric: tabular-nums;
+}
+.detail-overview .ov-label { color: var(--vscode-descriptionForeground); }
+.detail-actions {
+  display: flex; gap: var(--ah-space-1); flex-wrap: wrap;
+  margin-top: var(--ah-space-2);
+}
+.detail-actions button { padding: 2px 8px; font-size: .9em; }
 .detail-panel details {
   margin: 0 0 var(--ah-space-2);
   border: 1px solid var(--vscode-panel-border);
@@ -1154,8 +1333,103 @@ tr.detail-row td {
 }
 .failure-block h3 { margin: 0 0 4px; font-size: 1em; }
 .muted-inline { color: var(--vscode-descriptionForeground); }
-.toggle-details {
-  padding: 2px 8px; font-size: .9em;
+.message {
+  color: var(--vscode-descriptionForeground);
+  font-size: .88em; overflow-wrap: anywhere; margin-top: var(--ah-space-1);
+  white-space: pre-line;
+}
+.message .message-title {
+  display: block; font-weight: 600;
+  color: var(--vscode-errorForeground);
+}
+.failure-facts { margin: 8px 0 0; padding: 0 0 0 1.1em; }
+.failure-facts li { padding: 1px 0; color: var(--vscode-descriptionForeground); }
+.message.skip-reason { color: var(--vscode-editorWarning-foreground); }
+.vars-produced {
+  color: var(--vscode-charts-green, var(--vscode-terminal-ansiGreen, #89d185));
+  font-size: .85em; overflow-wrap: anywhere; margin-top: 2px;
+  font-family: var(--vscode-editor-font-family, var(--vscode-font-family));
+}
+.vars-consumed {
+  color: var(--vscode-descriptionForeground);
+  font-size: .85em; overflow-wrap: anywhere; margin-top: 2px;
+  font-family: var(--vscode-editor-font-family, var(--vscode-font-family));
+}
+.dependency-list, .unresolved-list {
+  margin: 0 0 var(--ah-space-2); padding: 0; list-style: none;
+  color: var(--vscode-descriptionForeground); font-size: .88em;
+}
+.dependency-list li, .unresolved-list li {
+  padding: 2px 0; overflow-wrap: anywhere;
+  font-family: var(--vscode-editor-font-family, var(--vscode-font-family));
+}
+.unresolved-list li { color: var(--vscode-editorWarning-foreground); }
+.vars-status {
+  margin: var(--ah-space-2) 0 0;
+  font-size: .88em; font-weight: 600;
+}
+.vars-status.vars-ok {
+  color: var(--vscode-testing-iconPassed, #89d185);
+}
+.vars-status.vars-warn {
+  color: var(--vscode-editorWarning-foreground);
+}
+.vars-compact { margin: var(--ah-space-2) 0 0; }
+.vars-unresolved-names {
+  margin: 2px 0 0; padding: 0; list-style: none;
+  font-family: var(--vscode-editor-font-family, var(--vscode-font-family));
+  font-size: .88em;
+  color: var(--vscode-editorWarning-foreground);
+}
+.vars-unresolved-names li { padding: 1px 0; overflow-wrap: anywhere; }
+.vars-unresolved-names .vars-more {
+  color: var(--vscode-descriptionForeground);
+}
+.vars-expand { margin: var(--ah-space-1) 0 0; font-size: .88em; }
+.vars-expand > summary {
+  cursor: pointer;
+  color: var(--vscode-textLink-foreground);
+  list-style: none;
+}
+.vars-expand > summary::-webkit-details-marker { display: none; }
+.vars-expand-body { margin-top: var(--ah-space-2); }
+.variable-trace {
+  margin: 0 0 var(--ah-space-2); padding: 0; list-style: none;
+  color: var(--vscode-descriptionForeground); font-size: .88em;
+}
+.variable-trace li {
+  padding: 4px 0; overflow-wrap: anywhere;
+  font-family: var(--vscode-editor-font-family, var(--vscode-font-family));
+}
+.variable-trace .var-name { font-weight: 600; color: var(--vscode-foreground); }
+.variable-trace .var-meta { margin-top: 2px; font-size: .92em; }
+.request-vars-list {
+  margin: 0; padding: 0; list-style: none;
+  font-family: var(--vscode-editor-font-family, var(--vscode-font-family));
+}
+.request-vars-list li {
+  display: grid;
+  grid-template-columns: 1.2em minmax(5rem, 9rem) minmax(0, 1fr);
+  gap: 4px 8px; padding: 2px 0; overflow-wrap: anywhere;
+  align-items: baseline;
+}
+.request-vars-list .var-mark-ok {
+  color: var(--vscode-testing-iconPassed, #89d185);
+}
+.request-vars-list .var-mark-warn {
+  color: var(--vscode-editorWarning-foreground);
+}
+.request-vars-list .var-name { font-weight: 600; }
+.request-vars-list .var-value { color: var(--vscode-descriptionForeground); }
+.vars-role-labels { margin: 0 0 6px; }
+.toggle-details { padding: 2px 8px; font-size: .9em; }
+@media (max-width: 420px) {
+  .req-row {
+    grid-template-columns: 1.1rem 2.75rem minmax(0, 1fr);
+    grid-template-rows: auto auto;
+  }
+  .req-row .http-status { grid-column: 2; text-align: left; }
+  .req-row .duration { grid-column: 3; }
 }
 `;
 
@@ -1164,8 +1438,26 @@ const REPORT_SCRIPT = `
   const vscode = acquireVsCodeApi();
   const root = document.getElementById('root');
   let model = null;
-  let filterFailed = false;
-  const expanded = {};
+  /** @type {'all'|'passed'|'failed'|'skipped'} */
+  let outcomeFilter = 'all';
+  let searchText = '';
+  let methodFilter = '';
+  /** Single-expand: at most one request detail open (performance for large collections). */
+  let expandedRequestId = null;
+  /** Folder groups collapsed by user; default open. */
+  const collapsedGroups = {};
+  let searchDebounceTimer = null;
+
+  function cssEscapeAttr(value) {
+    if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') {
+      return CSS.escape(value);
+    }
+    return String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  }
+
+  function requestRowSelector(requestId) {
+    return '[data-request-id="' + cssEscapeAttr(requestId) + '"]';
+  }
 
   function escapeHtml(value) {
     return String(value)
@@ -1186,11 +1478,99 @@ const REPORT_SCRIPT = `
       escapeHtml(value) + '</strong></div>';
   }
 
-  function visibleRows() {
-    if (!model) {
-      return [];
+  function formatFolderGroupLabel(folderRelativePath) {
+    if (folderRelativePath === undefined || folderRelativePath === null ||
+        String(folderRelativePath).trim() === '') {
+      return 'Root';
     }
-    return filterFailed ? model.rows.filter(function (row) { return row.isFailure; }) : model.rows;
+    return String(folderRelativePath);
+  }
+
+  function outcomeIconClass(outcome) {
+    if (outcome === 'passed') return '';
+    if (outcome === 'failed') return '';
+    if (outcome === 'skipped') return 'skip neutral';
+    if (outcome === 'cancelled') return 'cancelled';
+    if (outcome === 'running') return 'running';
+    if (outcome === 'pending') return 'pending';
+    return 'neutral';
+  }
+
+  function httpStatusLabel(row) {
+    if (row.outcome === 'skipped' || row.outcome === 'cancelled' ||
+        row.outcome === 'pending' || row.outcome === 'running') {
+      return '—';
+    }
+    return row.statusCode === undefined || row.statusCode === null
+      ? '—'
+      : String(row.statusCode);
+  }
+
+  function matchesSearch(row, q) {
+    if (!q) return true;
+    const hay = [
+      row.label || '',
+      row.method || '',
+      row.url || '',
+      row.outcomeLabel || '',
+    ].join(' ').toLowerCase();
+    return hay.indexOf(q) !== -1;
+  }
+
+  function matchesOutcome(row) {
+    if (outcomeFilter === 'all') return true;
+    if (outcomeFilter === 'passed') return row.outcome === 'passed';
+    if (outcomeFilter === 'failed') return row.isFailure === true;
+    if (outcomeFilter === 'skipped') {
+      return row.outcome === 'skipped' || row.outcome === 'cancelled';
+    }
+    return true;
+  }
+
+  function visibleRows() {
+    if (!model) return [];
+    const q = searchText.trim().toLowerCase();
+    return model.rows.filter(function (row) {
+      if (!matchesOutcome(row)) return false;
+      if (methodFilter && row.method !== methodFilter) return false;
+      return matchesSearch(row, q);
+    });
+  }
+
+  function uniqueMethods(rows) {
+    const set = {};
+    rows.forEach(function (row) {
+      if (row.method && row.method !== '—') set[row.method] = true;
+    });
+    return Object.keys(set).sort();
+  }
+
+  function groupRows(rows) {
+    const order = [];
+    const map = {};
+    rows.forEach(function (row) {
+      const key = formatFolderGroupLabel(row.folderRelativePath);
+      if (!map[key]) {
+        map[key] = [];
+        order.push(key);
+      }
+      map[key].push(row);
+    });
+    return order.map(function (key) {
+      return { key: key, rows: map[key] };
+    });
+  }
+
+  function groupCounts(rows) {
+    let passed = 0;
+    let failed = 0;
+    let skipped = 0;
+    rows.forEach(function (row) {
+      if (row.isFailure) failed += 1;
+      else if (row.outcome === 'passed') passed += 1;
+      else if (row.outcome === 'skipped' || row.outcome === 'cancelled') skipped += 1;
+    });
+    return { passed: passed, failed: failed, skipped: skipped, total: rows.length };
   }
 
   function renderBodySection(presentation) {
@@ -1331,30 +1711,76 @@ const REPORT_SCRIPT = `
   }
 
   function renderExecutionDetails(details) {
-    const vars = details.resolvedVariables || [];
     const deps = details.dependencyLabels || [];
-    if (vars.length === 0 && deps.length === 0) {
-      return '<p class="muted-inline">No execution details</p>';
+    const hasVars = (details.resolvedVariables || []).length > 0;
+    if (deps.length === 0) {
+      return hasVars
+        ? '<p class="muted-inline">Resolved variables are listed under Variables.</p>'
+        : '<p class="muted-inline">No execution details</p>';
     }
+    return '<p class="muted-inline">Depends on</p>' +
+      '<ul class="dep-list">' +
+      deps.map(function (d) {
+        return '<li>' + escapeHtml(d) + '</li>';
+      }).join('') +
+      '</ul>';
+  }
+
+  /** Unresolved consume entries that apply to this request row. */
+  function unresolvedConsumesForRow(row) {
+    const unresolved = (model && model.unresolvedConsumes) || [];
+    return unresolved.filter(function (entry) {
+      return entry.requestId === row.requestId;
+    });
+  }
+
+  function hasRequestVariableErrors(row) {
+    return unresolvedConsumesForRow(row).length > 0;
+  }
+
+  /**
+   * Per-request Variables section — resolved displayValue (masked) + unresolved.
+   * Owns variable lines; Execution Details keeps depends-on only.
+   */
+  function renderVariablesSection(row, details) {
+    const vars = (details && details.resolvedVariables) || [];
+    const unresolved = unresolvedConsumesForRow(row);
+    const hasRoles = !!(row.producedVariablesLabel || row.consumedVariablesLabel);
+    if (vars.length === 0 && unresolved.length === 0 && !hasRoles) {
+      return null;
+    }
+    const resolvedNames = {};
+    vars.forEach(function (v) { resolvedNames[v.name] = true; });
     let html = '';
-    if (vars.length > 0) {
-      html += '<ul class="resolved-list">' +
-        vars.map(function (v) {
-          return '<li class="resolved-item"><code>{{' + escapeHtml(v.name) +
-            '}}</code> → <code>' + escapeHtml(v.displayValue) + '</code>' +
-            ' <span class="muted-inline">(' + escapeHtml(v.scope) +
-            (v.sensitive ? ', sensitive' : '') + ')</span></li>';
-        }).join('') +
-        '</ul>';
+    if (hasRoles) {
+      const bits = [];
+      if (row.producedVariablesLabel) {
+        bits.push('<span class="vars-produced">' +
+          escapeHtml(row.producedVariablesLabel) + '</span>');
+      }
+      if (row.consumedVariablesLabel) {
+        bits.push('<span class="vars-consumed">' +
+          escapeHtml(row.consumedVariablesLabel) + '</span>');
+      }
+      html += '<p class="vars-role-labels muted-inline">' + bits.join(' · ') + '</p>';
     }
-    if (deps.length > 0) {
-      html += '<p class="muted-inline" style="margin-top:8px">Depends on</p>' +
-        '<ul class="dep-list">' +
-        deps.map(function (d) {
-          return '<li>' + escapeHtml(d) + '</li>';
-        }).join('') +
-        '</ul>';
+    if (vars.length === 0 && unresolved.length === 0) {
+      return html || '<p class="muted-inline">No variables</p>';
     }
+    html += '<ul class="request-vars-list" aria-label="Request variables">';
+    vars.forEach(function (v) {
+      html += '<li><span class="var-mark-ok" aria-hidden="true">✓</span>' +
+        '<span class="var-name">' + escapeHtml(v.name) + '</span>' +
+        '<span class="var-value"><code>' + escapeHtml(v.displayValue) +
+        '</code></span></li>';
+    });
+    unresolved.forEach(function (entry) {
+      if (resolvedNames[entry.variable]) return;
+      html += '<li><span class="var-mark-warn" aria-hidden="true">⚠</span>' +
+        '<span class="var-name">' + escapeHtml(entry.variable) + '</span>' +
+        '<span class="var-value var-mark-warn">Unresolved</span></li>';
+    });
+    html += '</ul>';
     return html;
   }
 
@@ -1429,13 +1855,49 @@ const REPORT_SCRIPT = `
       '</dl>';
   }
 
-  function renderDetailPanel(details) {
+  function renderOverview(row) {
+    return '<div class="detail-overview" aria-label="Request overview">' +
+      '<span class="status-badge ' + escapeAttribute(row.statusBadgeClass) + '">' +
+        escapeHtml(row.statusBadgeText) + '</span>' +
+      '<span>' + escapeHtml(row.outcomeLabel) + '</span>' +
+      '<span class="ov-label">HTTP</span><strong>' + escapeHtml(httpStatusLabel(row)) + '</strong>' +
+      '<span class="ov-label">Duration</span><strong>' + escapeHtml(row.durationLabel) + '</strong>' +
+      '<span class="ov-label">Assertions</span><strong>' + escapeHtml(row.assertionsLabel) + '</strong>' +
+      '</div>';
+  }
+
+  function renderOverviewExtras(row) {
+    // Produced/consumed role labels live under Variables (not Overview).
+    return renderRowMessage(row);
+  }
+
+  function renderDetailPanel(row) {
+    const details = row.details;
     if (!details) {
-      return '<p class="muted-inline">No debugger details for this request.</p>';
+      const varsOnly = renderVariablesSection(row, {});
+      let varsBlock = '';
+      if (varsOnly !== null) {
+        varsBlock = '<details' + (hasRequestVariableErrors(row) ? ' open' : '') + '>' +
+          '<summary>Variables</summary>' +
+          '<div class="detail-body">' + varsOnly + '</div></details>';
+      }
+      return '<div class="detail-panel">' + renderOverview(row) +
+        renderOverviewExtras(row) +
+        (varsBlock ||
+          '<p class="muted-inline">No debugger details for this request.</p>') +
+        renderDetailActions(row) +
+        '</div>';
     }
     const presentation = details.presentation;
     const failure = details.failure;
+    const openResponse = !!row.isFailure;
     const sections = [];
+    sections.push({
+      id: 'overview',
+      label: 'Overview',
+      body: renderOverview(row) + renderOverviewExtras(row),
+      open: true,
+    });
     if (failure) {
       sections.push({
         id: 'failure',
@@ -1473,7 +1935,7 @@ const REPORT_SCRIPT = `
         id: 'response',
         label: 'Response',
         body: renderBodySection(presentation),
-        open: true,
+        open: openResponse,
       });
       sections.push({
         id: 'headers',
@@ -1509,6 +1971,15 @@ const REPORT_SCRIPT = `
         open: openAssertions,
       });
     }
+    const variablesBody = renderVariablesSection(row, details);
+    if (variablesBody !== null) {
+      sections.push({
+        id: 'variables',
+        label: 'Variables',
+        body: variablesBody,
+        open: hasRequestVariableErrors(row),
+      });
+    }
     sections.push({
       id: 'execution',
       label: 'Execution Details',
@@ -1527,121 +1998,63 @@ const REPORT_SCRIPT = `
           '<summary>' + escapeHtml(s.label) + '</summary>' +
           '<div class="detail-body">' + s.body + '</div></details>';
       }).join('') +
+      renderDetailActions(row) +
       '</div>';
   }
 
-  function render() {
-    if (!model) {
-      return;
-    }
-    const categoryChip = function (label, count) {
-      return (count || 0) > 0 ? [statChip(label, String(count), true)] : [];
-    };
-    const chips = [
-      statChip('Passed', String(model.passed), model.failed === 0),
-      statChip('Failed', String(model.failed), model.failed > 0),
-    ].concat(
-      categoryChip('Validation Failures', model.preconditionFailures),
-      categoryChip('HTTP/Network Failures', model.transportFailures),
-      categoryChip('Assertion Failures', model.assertionFailures),
-      categoryChip('Extraction Failures', model.extractionFailures),
-      [
-        statChip('Skipped', String(model.skipped), false),
-        statChip('Duration', model.durationLabel, false),
-        statChip('Average', model.averageDurationLabel, false),
-        statChip('Assertions', model.assertionsLabel, false),
-      ],
-    ).join('');
+  function renderDetailActions(row) {
+    return '<div class="detail-actions">' +
+      '<button type="button" class="primary open-btn"' +
+        (row.canOpen ? '' : ' disabled') + ' aria-label="Open request">Open</button>' +
+      '<button type="button" class="reveal-btn"' +
+        (row.canOpen ? '' : ' disabled') + ' aria-label="Reveal in Collections">Reveal</button>' +
+      '</div>';
+  }
 
-    const rows = visibleRows();
-    const orderBadge = model.reordered
-      ? ' <span class="status-badge status-neutral">Reordered</span>'
-      : '';
-    const body = rows.length === 0
-      ? '<div class="empty-state" id="empty" role="status">' +
-        '<strong>' + (filterFailed ? 'No failures' : 'No requests') + '</strong>' +
-        (filterFailed
-          ? 'This run has no failed requests. Clear “Failed only” to see the full results.'
-          : 'This collection run did not include any requests.') +
-        '</div>'
-      : '<p class="section-label">Execution order' + orderBadge + '</p>' +
-        '<div class="table-wrap"><table aria-label="Collection run execution order">' +
-        '<thead><tr>' +
-        '<th scope="col">#</th>' +
-        '<th scope="col">Status</th>' +
-        '<th scope="col">Request</th>' +
-        '<th scope="col">Duration</th>' +
-        '<th scope="col">Assertions</th>' +
-        '<th scope="col"><span class="sr-only">Actions</span></th>' +
-        '</tr></thead><tbody>' +
-        rows.map(function (row) {
-          const meta = row.method && row.method !== '—'
-            ? '<div class="meta"><span class="' + escapeAttribute(row.methodBadgeClass) + '">' +
-              escapeHtml(row.method) + '</span> ' + escapeHtml(row.url) + '</div>'
-            : '';
-          const message = renderRowMessage(row);
-          const producedVariables = row.producedVariablesLabel
-            ? '<div class="vars-produced">' + escapeHtml(row.producedVariablesLabel) + '</div>'
-            : '';
-          const consumedVariables = row.consumedVariablesLabel
-            ? '<div class="vars-consumed">' + escapeHtml(row.consumedVariablesLabel) + '</div>'
-            : '';
-          const hasDetails = !!row.details;
-          const isExpanded = !!expanded[row.requestId];
-          const detailRow = hasDetails && isExpanded
-            ? '<tr class="detail-row" data-detail-for="' + escapeAttribute(row.requestId) + '">' +
-              '<td colspan="6">' + renderDetailPanel(row.details) + '</td></tr>'
-            : '';
-          const rowClass = [
-            row.isFailure ? 'row-fail' : '',
-            row.outcome === 'running' ? 'row-running' : '',
-          ].filter(Boolean).join(' ');
-          return '<tr data-request-id="' + escapeAttribute(row.requestId) + '" tabindex="0"' +
-            (rowClass ? ' class="' + rowClass + '"' : '') + '>' +
-            '<td>' + escapeHtml(String(row.ordinal + 1)) + '</td>' +
-            '<td><span class="status-badge ' + escapeAttribute(row.statusBadgeClass) + '">' +
-              escapeHtml(row.statusBadgeText) + '</span></td>' +
-            '<td class="request-cell"><div class="label">' + escapeHtml(row.label) + '</div>' +
-              meta + producedVariables + consumedVariables + message + '</td>' +
-            '<td>' + escapeHtml(row.durationLabel) + '</td>' +
-            '<td class="' + (row.isFailure && row.assertionsLabel && /fail/i.test(row.assertionsLabel) ? 'assertions-fail' : '') + '">' + escapeHtml(row.assertionsLabel) + '</td>' +
-            '<td class="row-actions">' +
-              (hasDetails
-                ? '<button type="button" class="toggle-details"' +
-                  ' aria-expanded="' + (isExpanded ? 'true' : 'false') + '"' +
-                  ' aria-label="Toggle details">' +
-                  (isExpanded ? 'Hide' : 'Details') + '</button>'
-                : '') +
-              '<button type="button" class="primary open-btn"' +
-                (row.canOpen ? '' : ' disabled') + ' aria-label="Open request">Open</button>' +
-              '<button type="button" class="reveal-btn"' +
-                (row.canOpen ? '' : ' disabled') + ' aria-label="Reveal in Collections">Reveal</button>' +
-            '</td></tr>' + detailRow;
-        }).join('') +
-        '</tbody></table></div>';
+  function renderFailedSection() {
+    if (!model || !model.failed) return '';
+    const failedRows = model.rows.filter(function (row) { return row.isFailure; });
+    if (failedRows.length === 0) return '';
+    return '<section class="failed-section" id="failed-section" aria-label="Failed requests">' +
+      '<p class="section-label" style="margin:0 0 6px">Failed Requests</p>' +
+      '<ul class="failed-list">' +
+      failedRows.map(function (row) {
+        return '<li class="failed-item" tabindex="0" data-jump-id="' +
+          escapeAttribute(row.requestId) + '">' +
+          '<span class="name">' + escapeHtml(row.label) + '</span>' +
+          '<span class="code">' + escapeHtml(httpStatusLabel(row)) + '</span>' +
+          '<span class="dur">' + escapeHtml(row.durationLabel) + '</span></li>';
+      }).join('') +
+      '</ul></section>';
+  }
 
-    const dependenciesSection = model.dependencyEdges.length === 0
-      ? ''
-      : '<p class="section-label">Dependencies</p>' +
-        '<ul class="dependency-list" aria-label="Dependency edges">' +
-        model.dependencyEdges.map(function (edge) {
-          return '<li>' + escapeHtml(edge.label) + '</li>';
-        }).join('') +
-        '</ul>';
+  /** Unique unresolved variable names (order preserved). */
+  function uniqueUnresolvedVariableNames(unresolved) {
+    const seen = {};
+    const names = [];
+    unresolved.forEach(function (entry) {
+      if (seen[entry.variable]) return;
+      seen[entry.variable] = true;
+      names.push(entry.variable);
+    });
+    return names;
+  }
 
-    const unresolvedSection = model.unresolvedConsumes.length === 0
-      ? ''
-      : '<p class="section-label">Unresolved</p>' +
-        '<ul class="unresolved-list" aria-label="Unresolved variables">' +
-        model.unresolvedConsumes.map(function (entry) {
-          return '<li>' + escapeHtml(entry.variable) + ' — ' + escapeHtml(entry.requestLabel) + '</li>';
-        }).join('') +
-        '</ul>';
+  function hasVariableActivity() {
+    const trace = model.variableTrace || [];
+    if (trace.length > 0) return true;
+    if ((model.unresolvedConsumes || []).length > 0) return true;
+    return (model.rows || []).some(function (row) {
+      return !!(row.producedVariablesLabel || row.consumedVariablesLabel);
+    });
+  }
 
+  function renderFullVariableTraceBody() {
     const variableTrace = model.variableTrace || [];
-    const variableTraceSection = variableTrace.length === 0
-      ? ''
-      : '<p class="section-label">Variable Trace</p>' +
+    const unresolved = model.unresolvedConsumes || [];
+    let html = '';
+    if (variableTrace.length > 0) {
+      html += '<p class="section-label">Variable Trace</p>' +
         '<ul class="variable-trace" aria-label="Variable trace">' +
         variableTrace.map(function (entry) {
           const produced = entry.producedBy.length
@@ -1655,54 +2068,350 @@ const REPORT_SCRIPT = `
             '<br>' + escapeHtml(consumed) + '</div></li>';
         }).join('') +
         '</ul>';
+    }
+    if (unresolved.length > 0) {
+      html += '<p class="section-label">Unresolved</p>' +
+        '<ul class="unresolved-list" aria-label="Unresolved variables">' +
+        unresolved.map(function (entry) {
+          return '<li>' + escapeHtml(entry.variable) + ' — ' +
+            escapeHtml(entry.requestLabel) + '</li>';
+        }).join('') +
+        '</ul>';
+    }
+    return html || '<p class="muted-inline">No variable details</p>';
+  }
+
+  /**
+   * Compact header variables status — no full Variable Trace by default.
+   * Healthy: "Variables ✓" + collapsed View Variables when trace exists.
+   * Unresolved: compact names + View Variables expand.
+   */
+  function renderVariablesStatus() {
+    const unresolved = model.unresolvedConsumes || [];
+    const trace = model.variableTrace || [];
+    if (unresolved.length === 0) {
+      if (!hasVariableActivity()) return '';
+      const expand = trace.length > 0
+        ? '<details class="vars-expand">' +
+          '<summary>View Variables</summary>' +
+          '<div class="vars-expand-body">' + renderFullVariableTraceBody() + '</div>' +
+          '</details>'
+        : '';
+      return '<div class="vars-compact vars-ok-wrap" aria-label="Variables resolved">' +
+        '<p class="vars-status vars-ok">Variables ✓</p>' +
+        expand +
+        '</div>';
+    }
+    const names = uniqueUnresolvedVariableNames(unresolved);
+    const maxVisible = 8;
+    const visible = names.slice(0, maxVisible);
+    const more = names.length - visible.length;
+    const nameItems = visible.map(function (name) {
+      return '<li>' + escapeHtml(name) + '</li>';
+    }).join('') +
+      (more > 0
+        ? '<li class="vars-more">+' + more + ' more</li>'
+        : '');
+    return '<div class="vars-compact" aria-label="Unresolved variables diagnostic">' +
+      '<p class="vars-status vars-warn">' +
+        '<span aria-hidden="true">⚠</span> ' + names.length +
+        ' unresolved variables</p>' +
+      '<ul class="vars-unresolved-names" aria-label="Unresolved variable names">' +
+        nameItems + '</ul>' +
+      '<details class="vars-expand">' +
+        '<summary>View Variables</summary>' +
+        '<div class="vars-expand-body">' + renderFullVariableTraceBody() + '</div>' +
+      '</details>' +
+      '</div>';
+  }
+
+  function renderFilters(methods) {
+    const chip = function (id, label) {
+      return '<button type="button" class="filter-chip" data-outcome-filter="' + id +
+        '" aria-pressed="' + (outcomeFilter === id ? 'true' : 'false') + '">' +
+        escapeHtml(label) + '</button>';
+    };
+    const methodOptions = '<option value="">All methods</option>' +
+      methods.map(function (m) {
+        return '<option value="' + escapeAttribute(m) + '"' +
+          (methodFilter === m ? ' selected' : '') + '>' +
+          escapeHtml(m) + '</option>';
+      }).join('');
+    return '<div class="filters" role="toolbar" aria-label="Report filters" id="report-filters">' +
+      '<div class="filter-chips" role="group" aria-label="Outcome filter">' +
+        chip('all', 'All') +
+        chip('passed', 'Passed') +
+        chip('failed', 'Failed') +
+        chip('skipped', 'Skipped') +
+      '</div>' +
+      '<input type="search" class="filter-search" id="filterSearch" placeholder="Search name, method, URL…" value="' +
+        escapeAttribute(searchText) + '" aria-label="Search requests" />' +
+      (methods.length > 1
+        ? '<select class="filter-method" id="filterMethod" aria-label="Filter by method">' +
+          methodOptions + '</select>'
+        : '') +
+      '</div>';
+  }
+
+  function renderCompactRow(row) {
+    const isExpanded = expandedRequestId === row.requestId;
+    const iconClass = outcomeIconClass(row.outcome);
+    const rowClass = [
+      'req-row',
+      row.isFailure ? 'row-fail' : '',
+      row.outcome === 'running' ? 'row-running' : '',
+      isExpanded ? 'expanded' : '',
+    ].filter(Boolean).join(' ');
+    const detailHtml = isExpanded
+      ? '<div class="detail-slot" data-detail-for="' + escapeAttribute(row.requestId) + '">' +
+        renderDetailPanel(row) + '</div>'
+      : '';
+    const ariaLabel = [
+      row.outcomeLabel,
+      row.method,
+      row.label,
+      'HTTP ' + httpStatusLabel(row),
+      row.durationLabel,
+    ].join(', ');
+    return '<div class="' + rowClass + '" data-request-id="' + escapeAttribute(row.requestId) +
+      '" tabindex="0" role="button" aria-expanded="' + (isExpanded ? 'true' : 'false') +
+      '" aria-label="' + escapeAttribute(ariaLabel) + '">' +
+      '<span class="outcome-icon ' + iconClass + '" aria-hidden="true">' +
+        escapeHtml(row.statusBadgeText) + '</span>' +
+      '<span class="method ' + escapeAttribute(row.methodBadgeClass) + '">' +
+        escapeHtml(row.method) + '</span>' +
+      '<span class="label">' + escapeHtml(row.label) + '</span>' +
+      '<span class="http-status">' + escapeHtml(httpStatusLabel(row)) + '</span>' +
+      '<span class="duration">' + escapeHtml(row.durationLabel) + '</span>' +
+      '</div>' + detailHtml;
+  }
+
+  function renderRequestList(rows) {
+    if (rows.length === 0) {
+      return '<div class="empty-state" id="empty" role="status">' +
+        '<strong>No matching requests</strong>' +
+        'Adjust filters or search to see results.' +
+        '</div>';
+    }
+    const groups = groupRows(rows);
+    const reorderNote = model.reordered
+      ? '<p class="reorder-note">Execution order may differ from folder order due to dependencies.</p>'
+      : '';
+    return '<div class="list-wrap" id="request-list">' +
+      reorderNote +
+      groups.map(function (group) {
+        const counts = groupCounts(group.rows);
+        const mark = counts.failed > 0 ? '✕' : (counts.passed === counts.total ? '✓' : '⊘');
+        const markClass = counts.failed > 0 ? 'fail' : (counts.passed === counts.total ? 'pass' : 'skip');
+        const isOpen = !collapsedGroups[group.key];
+        return '<section class="folder-group" data-group-key="' + escapeAttribute(group.key) +
+          '" data-open="' + (isOpen ? 'true' : 'false') + '">' +
+          '<button type="button" class="folder-group-header" data-toggle-group="' +
+            escapeAttribute(group.key) + '" aria-expanded="' + (isOpen ? 'true' : 'false') + '">' +
+            '<span class="chev" aria-hidden="true"></span>' +
+            '<span class="group-name">' + escapeHtml(group.key) + '</span>' +
+            '<span class="group-counts">' + counts.passed + '/' + counts.total +
+              ' <span class="group-mark ' + markClass + '">' + mark + '</span></span>' +
+          '</button>' +
+          '<div class="folder-group-body">' +
+            group.rows.map(renderCompactRow).join('') +
+          '</div></section>';
+      }).join('') +
+      '</div>';
+  }
+
+  function render() {
+    if (!model) {
+      return;
+    }
+    const categoryChip = function (label, count) {
+      return (count || 0) > 0 ? [statChip(label, String(count), true)] : [];
+    };
+    const chips = [].concat(
+      categoryChip('Validation Failures', model.preconditionFailures),
+      categoryChip('HTTP/Network Failures', model.transportFailures),
+      categoryChip('Assertion Failures', model.assertionFailures),
+      categoryChip('Extraction Failures', model.extractionFailures),
+    ).join('');
+
+    const canRunAgain = !model.live && !!model.collectionId;
+    const envLine = model.environmentName
+      ? '<span class="sep">·</span> Environment: ' + escapeHtml(model.environmentName)
+      : '';
+
+    const dependenciesSection = model.dependencyEdges.length === 0
+      ? ''
+      : '<p class="section-label">Dependencies</p>' +
+        '<ul class="dependency-list" aria-label="Dependency edges">' +
+        model.dependencyEdges.map(function (edge) {
+          return '<li>' + escapeHtml(edge.label) + '</li>';
+        }).join('') +
+        '</ul>';
+
+    const variablesStatusSection = renderVariablesStatus();
+
+    const rows = visibleRows();
+    const methods = uniqueMethods(model.rows);
 
     root.innerHTML =
-      '<div class="toolbar" role="toolbar" aria-label="Report filters">' +
-        '<label><input type="checkbox" id="filterFailed"' +
-          (filterFailed ? ' checked' : '') + '> Failed only</label>' +
-      '</div>' +
       '<header class="header">' +
-        '<h1>' + escapeHtml(model.collectionName) + '</h1>' +
-        '<p class="meta-line">' + escapeHtml(model.statusLabel) +
-          ' · ' + escapeHtml(model.failurePolicyLabel) +
-          (model.cancelled > 0 ? ' · ' + model.cancelled + ' cancelled' : '') +
+        '<div class="header-top">' +
+          '<div class="header-titles">' +
+            '<h1>' + escapeHtml(model.collectionName) + '</h1>' +
+            '<p class="header-kicker">Collection Run' +
+              (model.live ? ' · Live' : '') +
+              ' · <span class="status-badge ' +
+              (model.failed > 0 ? 'status-error' : model.live ? 'status-running' : 'status-success') +
+              '">' + escapeHtml(model.statusLabel) + '</span></p>' +
+          '</div>' +
+          '<div class="header-actions">' +
+            (canRunAgain
+              ? '<button type="button" class="primary" id="runAgainBtn">Run Again</button>'
+              : '') +
+          '</div>' +
+        '</div>' +
+        '<div class="outcome-line" aria-label="Run outcome counts">' +
+          '<span class="outcome-pill pass"><span class="outcome-icon" aria-hidden="true">✓</span>' +
+            model.passed + ' passed</span>' +
+          '<span class="outcome-pill fail"><span class="outcome-icon" aria-hidden="true">✕</span>' +
+            model.failed + ' failed</span>' +
+          '<span class="outcome-pill skip"><span class="outcome-icon" aria-hidden="true">⊘</span>' +
+            model.skipped + ' skipped</span>' +
+        '</div>' +
+        '<p class="meta-line">' +
+          escapeHtml(String(model.total)) + ' requests' +
+          '<span class="sep">·</span>' + escapeHtml(model.durationLabel) +
+          '<span class="sep">·</span>' + escapeHtml(model.failurePolicyLabel) +
+          (model.cancelled > 0
+            ? '<span class="sep">·</span>' + model.cancelled + ' cancelled'
+            : '') +
+          (model.reordered
+            ? '<span class="sep">·</span><span class="status-badge status-neutral">Reordered</span>'
+            : '') +
+          envLine +
         '</p>' +
-        '<p class="muted-inline">Collection Run Debugger / Details inspect the last in-memory run (not History).</p>' +
-        '<div class="stats-summary" aria-label="Run statistics">' + chips + '</div>' +
+        '<p class="debugger-note">Collection Run Debugger / Details inspect the last in-memory run (not History).</p>' +
+        (chips ? '<div class="stats-summary" aria-label="Failure categories">' + chips + '</div>' : '') +
         dependenciesSection +
-        unresolvedSection +
-        variableTraceSection +
+        variablesStatusSection +
       '</header>' +
-      body;
+      renderFailedSection() +
+      renderFilters(methods) +
+      renderRequestList(rows);
 
-    const checkbox = document.getElementById('filterFailed');
-    if (checkbox) {
-      checkbox.addEventListener('change', function () {
-        filterFailed = checkbox.checked;
+    const runAgainBtn = document.getElementById('runAgainBtn');
+    if (runAgainBtn) {
+      runAgainBtn.addEventListener('click', function () {
+        vscode.postMessage({ type: 'runAgain' });
+      });
+    }
+
+    root.querySelectorAll('[data-outcome-filter]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        outcomeFilter = btn.getAttribute('data-outcome-filter') || 'all';
+        render();
+      });
+    });
+
+    const searchInput = document.getElementById('filterSearch');
+    if (searchInput) {
+      searchInput.addEventListener('input', function () {
+        const next = searchInput.value || '';
+        if (searchDebounceTimer !== null) {
+          clearTimeout(searchDebounceTimer);
+        }
+        searchDebounceTimer = setTimeout(function () {
+          searchDebounceTimer = null;
+          searchText = next;
+          render();
+          const again = document.getElementById('filterSearch');
+          if (again) {
+            again.focus();
+            const len = again.value.length;
+            again.setSelectionRange(len, len);
+          }
+        }, 120);
+      });
+    }
+
+    const methodSelect = document.getElementById('filterMethod');
+    if (methodSelect) {
+      methodSelect.addEventListener('change', function () {
+        methodFilter = methodSelect.value || '';
         render();
       });
     }
 
-    root.querySelectorAll('tbody tr[data-request-id]').forEach(function (tr) {
-      const requestId = tr.getAttribute('data-request-id');
-      if (!requestId) {
-        return;
-      }
-      tr.addEventListener('click', function (event) {
-        if (event.target.closest('button')) {
-          return;
-        }
-        vscode.postMessage({ type: 'open', requestId: requestId });
+    root.querySelectorAll('[data-toggle-group]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        const key = btn.getAttribute('data-toggle-group');
+        if (!key) return;
+        if (collapsedGroups[key]) delete collapsedGroups[key];
+        else collapsedGroups[key] = true;
+        render();
       });
-      tr.addEventListener('keydown', function (event) {
+    });
+
+    function expandRequest(requestId) {
+      expandedRequestId = expandedRequestId === requestId ? null : requestId;
+      const groupKey = formatFolderGroupLabel(
+        (model.rows.find(function (r) { return r.requestId === requestId; }) || {}).folderRelativePath
+      );
+      delete collapsedGroups[groupKey];
+      render();
+      const el = root.querySelector(requestRowSelector(requestId));
+      if (el && typeof el.scrollIntoView === 'function') {
+        el.scrollIntoView({ block: 'nearest' });
+      }
+    }
+
+    root.querySelectorAll('.failed-item[data-jump-id]').forEach(function (item) {
+      const requestId = item.getAttribute('data-jump-id');
+      if (!requestId) return;
+      const jump = function () {
+        outcomeFilter = 'all';
+        searchText = '';
+        methodFilter = '';
+        expandedRequestId = requestId;
+        const groupKey = formatFolderGroupLabel(
+          (model.rows.find(function (r) { return r.requestId === requestId; }) || {}).folderRelativePath
+        );
+        delete collapsedGroups[groupKey];
+        render();
+        const el = root.querySelector(requestRowSelector(requestId));
+        if (el && typeof el.scrollIntoView === 'function') {
+          el.scrollIntoView({ block: 'nearest' });
+        }
+      };
+      item.addEventListener('click', jump);
+      item.addEventListener('keydown', function (event) {
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault();
-          vscode.postMessage({ type: 'open', requestId: requestId });
+          jump();
         }
       });
-      const openBtn = tr.querySelector('.open-btn');
-      const revealBtn = tr.querySelector('.reveal-btn');
-      const toggleBtn = tr.querySelector('.toggle-details');
+    });
+
+    root.querySelectorAll('.req-row[data-request-id]').forEach(function (rowEl) {
+      const requestId = rowEl.getAttribute('data-request-id');
+      if (!requestId) return;
+      rowEl.addEventListener('click', function (event) {
+        if (event.target.closest('button')) return;
+        expandRequest(requestId);
+      });
+      rowEl.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          expandRequest(requestId);
+        }
+      });
+    });
+
+    root.querySelectorAll('.detail-slot').forEach(function (slot) {
+      const requestId = slot.getAttribute('data-detail-for');
+      if (!requestId) return;
+      const openBtn = slot.querySelector('.open-btn');
+      const revealBtn = slot.querySelector('.reveal-btn');
       if (openBtn) {
         openBtn.addEventListener('click', function (event) {
           event.stopPropagation();
@@ -1715,13 +2424,6 @@ const REPORT_SCRIPT = `
           vscode.postMessage({ type: 'reveal', requestId: requestId });
         });
       }
-      if (toggleBtn) {
-        toggleBtn.addEventListener('click', function (event) {
-          event.stopPropagation();
-          expanded[requestId] = !expanded[requestId];
-          render();
-        });
-      }
     });
   }
 
@@ -1732,8 +2434,15 @@ const REPORT_SCRIPT = `
     }
     if (data.type === 'init' && data.model) {
       model = data.model;
-      filterFailed = false;
-      Object.keys(expanded).forEach(function (key) { delete expanded[key]; });
+      outcomeFilter = 'all';
+      searchText = '';
+      methodFilter = '';
+      expandedRequestId = null;
+      if (searchDebounceTimer !== null) {
+        clearTimeout(searchDebounceTimer);
+        searchDebounceTimer = null;
+      }
+      Object.keys(collapsedGroups).forEach(function (key) { delete collapsedGroups[key]; });
       render();
       return;
     }
@@ -1751,3 +2460,4 @@ const REPORT_SCRIPT = `
   vscode.postMessage({ type: 'ready' });
 })();
 `;
+

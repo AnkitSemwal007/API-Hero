@@ -4,7 +4,7 @@
 
 Author `.api` requests beside your code, organize them in Git-friendly collections, run with assertions, and expose the same collections to AI agents via a standalone MCP server — without leaving your editor workflow.
 
-> Extension ID: **`ankitsemwal.api-hero`** · Version: **2.8.3** · License: [MIT](LICENSE)
+> Extension ID: **`ankitsemwal.api-hero`** · Version: **2.8.4** · License: [MIT](LICENSE)
 
 [Documentation](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/README.md) · [Changelog](CHANGELOG.md) · [Support](SUPPORT.md)
 
@@ -23,15 +23,16 @@ Author `.api` requests beside your code, organize them in Git-friendly collectio
 
 - **Native `.api` language** — request line, headers, body, directives, `expect` assertions, CodeLens
 - **Git-first Collections** — `Collections/<Name>/` folders you can diff and review
-- **Variables & environments** — `{{name}}` with clear precedence; sensitive overlays gitignored
+- **Variables & environments** — `{{name}}` with clear precedence; collection variables in `api-hero.variables.json`; sensitive overlays gitignored
 - **Authentication** — `none` / `basic` / `bearer` / `apiKey` profiles, Login API sessions, Secret Storage
 - **Assertions** — `expect` lines with Expected/Actual in Response Viewer and Run Reports
 - **Collection Runner** — run collection / folder / selected requests with failure policies
+- **Collection Run Reports** — compact summary and rows, filters, folder grouping, and drill-down Details
+- **Copy as cURL** — resolve variables + auth and copy a redacted POSIX cURL command (no HTTP)
 - **Request History** — metadata in VS Code global storage (`request-history.json`)
 - **Scenarios (advanced)** — multi-step workflows under `.apihero/scenarios/`
-- **OpenAPI 3.x import** — wizard → Collections + `.api` files
-- **AI / MCP** — nine `apihero_*` tools over the same runner (client-owned configuration)
-- **CLI / CI** — `apihero run request|collection|scenario` without VS Code
+- **OpenAPI 3.x import** — local file or **HTTP(S) URL** wizard → Collections + `.api` files
+- **AI / MCP** — nine `apihero_*` tools (including `apihero_run_scenario`) over the same runner (client-owned configuration)
 
 ---
 
@@ -58,7 +59,7 @@ No context switching. No binary collections. Same workflow as the rest of your c
    ```bash
    npm install
    npm run package
-   code --install-extension release/api-hero-2.8.3.vsix
+   code --install-extension release/api-hero-2.8.4.vsix
    ```
 
    Requires VS Code **1.90+**.
@@ -359,9 +360,10 @@ Lifecycle for a single request:
 
 After a collection/folder/selection run, inspect:
 
-- Summary counts (total / passed / failed / skipped / cancelled)
-- Per-request rows
-- **Details** — Response, Headers, Assertions (Expected/Actual), Execution Details, Dependencies
+- Compact summary counts (total / passed / failed / skipped / cancelled)
+- Compact per-request rows with **outcome / method / search** filters and **folder grouping**
+- Compact **Variables** status in the header (expand for full Variable Trace / unresolved names)
+- **Details** drill-down — Response, Headers, Assertions (Expected/Actual), Variables, Execution Details, Dependencies
 
 The Collection Run Debugger holds the **last run in memory** — it is **not** Request History.
 
@@ -406,6 +408,7 @@ Scenarios automate **one multi-step API workflow** (branches, shared data). They
 
 - **Supported:** OpenAPI **3.0.x** / **3.1.x** JSON or YAML from a **local file** or **HTTP(S) URL**
 - **API Hero: Import OpenAPI Specification** — wizard → Collections + `.api` files (same serializer as the Request Editor; URL fetch uses the same importer)
+- **Environments:** imported server environments are created and selectable; an **existing active environment is preserved** (not replaced)
 - **Size limit:** `apiHero.import.maxFileBytes` (default 5 MiB)
 
 **Not supported:** Swagger 2.0, Postman/Insomnia import, GraphQL, remote `$ref`, OAuth2 as a live auth flow, automatic assertion generation from the spec, authenticated specification URLs.
@@ -432,7 +435,7 @@ Existing HTTP execution pipeline
 
 - MCP is **not** a second HTTP engine — it reuses discovery, Collection Runner, and Execution Orchestrator
 - Runs as an **independent Node stdio process** (not inside the VS Code extension host)
-- Headless MCP / CLI discover **filesystem collections** (`Collections/<Name>/` + collection variables) and load **`.apihero` Project Store** environments / auth profiles when present. VS Code settings globals and VS Code Secret Storage are not available in headless hosts — use process-env secrets (see [CLI](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/cli.md))
+- Headless MCP discovers **filesystem collections** (`Collections/<Name>/` + collection variables) and loads **`.apihero` Project Store** environments / auth profiles when present. VS Code settings globals and VS Code Secret Storage are not available in headless hosts — supply secrets via process environment (`APIHERO_SECRET_*` or exact Secret Storage keys)
 - **Installing the VS Code extension does not register MCP** with Codex, Cursor, Claude, or any other client
 - Target clients: **Codex**, **Cursor**, **Claude / Claude Code**, and other MCP-compatible tools
 - Configuration is **client-owned** — API Hero does not modify client config files
@@ -466,23 +469,6 @@ node ./dist/mcp/server.js --workspace "/absolute/path/to/your-api-workspace"
 
 ---
 
-## CLI / CI (`apihero`)
-
-| Entry | Notes |
-| --- | --- |
-| Bin | `apihero` → `bin/apihero.js` → `dist/cli/main.js` |
-| Direct | `node ./dist/cli/main.js` |
-
-Same workspace resolve priority as MCP. Run requests, collections, or scenarios in CI with exit codes `0–4`.
-
-```bash
-node ./bin/apihero.js run scenario checkout --workspace "/absolute/path/to/your-api-workspace" --json
-```
-
-→ [CLI guide](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/cli.md)
-
----
-
 ## MCP Tools
 
 All tools return a JSON envelope `{ ok: true, data }` or `{ ok: false, error }`, redacted for secrets.
@@ -495,6 +481,7 @@ All tools return a JSON envelope `{ ok: true, data }` or `{ ok: false, error }`,
 | `apihero_get_request` | Request details + auth metadata + variable refs | **optional** `collection`, `request`, `requestId` | Resolve by collection+name or `requestId` |
 | `apihero_run_request` | Run one request | **optional** `collection`, `request`, `requestId` | Full redacted response presentation |
 | `apihero_run_collection` | Run a collection | **required** `collection`; **optional** `failurePolicy` | Slim per-request rows; use get_request_result for full bodies |
+| `apihero_run_scenario` | Run a Scenario | **optional** `scenario`, `inputs` | Same `ScenarioEngine` path as UI Run Scenario |
 | `apihero_get_run` | Run summary by id | **required** `runId` | |
 | `apihero_get_request_result` | One request result from a run | **required** `runId`, `request` | Full secret-redacted response |
 
@@ -531,7 +518,7 @@ Installing the extension ≠ MCP registered. Add:
 [mcp_servers.api-hero]
 command = "node"
 args = [
-  "C:/Users/<you>/.vscode/extensions/ankitsemwal.api-hero-2.8.3/dist/mcp/server.js",
+  "C:/Users/<you>/.vscode/extensions/ankitsemwal.api-hero-2.8.4/dist/mcp/server.js",
   "--workspace",
   "D:/path/to/your-api-workspace"
 ]
@@ -555,7 +542,7 @@ Project `.cursor/mcp.json` or Cursor MCP settings — same `command` / `args` / 
 2. `apihero_get_collection` — inspect folders / variables / auth metadata
 3. `apihero_list_requests` — find targets
 4. `apihero_get_request` — inspect one request
-5. `apihero_run_request` or `apihero_run_collection`
+5. `apihero_run_request`, `apihero_run_collection`, or `apihero_run_scenario`
 6. `apihero_get_run` — summary / status
 7. `apihero_get_request_result` — full redacted response; inspect failure diagnostics
 
@@ -577,7 +564,7 @@ Before tool JSON is returned, API Hero redacts:
 
 Masked values appear as **`••••••••`**.
 
-Headless MCP / CLI use a **process-env SecretStore** (exact Secret Storage keys or `APIHERO_SECRET_*`) — not VS Code Secret Storage. Prefer **variables** or CI secrets for agent/CI workspaces. **Never** put real secrets in README examples or committed `api-hero.variables.json`.
+Headless MCP uses a **process-env SecretStore** (exact Secret Storage keys or `APIHERO_SECRET_*`) — not VS Code Secret Storage. Prefer **variables** or injected process-env secrets for agent workspaces. **Never** put real secrets in README examples or committed `api-hero.variables.json`.
 
 ---
 
@@ -709,11 +696,10 @@ Notable keys:
 | --- | --- |
 | Docs home | [docs/README.md](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/README.md) |
 | Getting started | [getting-started.md](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/getting-started.md) |
-| CLI / CI | [cli.md](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/cli.md) |
 | MCP for AI agents | [mcp.md](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/mcp.md) |
 | Product overview | [product/README.md](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/product/README.md) |
 | Marketplace assets | [marketplace-assets.md](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/release/marketplace-assets.md) |
-| Release notes 2.8.3 | [v2.8.3-release-notes.md](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/release/v2.8.3-release-notes.md) |
+| Release notes 2.8.4 | [v2.8.4-release-notes.md](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/release/v2.8.4-release-notes.md) |
 
 Listing media (hero, screenshots, banner, social preview, workflow GIF) is hosted on **Cloudinary** so the VSIX stays small. Extension icons still ship in-package.
 

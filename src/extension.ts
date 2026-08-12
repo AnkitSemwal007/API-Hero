@@ -594,6 +594,7 @@ export async function activate(context: ExtensionContext): Promise<void> {
     context,
     logger,
     discovery: collectionsRegistration.discovery,
+    environmentManager,
   });
   registerEnvironments({
     context,

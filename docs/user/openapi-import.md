@@ -26,11 +26,27 @@ Collections/<api-slug>/api-hero.collection.json
 
 Requests are generated as `.api` files through the shared **request-source** model used by the Request Editor.
 
+## Environments after import
+
+OpenAPI `servers[]` become API Hero environments (primary `imported-<api-slug>`, plus up to four additional servers).
+
+| Case | Behavior |
+| --- | --- |
+| **A — No active environment** | Import may activate the imported primary environment. |
+| **B — An environment is already active** | The active environment is **preserved** (for example DummyJSON stays selected when you import OpenAI). Imported environments are still **created and selectable** afterward. |
+
+Imported environments are always appended; import never deletes existing environments.
+
+## Authentication / security schemes
+
+Supported schemes map to profile metadata (secrets as placeholders). OAuth2 is not implemented as a live flow.
+
+If document- or operation-level `security` names a scheme that is **missing** from `components.securitySchemes`, the importer emits a warning diagnostic and does **not** invent an auth profile. Import continues; valid schemes still import normally.
+
 ## Limits and behavior
 
 - Max file / response size: `apiHero.import.maxFileBytes` (default 5 MiB).
 - Local `#/` `$ref` resolution with depth/cycle caps; remote `$ref` is out of scope (not fetched over the network).
-- Auth schemes map to profile metadata (secrets as placeholders). OAuth2 is not implemented as a live flow.
 - Error diagnostics prevent writes and settings patches; warnings alone may still succeed.
 - Swagger 2.0, Postman, Insomnia, and GraphQL import are not supported.
 

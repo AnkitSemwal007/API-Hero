@@ -83,7 +83,10 @@ describe('request editor webview helpers', () => {
       /Run overrides Request overrides Environment overrides Collection overrides Workspace overrides Global/u,
     );
     assert.match(html, /id="variablesActiveEnv"/u);
-    assert.match(html, /Env: None/u);
+    assert.match(html, /Workspace Env: None/u);
+    assert.match(html, /Workspace Env: /u);
+    assert.match(html, /Active workspace environment:/u);
+    assert.match(html, /title="Switch workspace environment"/u);
     assert.match(html, /id="extractTable"/u);
     assert.match(html, /Add extraction/u);
     assert.match(html, /id="dependsOnPicker"/u);

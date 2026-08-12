@@ -147,11 +147,37 @@ cycle path in an error notification, for example
 
 ### Collection Run Report
 
-The **Collection Run Report** shows the resulting execution order (with a
-"Reordered" badge when it changed), which variables each request produced
-(`+name`) and planned to consume (`-name`), skip reasons, and a text list of
-dependency edges such as `Login → Get User (token)` — variable **names** only,
-never values. Unresolved consumes and a variable trace appear when applicable.
+The **Collection Run Report** opens after a collection (or folder / selection) run
+(and via **Open Live Report** while a run is in progress).
+
+**Summary and rows**
+
+- Compact summary counts (total / passed / failed / skipped / cancelled)
+- Compact per-request rows (status, method, name, timing) instead of a dense dump
+
+**Filters and grouping**
+
+- Outcome filter chips (All / Passed / Failed / Skipped — Skipped includes cancelled)
+- Search by name, method, or URL
+- Optional method filter
+- Rows grouped by collection folder (collapsible groups with pass/fail marks)
+
+**Drill-down**
+
+- Expand a request’s **Details** for Response, Headers, Cookies, Assertions,
+  Variables, Execution Details, Dependencies, and Timeline — same Collection Run
+  Debugger data as before (last run in memory only)
+
+**Variables**
+
+- Header shows a **compact Variables status** (`Variables ✓` when healthy, or
+  unresolved variable names when not)
+- Expand **View Variables** for the full Variable Trace (produced/consumed edges)
+  and unresolved diagnostics
+- Per-request **Variables** in Details lists resolved (masked) values and roles
+  (`+produced` / `-consumed` names only — never secret values)
+
+Dependency edges and reorder badges still appear when applicable.
 
 ### How scenarios relate
 
@@ -168,7 +194,7 @@ After a collection (or folder / selection) run, open the **Collection Run Report
 and expand a request’s **Details** to inspect that attempt without re-running APIs:
 
 - Response, Headers, Cookies
-- Extracted Variables
+- Variables (resolved display values + produced/consumed roles)
 - Assertions
 - Execution Details (including secret-safe resolved `{{variables}}`)
 - Dependencies and Timeline (Start / End / Duration)

@@ -4,13 +4,19 @@
  * Secrets are never copied from the specification. Profiles use
  * `{ kind: 'secret' }` placeholders. OAuth2 / OpenID Connect are metadata-only
  * (notes + summary diagnostics) because login flows are out of scope.
+ *
+ * Security requirements that name schemes missing from
+ * `components.securitySchemes` produce a warning diagnostic; no auth profile
+ * is invented for them.
  */
 
 import type { GeneratedAuthProfile, ImportDiagnostic } from '../models';
 import type { OpenApiRefResolver } from '../openapi/resolve';
-import type {
-  OpenApiDocument,
-  OpenApiSecurityScheme,
+import {
+  OPENAPI_HTTP_METHODS,
+  type OpenApiDocument,
+  type OpenApiSecurityRequirement,
+  type OpenApiSecurityScheme,
 } from '../openapi/types';
 import { isReference } from '../openapi/types';
 import { slugifyIdentifier } from '../sanitize';
@@ -32,6 +38,7 @@ export function generateAuthProfiles(
   const profiles: GeneratedAuthProfile[] = [];
   const schemeToProfileId = new Map<string, string>();
   const schemes = document.components?.securitySchemes ?? {};
+  const knownSchemeNames = new Set(Object.keys(schemes));
 
   for (const [schemeName, schemeOrRef] of Object.entries(schemes)) {
     if (schemeOrRef === undefined) {
@@ -86,7 +93,68 @@ export function generateAuthProfiles(
     }
   }
 
+  diagnostics.push(
+    ...collectUndefinedSecuritySchemeDiagnostics(document, knownSchemeNames),
+  );
+
   return { profiles, schemeToProfileId, diagnostics };
+}
+
+/**
+ * Warns once per scheme name when document- or operation-level security
+ * requirements reference a scheme absent from `components.securitySchemes`.
+ * Does not invent auth profiles; import continues.
+ */
+export function collectUndefinedSecuritySchemeDiagnostics(
+  document: OpenApiDocument,
+  knownSchemeNames: ReadonlySet<string>,
+): readonly ImportDiagnostic[] {
+  const warned = new Set<string>();
+  const diagnostics: ImportDiagnostic[] = [];
+
+  const check = (
+    requirements: readonly OpenApiSecurityRequirement[] | undefined,
+    path: string,
+  ): void => {
+    if (requirements === undefined) {
+      return;
+    }
+    for (const requirement of requirements) {
+      for (const schemeName of Object.keys(requirement)) {
+        if (
+          schemeName.length === 0 ||
+          knownSchemeNames.has(schemeName) ||
+          warned.has(schemeName)
+        ) {
+          continue;
+        }
+        warned.add(schemeName);
+        diagnostics.push({
+          code: 'undefined-security-scheme',
+          severity: 'warning',
+          path,
+          message: `OpenAPI security requirement '${schemeName}' references an undefined security scheme. Authentication was not imported.`,
+        });
+      }
+    }
+  };
+
+  check(document.security, '/security');
+
+  for (const [pathKey, pathItem] of Object.entries(document.paths ?? {})) {
+    if (pathItem === undefined) {
+      continue;
+    }
+    for (const method of OPENAPI_HTTP_METHODS) {
+      const operation = pathItem[method];
+      if (operation === undefined) {
+        continue;
+      }
+      check(operation.security, `/paths/${pathKey}/${method}/security`);
+    }
+  }
+
+  return diagnostics;
 }
 
 function mapScheme(
