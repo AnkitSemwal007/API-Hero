@@ -1,6 +1,14 @@
 # Roadmap
 
-Honest near-term plan for **API Hero** after **2.9.0** (Postman Import, Insomnia Import, cURL→`.api`, Variable Autocomplete polish, Failure Diagnostics Possible causes, Request/Response Diff, TypeScript generation, VSIX esbuild bundling; **2.8.4** Collection Execution Controls, OpenAPI environment safety + sensitive server vars, header masking alignment, Collection Run Report / Variable Trace UX, Scenario menu cleanup; **2.8.3** Copy as cURL + MCP `apihero_run_scenario`; **2.8.2** OpenAPI URL import; **2.8.1** complete README + Marketplace documentation; **2.8.0** universal MCP `--workspace` + client-owned MCP docs; **2.7.0** MCP server for AI agents; **2.6.0** Scenarios progressive disclosure, project-store scenario paths, Reset Workspace, Run Report failure diagnostics; Authentication Premium UX + Scenario Experience shipped in **2.5.0**; Scenarios Phase 1 foundation in **2.4.0**). Product features through **2.3.x** already ship — Execution Center, Collection Runner / Run Report polish, dependency workflow, Collection Run Debugger, Managers (Environments, Auth), Overview, History Detail, OpenAPI wizard, Response copy/save/search, response variable extraction, and collection chaining (`@depends-on`, per-run store, collection variables). Those are not roadmap gaps.
+Honest near-term plan for **API Hero** after **2.9.1** (docs + Marketplace icon patch on top of **2.9.0** Postman Import, Insomnia Import, cURL→`.api`, Variable Autocomplete polish, Failure Diagnostics Possible causes, Request/Response Diff, TypeScript generation, VSIX esbuild bundling; **2.8.4** Collection Execution Controls, OpenAPI environment safety + sensitive server vars, header masking alignment, Collection Run Report / Variable Trace UX, Scenario menu cleanup; **2.8.3** Copy as cURL + MCP `apihero_run_scenario`; **2.8.2** OpenAPI URL import; **2.8.1** complete README + Marketplace documentation; **2.8.0** universal MCP `--workspace` + client-owned MCP docs; **2.7.0** MCP server for AI agents; **2.6.0** Scenarios progressive disclosure, project-store scenario paths, Reset Workspace, Run Report failure diagnostics; Authentication Premium UX + Scenario Experience shipped in **2.5.0**; Scenarios Phase 1 foundation in **2.4.0**). Product features through **2.3.x** already ship — Execution Center, Collection Runner / Run Report polish, dependency workflow, Collection Run Debugger, Managers (Environments, Auth), Overview, History Detail, OpenAPI wizard, Response copy/save/search, response variable extraction, and collection chaining (`@depends-on`, per-run store, collection variables). Those are not roadmap gaps.
+
+## Shipped in 2.9.1
+
+| Item | Notes |
+| --- | --- |
+| Marketplace icon restoration | `images/icon.png` restored to pre-Cursor version |
+| README / Marketplace docs completeness | Diff, TypeScript generation, Failure Diagnostics, Postman/Insomnia/cURL, dependencies/data flow documented as product capabilities (features from **2.9.0**) |
+| Marketplace description clarity | Import formats: OpenAPI / Postman / Insomnia / cURL |
 
 ## Shipped in 2.9.0
 

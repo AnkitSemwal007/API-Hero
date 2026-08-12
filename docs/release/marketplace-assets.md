@@ -1,6 +1,6 @@
-# Marketplace assets — 2.9.0
+# Marketplace assets — 2.9.1
 
-Guidance for listing media for **API Hero 2.9.0**.
+Guidance for listing media for **API Hero 2.9.1**.
 
 **Strategy:** README screenshots, banner, social preview, and workflow GIFs are hosted on **Cloudinary** (absolute HTTPS URLs). That keeps the VSIX small. Only in-extension chrome icons ship inside the package (`images/icon.png`, `images/api-*.svg`, `images/execution-*.svg`).
 
@@ -12,7 +12,7 @@ Local MCP GIF source can be regenerated with `python scripts/generate-mcp-gif.py
 
 | Requirement | Status |
 | --- | --- |
-| `package.json` `icon` | `images/icon.png` (128×128 PNG) |
+| `package.json` `icon` | `images/icon.png` (128×128 PNG) — restored pre-Cursor icon in **2.9.1** |
 | Activity Bar / language glyphs | `images/api-light.svg`, `images/api-dark.svg` |
 | Execution view glyphs | `images/execution-light.svg`, `images/execution-dark.svg` |
 
@@ -70,5 +70,5 @@ See [banner-placeholder.md](../marketplace/banner-placeholder.md). Gallery banne
 - [Marketplace readiness review](../marketplace/marketplace-readiness-review.md)
 - [Marketplace readiness](./marketplace-readiness.md)
 - [Product README](../product/README.md)
-- [Release notes — 2.9.0](./v2.9.0-release-notes.md)
-- [Changelog — 2.9.0](../../CHANGELOG.md)
+- [Release notes — 2.9.1](./v2.9.1-release-notes.md)
+- [Changelog — 2.9.1](../../CHANGELOG.md)

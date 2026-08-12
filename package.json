@@ -1,8 +1,8 @@
 {
   "name": "api-hero",
   "displayName": "API Hero",
-  "description": "Git-first REST/HTTP client for VS Code. Edit .api requests in a UI Request Editor, run with assertions, orchestrate Scenarios, manage Authentication (profiles, Login API sessions, Secret Storage), collections, and environments, import OpenAPI, inspect Execution, History, and Run Reports, and expose collections to AI agents via MCP.",
-  "version": "2.9.0",
+  "description": "Git-first REST/HTTP client for VS Code. Edit .api requests in a UI Request Editor, run with assertions, orchestrate Scenarios, manage Authentication (profiles, Login API sessions, Secret Storage), collections, and environments, import OpenAPI / Postman / Insomnia / cURL, inspect Execution, History, and Run Reports, and expose collections to AI agents via MCP.",
+  "version": "2.9.1",
   "publisher": "ankitsemwal",
   "license": "MIT",
   "homepage": "https://github.com/AnkitSemwal007/API-Hero",

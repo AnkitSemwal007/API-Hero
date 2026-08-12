@@ -171,7 +171,7 @@ Use absolute paths. The extension version folder changes when you update API Her
 [mcp_servers.api-hero]
 command = "node"
 args = [
-  "C:/Users/<you>/.vscode/extensions/ankitsemwal.api-hero-2.9.0/dist/mcp/server.js",
+  "C:/Users/<you>/.vscode/extensions/ankitsemwal.api-hero-2.9.1/dist/mcp/server.js",
   "--workspace",
   "D:/path/to/your-api-workspace"
 ]

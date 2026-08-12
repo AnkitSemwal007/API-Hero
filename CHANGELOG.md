@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.9.1] - 2026-08-12
+
+Marketplace icon restoration and complete README / Marketplace documentation coverage for capabilities already shipped in **2.9.0**. Backward compatible with **2.9.0**.
+
+### Changed
+
+- **Restored Marketplace / extension icon** — `images/icon.png` restored to the pre-Cursor version (commit `f5687f4`)
+- **README / Marketplace documentation completeness** — product coverage for Request/Response Diff, TypeScript generation, Failure Diagnostics (Possible causes), Postman / Insomnia / cURL import, and Request Dependencies / data flow (`@depends-on`, extract, Collection Runner vs single Run Request). Capability language only — these features shipped in **2.9.0**, not newly invented in **2.9.1**
+- **Marketplace description** — `package.json` description clarifies OpenAPI / Postman / Insomnia / cURL import (not OpenAPI-only)
+
+### Notes
+
+- Public CLI / CI distribution remains deferred; headless CLI implementation stays in-repo for development and is **not** a shipped public product capability in **2.9.1**
+
+### Docs & Marketplace
+
+- Release readiness and notes pinned to **2.9.1**
+
 ## [2.9.0] - 2026-08-12
 
 Postman Import, Insomnia Import, cURL→`.api`, Variable Autocomplete polish, Failure Diagnostics Possible causes, Request/Response Diff, TypeScript generation, and VSIX esbuild bundling. Backward compatible with **2.8.4**.
