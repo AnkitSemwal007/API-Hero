@@ -94,6 +94,39 @@ test('renders accessible pretty/raw and JSON expansion controls', () => {
   assert.match(html, /var\(--vscode-editor-background\)/u);
 });
 
+test('WebSocket success renders a session badge instead of HTTP 0', () => {
+  const base = result('{"ok":true}');
+  assert.equal(base.success, true);
+  if (!base.success) {
+    return;
+  }
+  const websocket: ExecutionResult = {
+    ...base,
+    request: Object.freeze({
+      method: 'GET',
+      url: 'ws://example.test/socket',
+    }),
+    response: {
+      ...base.response,
+      statusCode: 0,
+      statusText: 'received',
+      url: 'ws://example.test/socket',
+    },
+    websocket: {
+      connected: true,
+      sent: true,
+      received: true,
+      closed: true,
+    },
+  };
+  const html = renderResponseViewerHtml(
+    presentExecutionResult(websocket),
+    'nonce',
+  );
+  assert.match(html, /WebSocket received/u);
+  assert.doesNotMatch(html, />0 received</u);
+});
+
 test('renders Possible causes for successful 401 responses', () => {
   const base = result('{"error":"unauthorized"}');
   assert.equal(base.success, true);

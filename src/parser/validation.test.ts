@@ -521,3 +521,72 @@ test('scoped validation excludes unrelated request errors but keeps document sem
     ),
   );
 });
+
+test('treats @protocol as a known directive and rejects unknown protocol values', () => {
+  const omitted = validateApiDocument(parseApiDocument('GET /health').ast);
+  assert.equal(omitted.valid, true);
+
+  const http = validateApiDocument(
+    parseApiDocument('@protocol http\nGET /health\n').ast,
+  );
+  assert.equal(http.valid, true);
+  assert.equal(
+    http.diagnostics.some(
+      (diagnostic) =>
+        diagnostic.code === VALIDATION_DIAGNOSTIC_CODES.unknownDirective,
+    ),
+    false,
+  );
+
+  const graphql = validateApiDocument(
+    parseApiDocument(
+      '@protocol GRAPHQL\nPOST /graphql\n{"query":"{ ping }"}\n',
+    ).ast,
+  );
+  assert.equal(graphql.valid, true);
+
+  const websocket = validateApiDocument(
+    parseApiDocument(
+      '@protocol websocket\nGET ws://example.test/socket\nhello\n',
+    ).ast,
+  );
+  assert.equal(websocket.valid, true);
+
+  const mqtt = validateApiDocument(
+    parseApiDocument('@protocol mqtt\nGET /health\n').ast,
+  );
+  assert.equal(mqtt.valid, false);
+  assert.ok(
+    mqtt.diagnostics.some(
+      (diagnostic) =>
+        diagnostic.code === VALIDATION_DIAGNOSTIC_CODES.unknownProtocol,
+    ),
+  );
+  assert.equal(
+    mqtt.diagnostics.some(
+      (diagnostic) =>
+        diagnostic.code === VALIDATION_DIAGNOSTIC_CODES.unknownDirective,
+    ),
+    false,
+  );
+
+  const empty = validateApiDocument(
+    parseApiDocument('@protocol\nGET /health\n').ast,
+  );
+  assert.ok(
+    empty.diagnostics.some(
+      (diagnostic) =>
+        diagnostic.code === VALIDATION_DIAGNOSTIC_CODES.invalidDirective,
+    ),
+  );
+
+  const duplicate = validateApiDocument(
+    parseApiDocument('@protocol http\n@protocol graphql\nGET /health\n').ast,
+  );
+  assert.ok(
+    duplicate.diagnostics.some(
+      (diagnostic) =>
+        diagnostic.code === VALIDATION_DIAGNOSTIC_CODES.duplicateDirective,
+    ),
+  );
+});

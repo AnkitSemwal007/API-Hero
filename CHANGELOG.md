@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.11.0] - 2026-08-13
+
+GraphQL Phase 1 and WebSocket Phase 1 on the shared VS Code / CLI / MCP runtime. Backward compatible with **2.10.1**.
+
+### Added
+
+- **GraphQL Phase 1** — `@protocol graphql` runs queries and mutations over HTTP through the existing executor (`NodeHttpTransport`). JSON body may include `query`, `variables`, and `operationName`. Existing headers, auth, `{{variables}}`, assertions, extraction, collections, and scenarios apply. HTTP 200 with GraphQL `errors` is not a successful GraphQL operation. GraphQL error messages use existing secret masking. Collection retry for GraphQL HTTP `408`/`429`/`502`/`503`/`504` matches REST. Subscriptions, GraphQL-over-WebSocket, GraphQL schema import, and gRPC are not included.
+- **WebSocket Phase 1** — `@protocol websocket` runs a bounded connect → optional text send → first text frame receive → close session on a dedicated transport (`ws` / `wss`). Existing headers, auth, `{{variables}}`, assertions, extraction, collections, scenarios, timeout, and cancellation apply. Failures are not HTTP status codes. The socket is closed on every path. Persistent connections, subscriptions, reconnect, infinite streaming, connection pooling, a WebSocket server, binary frames, and gRPC are not included.
+
+### Notes
+
+- Protocol is chosen on the request (`@protocol`). There is no `--graphql`, `--websocket`, `--ws`, `--listen`, or `--stream` CLI flag.
+- Dual Marketplace / npm README packaging from **2.10.1** is included in this release.
+
+## [2.10.1] - 2026-08-13
+
+Dual public READMEs for the VS Code Marketplace listing and the npm CLI package. Backward compatible with **2.10.0**.
+
+### Changed
+
+- Dual public READMEs: VS Code Marketplace `README.md` vs npm `README.cli.md` for `@ankitsemwal007/api-hero`. `npm pack` / `npm publish` ship the CLI README; Marketplace/GitHub keep the product listing.
+
 ## [2.10.0] - 2026-08-13
 
 Public headless CLI / CI distribution via npm (`apihero` bin) on the shared headless runtime. Backward compatible with **2.9.1**.

@@ -78,6 +78,24 @@ export type ExecutionErrorCode =
   | 'RESPONSE_TOO_LARGE'
   | 'UNEXPECTED';
 
+export interface GraphqlEnvelopeSummary {
+  readonly validEnvelope: boolean;
+  readonly hasData: boolean;
+  readonly hasErrors: boolean;
+  readonly errorCount: number;
+  readonly errorMessages: readonly string[];
+}
+
+/** Bounded WebSocket session facts. Present only for `@protocol websocket`. */
+export interface WebsocketSessionSummary {
+  readonly connected: true;
+  readonly sent: boolean;
+  readonly received: true;
+  readonly closed: true;
+  readonly closeCode?: number;
+  readonly closeReason?: string;
+}
+
 export interface ExecutionErrorCause {
   readonly name?: string;
   readonly code?: string;
@@ -104,6 +122,16 @@ export interface SuccessfulExecutionResult {
   readonly request?: ExecutionRequestSummary;
   readonly response: RuntimeResponse;
   readonly timing: ExecutionTiming;
+  /**
+   * Present only when the request protocol is `graphql` and an HTTP response
+   * was received. REST results omit this field.
+   */
+  readonly graphql?: GraphqlEnvelopeSummary;
+  /**
+   * Present only when the request protocol is `websocket` and a text frame
+   * was received. REST and GraphQL results omit this field.
+   */
+  readonly websocket?: WebsocketSessionSummary;
 }
 
 export interface FailedExecutionResult {

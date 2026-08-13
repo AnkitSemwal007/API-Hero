@@ -8,6 +8,7 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { after, before, describe, test } from 'node:test';
+import { WebSocketServer } from 'ws';
 
 import { PROJECT_STORE_SCHEMA_VERSION } from '../project-store';
 import {
@@ -331,6 +332,211 @@ describe('cli integration', () => {
     });
     assert.equal(ok.exitCode, EXIT_SUCCESS);
     assert.equal(ok.stdout.includes('super-secret-cli-token'), false);
+  });
+
+  test('WebSocket uses existing run request/collection/scenario commands', async () => {
+    const httpServer: Server = createServer();
+    const wss = new WebSocketServer({ server: httpServer });
+    wss.on('connection', (socket) => {
+      socket.on('message', (data, isBinary) => {
+        if (!isBinary) {
+          socket.send(data.toString());
+        }
+      });
+    });
+    const silent: Server = createServer();
+    const silentWss = new WebSocketServer({ server: silent });
+    silentWss.on('connection', (socket) => {
+      socket.on('message', () => undefined);
+    });
+    const wsPort = await listen(httpServer);
+    const silentPort = await listen(silent);
+    try {
+      const socketsRoot = path.join(root, 'Collections', 'Sockets');
+      await mkdir(socketsRoot, { recursive: true });
+      await writeFile(
+        path.join(socketsRoot, 'echo.api'),
+        [
+          '@name EchoWs',
+          '@protocol websocket',
+          `@variable wsUrl=ws://127.0.0.1:${wsPort}`,
+          'GET {{wsUrl}}',
+          'Authorization: Bearer super-secret-ws-cli',
+          '',
+          '{"type":"ping"}',
+          '',
+          'expect body.type == "ping"',
+        ].join('\n'),
+        'utf8',
+      );
+      const hangRoot = path.join(root, 'Collections', 'Hang');
+      await mkdir(hangRoot, { recursive: true });
+      await writeFile(
+        path.join(hangRoot, 'hang.api'),
+        [
+          '@name HangWs',
+          '@protocol websocket',
+          '@timeout 80',
+          `@variable wsUrl=ws://127.0.0.1:${silentPort}`,
+          'GET {{wsUrl}}',
+          '',
+          '{"type":"ping"}',
+        ].join('\n'),
+        'utf8',
+      );
+
+      assert.equal(
+        parseCliArgs(['run', 'request', 'EchoWs', '--websocket']).kind,
+        'error',
+      );
+
+      const json = await executeCliRun({
+        kind: 'run',
+        targetType: 'request',
+        target: 'EchoWs',
+        workspace: root,
+        json: true,
+        quiet: false,
+        verbose: false,
+      });
+      assert.equal(json.exitCode, EXIT_SUCCESS);
+      assert.doesNotMatch(json.stdout, /super-secret-ws-cli/u);
+      assert.doesNotMatch(json.stdout, /"httpStatus":\s*0/u);
+      const envelope = JSON.parse(json.stdout) as {
+        ok: boolean;
+        data?: {
+          httpStatus?: number;
+          response?: { summary?: string; status?: { code?: number } };
+        };
+      };
+      assert.equal(envelope.ok, true);
+      assert.equal(envelope.data?.httpStatus, undefined);
+      assert.equal(envelope.data?.response?.status, undefined);
+      assert.match(envelope.data?.response?.summary ?? '', /WebSocket received/u);
+
+      const human = await executeCliRun({
+        kind: 'run',
+        targetType: 'request',
+        target: 'EchoWs',
+        workspace: root,
+        json: false,
+        quiet: false,
+        verbose: false,
+      });
+      assert.equal(human.exitCode, EXIT_SUCCESS);
+      assert.match(human.stdout, /PASSED/u);
+      assert.doesNotMatch(human.stdout, /super-secret-ws-cli/u);
+
+      const quiet = await executeCliRun({
+        kind: 'run',
+        targetType: 'request',
+        target: 'EchoWs',
+        workspace: root,
+        json: false,
+        quiet: true,
+        verbose: false,
+      });
+      assert.equal(quiet.exitCode, EXIT_SUCCESS);
+      assert.match(quiet.stdout, /PASSED/u);
+
+      const verbose = await executeCliRun({
+        kind: 'run',
+        targetType: 'request',
+        target: 'EchoWs',
+        workspace: root,
+        json: false,
+        quiet: false,
+        verbose: true,
+      });
+      assert.equal(verbose.exitCode, EXIT_SUCCESS);
+      assert.doesNotMatch(
+        `${verbose.stdout}${verbose.stderr}`,
+        /super-secret-ws-cli/u,
+      );
+
+      const collection = await executeCliRun({
+        kind: 'run',
+        targetType: 'collection',
+        target: 'Sockets',
+        workspace: root,
+        json: true,
+        quiet: false,
+        verbose: false,
+      });
+      assert.equal(collection.exitCode, EXIT_SUCCESS);
+      const collectionEnvelope = JSON.parse(collection.stdout) as {
+        ok: boolean;
+        data?: { passed?: number; failed?: number };
+      };
+      assert.equal(collectionEnvelope.ok, true);
+      assert.equal(collectionEnvelope.data?.passed, 1);
+      assert.equal(collectionEnvelope.data?.failed, 0);
+
+      const timeout = await executeCliRun({
+        kind: 'run',
+        targetType: 'request',
+        target: 'HangWs',
+        workspace: root,
+        json: true,
+        quiet: false,
+        verbose: false,
+      });
+      assert.equal(timeout.exitCode, EXIT_EXECUTION_FAILURE);
+
+      const scenariosRoot = scenariosRootPath(root);
+      const storage = new ScenarioStorageService();
+      const wsFlow: Scenario = {
+        id: 'sc-ws',
+        schemaVersion: ScenarioSchemaVersion,
+        name: 'ws-flow',
+        variables: [],
+        steps: [
+          {
+            id: 'R1',
+            type: StepType.Request,
+            name: 'Echo',
+            requestId: 'pending:echo',
+            requestFilePath: '',
+            requestOffset: 0,
+            requestRef: 'EchoWs',
+            inputMappings: [],
+            outputs: [],
+          },
+        ],
+        connections: [],
+        executionSettings: { failurePolicy: 'stop-on-first-error' },
+        metadata: { createdAt: 't1', updatedAt: 't2' },
+      };
+      const saved = await storage.save(
+        wsFlow,
+        path.join(scenariosRoot, 'ws.scenario.json'),
+      );
+      assert.equal(saved.ok, true);
+      const scenario = await executeCliRun({
+        kind: 'run',
+        targetType: 'scenario',
+        target: 'ws-flow',
+        workspace: root,
+        json: true,
+        quiet: false,
+        verbose: false,
+      });
+      assert.equal(scenario.exitCode, EXIT_SUCCESS);
+      assert.doesNotMatch(scenario.stdout, /super-secret-ws-cli/u);
+    } finally {
+      await new Promise<void>((resolve) => {
+        wss.close(() => resolve());
+      });
+      await new Promise<void>((resolve) => {
+        silentWss.close(() => resolve());
+      });
+      await new Promise<void>((resolve, reject) => {
+        httpServer.close((error) => (error ? reject(error) : resolve()));
+      });
+      await new Promise<void>((resolve, reject) => {
+        silent.close((error) => (error ? reject(error) : resolve()));
+      });
+    }
   });
 
   test('headless composition runs without vscode module', async () => {

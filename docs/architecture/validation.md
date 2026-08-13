@@ -24,9 +24,11 @@ decide whether parsed language constructs are meaningful.
 `validateApiDocument(document)` accepts an already-parsed `ApiDocument`. It
 does not accept source text and cannot reparse. It reports semantic diagnostics
 such as missing request fields, duplicate headers and singleton directives,
-unknown directives, invalid directive values, malformed element ordering, and
+unknown directives, invalid directive values (including unknown `@protocol`
+values — never silently treated as HTTP), malformed element ordering, and
 invalid parser-visible variable expressions. Validation never resolves a
-variable, environment, connection, or authentication value.
+variable, environment, connection, or authentication value. See
+[ADR-0004](./adr/0004-graphql-phase-1.md).
 
 ## Rule architecture
 

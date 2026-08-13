@@ -18,6 +18,8 @@ export interface FailureExplanationInput {
   readonly requestId?: string;
   readonly contentType?: string;
   readonly bodySizeBytes?: number;
+  readonly graphqlErrorMessages?: readonly string[];
+  readonly graphqlValidEnvelope?: boolean;
 }
 
 /**
@@ -122,21 +124,44 @@ const TRANSPORT_CAUSES: Readonly<Record<string, readonly string[]>> =
 export function buildFailureExplanation(
   input: FailureExplanationInput,
 ): FailureExplanation | undefined {
+  const graphqlFacts = graphqlErrorFacts(input);
+  let explanation: FailureExplanation | undefined;
   if (
     input.statusCode !== undefined &&
     Number.isFinite(input.statusCode) &&
     input.statusCode >= 400
   ) {
-    return explainHttpStatus(input);
-  }
-  if (
+    explanation = explainHttpStatus(input);
+  } else if (
     input.transportCode !== undefined ||
     (input.transportMessage !== undefined &&
       input.transportMessage.trim().length > 0)
   ) {
-    return explainTransport(input);
+    explanation = explainTransport(input);
+  } else if (graphqlFacts.length > 0) {
+    explanation = {
+      title:
+        input.graphqlValidEnvelope === false
+          ? 'Invalid GraphQL response'
+          : 'GraphQL Errors',
+      facts: graphqlFacts,
+      possibleCauses: [],
+    };
   }
-  return undefined;
+  if (explanation === undefined) {
+    return undefined;
+  }
+  if (
+    graphqlFacts.length === 0 ||
+    explanation.title === 'GraphQL Errors' ||
+    explanation.title === 'Invalid GraphQL response'
+  ) {
+    return explanation;
+  }
+  return {
+    ...explanation,
+    facts: [...explanation.facts, ...graphqlFacts],
+  };
 }
 
 /** Formats explanation for plain-text surfaces (messages, MCP summaries). */
@@ -197,8 +222,15 @@ function explainTransport(
   input: FailureExplanationInput,
 ): FailureExplanation {
   const code = input.transportCode;
+  const websocketMessage =
+    input.transportMessage !== undefined &&
+    input.transportMessage.includes('WebSocket')
+      ? input.transportMessage.trim()
+      : undefined;
   const title =
-    code === 'TIMEOUT'
+    websocketMessage !== undefined
+      ? websocketMessage
+      : code === 'TIMEOUT'
       ? 'Request timed out'
       : code === 'DNS'
         ? 'DNS lookup failed'
@@ -307,4 +339,18 @@ function formatDurationMs(ms: number): string {
     return `${Math.round(ms)} ms`;
   }
   return `${(ms / 1_000).toFixed(2)} s`;
+}
+
+function graphqlErrorFacts(input: FailureExplanationInput): string[] {
+  const facts: string[] = [];
+  if (input.graphqlValidEnvelope === false) {
+    facts.push('The GraphQL response is not a valid envelope.');
+  }
+  for (const message of input.graphqlErrorMessages ?? []) {
+    const trimmed = message.trim();
+    if (trimmed.length > 0) {
+      facts.push(`GraphQL error: ${trimmed}`);
+    }
+  }
+  return facts;
 }

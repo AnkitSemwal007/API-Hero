@@ -223,6 +223,131 @@ test('transport without status uses presentation.retryable when present', () => 
   );
 });
 
+test('WebSocket connect is retryable; send/receive and success are not', () => {
+  const basePresentation = {
+    success: false,
+    requestId: 'r1',
+    method: 'GET',
+    requestUrl: 'ws://example.test',
+    headers: [],
+    cookies: { available: false as const, setCookieHeaderCount: 0 },
+    statistics: {
+      durationMs: 1,
+      startedAt: '2020-01-01T00:00:00.000Z',
+      completedAt: '2020-01-01T00:00:00.001Z',
+      headerCount: 0,
+      redirected: false,
+      redirectCount: 0,
+    },
+    summary: 'failed',
+  };
+
+  assert.equal(
+    isCollectionRetryEligible(
+      result({
+        outcome: RequestRunOutcomeKinds.Failed,
+        failureDiagnostics: {
+          category: RequestFailureCategories.Transport,
+          reason: 'The WebSocket host could not be resolved.',
+          httpRequestSent: false,
+        },
+        presentation: {
+          ...basePresentation,
+          failure: {
+            title: 'DNS lookup failed',
+            message: 'The WebSocket host could not be resolved.',
+            retryable: true,
+            code: 'DNS',
+          },
+        },
+      }),
+    ),
+    true,
+  );
+  assert.equal(
+    isCollectionRetryEligible(
+      result({
+        outcome: RequestRunOutcomeKinds.Failed,
+        failureDiagnostics: {
+          category: RequestFailureCategories.Transport,
+          reason: 'The WebSocket message could not be sent.',
+          httpRequestSent: true,
+        },
+        presentation: {
+          ...basePresentation,
+          failure: {
+            title: 'Network failure',
+            message: 'The WebSocket message could not be sent.',
+            retryable: false,
+            code: 'NETWORK',
+          },
+        },
+      }),
+    ),
+    false,
+  );
+  assert.equal(
+    isCollectionRetryEligible(
+      result({
+        outcome: RequestRunOutcomeKinds.Failed,
+        failureDiagnostics: {
+          category: RequestFailureCategories.Transport,
+          reason: 'The WebSocket closed before a text message was received.',
+          httpRequestSent: true,
+        },
+        presentation: {
+          ...basePresentation,
+          failure: {
+            title: 'Network failure',
+            message: 'The WebSocket closed before a text message was received.',
+            retryable: false,
+            code: 'NETWORK',
+          },
+        },
+      }),
+    ),
+    false,
+  );
+  assert.equal(
+    isCollectionRetryEligible(
+      result({
+        outcome: RequestRunOutcomeKinds.Passed,
+        presentation: {
+          ...basePresentation,
+          success: true,
+          summary: 'WebSocket received',
+          websocket: {
+            connected: true,
+            sent: true,
+            received: true,
+            closed: true,
+          },
+        },
+      }),
+    ),
+    false,
+  );
+  assert.equal(
+    isCollectionRetryEligibleFromSideEffectContext({
+      httpSuccess: false,
+      assertionsEvaluated: false,
+      assertionFailed: false,
+      cancelledAtTransport: false,
+      transportRetryable: false,
+    }),
+    false,
+  );
+  assert.equal(
+    isCollectionRetryEligibleFromSideEffectContext({
+      httpSuccess: true,
+      assertionsEvaluated: false,
+      assertionFailed: false,
+      cancelledAtTransport: false,
+    }),
+    false,
+  );
+});
+
 test('transport without status defaults to retryable', () => {
   assert.equal(
     isCollectionRetryEligible(
@@ -239,7 +364,7 @@ test('transport without status defaults to retryable', () => {
   );
 });
 
-test('precondition / extraction / unread / cancelled are not retryable', () => {
+test('precondition / extraction / unread / cancelled are not retryable even for 503', () => {
   const categories = [
     RequestFailureCategories.Precondition,
     RequestFailureCategories.Extraction,
@@ -263,6 +388,51 @@ test('precondition / extraction / unread / cancelled are not retryable', () => {
       category,
     );
   }
+});
+
+test('Protocol + retryable HTTP status is retryable; Protocol without one is not', () => {
+  assert.equal(
+    isCollectionRetryEligible(
+      result({
+        outcome: RequestRunOutcomeKinds.Failed,
+        statusCode: 503,
+        failureDiagnostics: {
+          category: RequestFailureCategories.Protocol,
+          reason: 'GraphQL request failed with HTTP 503.',
+          httpRequestSent: true,
+        },
+      }),
+    ),
+    true,
+  );
+  assert.equal(
+    isCollectionRetryEligible(
+      result({
+        outcome: RequestRunOutcomeKinds.Failed,
+        statusCode: 200,
+        failureDiagnostics: {
+          category: RequestFailureCategories.Protocol,
+          reason: 'GraphQL errors: nope',
+          httpRequestSent: true,
+        },
+      }),
+    ),
+    false,
+  );
+  assert.equal(
+    isCollectionRetryEligible(
+      result({
+        outcome: RequestRunOutcomeKinds.Failed,
+        statusCode: 500,
+        failureDiagnostics: {
+          category: RequestFailureCategories.Protocol,
+          reason: 'GraphQL request failed with HTTP 500.',
+          httpRequestSent: true,
+        },
+      }),
+    ),
+    false,
+  );
 });
 
 test('Passed without retryable status / skipped / cancelled are not retryable', () => {
@@ -336,6 +506,42 @@ test('side-effect context mirrors result eligibility for success+503', () => {
       transportRetryable: true,
     }),
     true,
+  );
+});
+
+test('graphqlFailed side-effect context preserves HTTP retry statuses', () => {
+  assert.equal(
+    isCollectionRetryEligibleFromSideEffectContext({
+      statusCode: 503,
+      httpSuccess: true,
+      assertionsEvaluated: false,
+      assertionFailed: false,
+      graphqlFailed: true,
+      cancelledAtTransport: false,
+    }),
+    true,
+  );
+  assert.equal(
+    isCollectionRetryEligibleFromSideEffectContext({
+      statusCode: 200,
+      httpSuccess: true,
+      assertionsEvaluated: false,
+      assertionFailed: false,
+      graphqlFailed: true,
+      cancelledAtTransport: false,
+    }),
+    false,
+  );
+  assert.equal(
+    isCollectionRetryEligibleFromSideEffectContext({
+      statusCode: 500,
+      httpSuccess: true,
+      assertionsEvaluated: false,
+      assertionFailed: false,
+      graphqlFailed: true,
+      cancelledAtTransport: false,
+    }),
+    false,
   );
 });
 

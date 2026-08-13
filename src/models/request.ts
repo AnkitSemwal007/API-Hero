@@ -183,6 +183,9 @@ export interface RuntimeStreamingOptions {
   readonly extensions: Readonly<Record<string, unknown>>;
 }
 
+/** Supported request protocols. Omitted protocol is treated as HTTP. */
+export type RequestProtocol = 'http' | 'graphql' | 'websocket';
+
 /** Transport-independent options carried by every runtime request. */
 export interface RuntimeExecutionOptions {
   readonly timeoutMs?: number;
@@ -226,6 +229,13 @@ export interface RuntimeRequest extends RuntimeExecutionOptions {
   readonly metadata: RuntimeMetadata;
   readonly configuration: RuntimeConfiguration;
   readonly resolution?: RuntimeVariableResolution;
+  /**
+   * Effective `@protocol`. Omitted (and `http`) use the existing HTTP path.
+   * `graphql` applies the GraphQL-over-HTTP adapter before NodeHttpTransport.
+   * `websocket` runs a bounded connect/send/receive/close session on
+   * WebSocketTransport — not NodeHttpTransport.
+   */
+  readonly protocol?: RequestProtocol;
 }
 
 /**

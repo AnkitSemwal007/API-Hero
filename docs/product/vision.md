@@ -15,4 +15,4 @@ Developers and testers who already live in the editor and want a focused REST cl
 
 ## Non-goals (current product)
 
-OAuth2 flows, cookie jars, GraphQL tooling, and marketplace “alternative to X” positioning are out of scope for the current line. See [roadmap.md](./roadmap.md).
+OAuth2 flows, cookie jars, GraphQL **subscriptions**, persistent WebSockets, gRPC, and marketplace “alternative to X” positioning are out of scope for the current line. GraphQL query/mutation over HTTP and bounded WebSocket sessions are supported — see [GraphQL](../user/graphql.md) and [WebSocket](../user/websocket.md). See [roadmap.md](./roadmap.md).

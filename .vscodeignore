@@ -49,6 +49,8 @@ docs/**
 examples/**
 RELEASE.md
 CONTRIBUTING.md
+README.cli.md
+.README.marketplace.bak
 
 # Release artifacts, logs, temp, backups, design sources
 release/**

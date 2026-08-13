@@ -277,3 +277,46 @@ test('serializePlaceholderRequest emits @name without @id', () => {
   assert.match(source, /^@name Login\n\nGET https:\/\/httpbin\.org\/get\n$/u);
   assert.doesNotMatch(source, /@id/u);
 });
+
+test('emits @protocol only when set', () => {
+  const omitted = serializeRequestDocument({
+    name: 'REST',
+    method: 'GET',
+    url: 'https://example.test',
+  });
+  assert.doesNotMatch(omitted, /@protocol/u);
+
+  const graphql = serializeRequestDocument({
+    name: 'GetUser',
+    method: 'POST',
+    url: 'https://example.test/graphql',
+    protocol: 'graphql',
+    body: { type: 'json', text: '{ "query": "{ ping }" }' },
+  });
+  assert.match(graphql, /@protocol graphql\n/u);
+
+  const http = serializeRequestDocument({
+    name: 'REST',
+    method: 'GET',
+    url: 'https://example.test',
+    protocol: 'http',
+  });
+  assert.match(http, /@protocol http\n/u);
+
+  const websocket = serializeRequestDocument({
+    name: 'Echo',
+    method: 'GET',
+    url: 'ws://example.test/socket',
+    protocol: 'websocket',
+    body: { type: 'text', text: 'ping' },
+  });
+  assert.match(websocket, /@protocol websocket\n/u);
+
+  const unknown = serializeRequestDocument({
+    name: 'Bad',
+    method: 'GET',
+    url: 'https://example.test',
+    protocol: 'mqtt',
+  });
+  assert.match(unknown, /@protocol mqtt\n/u);
+});

@@ -2,7 +2,7 @@
 
 Use API Hero collections from AI agents (Cursor, Claude Code, Codex, Gemini CLI, and other MCP clients) **without the VS Code UI**.
 
-The MCP server is a **standalone Node stdio process**. It is **client-independent** — not hosted inside VS Code. It reuses the same discovery, Collection Runner, and execution orchestrator as the extension — it does **not** invent a parallel HTTP client or collection format.
+The MCP server is a **standalone Node stdio process**. It is **client-independent** — not hosted inside VS Code. It reuses the same discovery, Collection Runner, and execution orchestrator as the extension — it does **not** invent a parallel HTTP client or collection format. GraphQL-over-HTTP (`@protocol graphql`) and bounded WebSocket (`@protocol websocket`) requests run through the existing `apihero_run_request` / collection / scenario tools; there is no protocol-specific MCP tool.
 
 ## Client-owned configuration
 
@@ -171,7 +171,7 @@ Use absolute paths. The extension version folder changes when you update API Her
 [mcp_servers.api-hero]
 command = "node"
 args = [
-  "C:/Users/<you>/.vscode/extensions/ankitsemwal.api-hero-2.9.1/dist/mcp/server.js",
+  "C:/Users/<you>/.vscode/extensions/ankitsemwal.api-hero-<version>/dist/mcp/server.js",
   "--workspace",
   "D:/path/to/your-api-workspace"
 ]
@@ -314,6 +314,6 @@ This command is **not available yet** — do not look for it in the Command Pale
 ```
 AI agent → MCP tool → ApiHeroMcpService
   → CollectionDiscoveryService / CollectionRunnerService / ScenarioEngine / ExecutionOrchestrator
-  → DefaultRequestExecutor → NodeHttpTransport
+  → DefaultRequestExecutor → NodeHttpTransport or WebSocketTransport
   → RunSummary / RequestRunResult / ExecutionReport (secret-safe presentation)
 ```

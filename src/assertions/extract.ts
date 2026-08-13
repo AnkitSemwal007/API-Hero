@@ -126,6 +126,13 @@ export function extractAssertionsForOffset(
       return all[index];
     }
   }
+
+  // Cursor in leading document directives (@protocol, @name, @extract, …)
+  // belongs to the first request. Collections/CLI/MCP execute at offset 0.
+  if (document.requests.length > 0 && offset < document.requests[0]!.range.start.offset) {
+    return all[0];
+  }
+
   return undefined;
 }
 

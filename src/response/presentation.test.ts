@@ -510,3 +510,38 @@ test('attaches timeout transport explanation with factual lines', () => {
     (model.explanation?.possibleCauses.length ?? 0) > 0,
   );
 });
+
+test('WebSocket success omits HTTP status and uses a session summary', () => {
+  const source = success({
+    statusCode: 0,
+    statusText: 'received',
+    url: 'ws://example.test/socket',
+    contentType: 'application/json',
+    body: Object.freeze({
+      bytes: freezeDetachedBytes(new TextEncoder().encode('{"ok":true}')),
+      text: '{"ok":true}',
+      json: Object.freeze({ ok: true }),
+    }),
+    bodySizeBytes: 11,
+  });
+  const websocket: ExecutionResult = source.success
+    ? {
+        ...source,
+        request: Object.freeze({
+          method: 'GET' as const,
+          url: 'ws://example.test/socket',
+        }),
+        websocket: {
+          connected: true,
+          sent: true,
+          received: true,
+          closed: true,
+        },
+      }
+    : source;
+  const model = presentExecutionResult(websocket);
+  assert.equal(model.status, undefined);
+  assert.equal(model.websocket?.received, true);
+  assert.match(model.summary, /^WebSocket received · /u);
+  assert.doesNotMatch(model.summary, /\b0\b/u);
+});

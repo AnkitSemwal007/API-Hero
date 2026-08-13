@@ -404,6 +404,23 @@ describe('extractAssertionsForDocument', () => {
     const second = extractAssertionsForOffset(document, source, secondOffset);
     assert.equal(second?.suite.assertions.length, 0);
   });
+
+  test('extractAssertionsForOffset maps leading @protocol directives to the first request', () => {
+    const source = [
+      '@protocol websocket',
+      'GET {{wsUrl}}',
+      'expect body.token == "ws-token-1"',
+      '',
+      '{"token":"ws-token-1"}',
+    ].join('\n');
+    const document = parseApiDocument(source).ast;
+    const extracted = extractAssertionsForOffset(document, source, 0);
+    assert.equal(extracted?.suite.assertions.length, 1);
+    assert.equal(
+      extracted?.suite.assertions[0]?.text,
+      'expect body.token == "ws-token-1"',
+    );
+  });
 });
 
 describe('evaluateAssertions', () => {

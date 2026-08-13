@@ -24,6 +24,18 @@ if (typeof pkg.name !== 'string' || !pkg.name || typeof pkg.version !== 'string'
   process.exit(1);
 }
 
+const restoreReadme = spawnSync(
+  process.execPath,
+  [join(root, 'scripts', 'npm-readme.mjs'), 'restore'],
+  { cwd: root, stdio: 'inherit' },
+);
+if (restoreReadme.status !== 0) {
+  console.error(
+    'Marketplace README.md is not restored. Refusing to package a VSIX with the npm CLI README.',
+  );
+  process.exit(restoreReadme.status ?? 1);
+}
+
 const outDir = join(root, 'release');
 const outFile = join(outDir, `${pkg.name}-${pkg.version}.vsix`);
 

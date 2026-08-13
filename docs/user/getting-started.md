@@ -36,6 +36,8 @@ Environments and authentication are optional for a first public GET — configur
 ## Next steps
 
 - [Creating requests](./creating-requests.md)
+- [GraphQL](./graphql.md)
+- [WebSocket](./websocket.md)
 - [Collections](./collections.md)
 - [Environments](./environments.md)
 - [Authentication](./authentication.md)

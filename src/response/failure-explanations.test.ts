@@ -157,3 +157,29 @@ test('explanations never embed Authorization or cookie secrets', () => {
   assert.doesNotMatch(transportOnly.facts.join('\n'), /cookie-value/u);
   assert.doesNotMatch(transportOnly.facts.join('\n'), /alice:/u);
 });
+
+test('GraphQL envelope errors become deterministic facts without HTTP status claims', () => {
+  const graphqlOnly = buildFailureExplanation({
+    statusCode: 200,
+    graphqlValidEnvelope: true,
+    graphqlErrorMessages: ['Cannot query field "nope"'],
+  });
+  assert.ok(graphqlOnly);
+  assert.equal(graphqlOnly.title, 'GraphQL Errors');
+  assert.deepEqual(graphqlOnly.facts, [
+    'GraphQL error: Cannot query field "nope"',
+  ]);
+  assert.deepEqual(graphqlOnly.possibleCauses, []);
+
+  const withHttp = buildFailureExplanation({
+    statusCode: 500,
+    statusText: 'Internal Server Error',
+    graphqlValidEnvelope: true,
+    graphqlErrorMessages: ['upstream failed'],
+  });
+  assert.ok(withHttp);
+  assert.match(withHttp.title, /500/u);
+  assert.ok(
+    withHttp.facts.some((fact) => fact === 'GraphQL error: upstream failed'),
+  );
+});

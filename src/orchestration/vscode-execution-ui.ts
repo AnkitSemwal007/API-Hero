@@ -84,8 +84,14 @@ implements ExecutionStatusPresenter {
         this.item.show();
         return;
       case 'success':
-        this.item.text = `$(check) API Hero: Success (${status.statusCode})`;
-        this.item.tooltip = `Request completed with HTTP status ${status.statusCode}.`;
+        this.item.text =
+          status.statusCode === undefined
+            ? '$(check) API Hero: Success'
+            : `$(check) API Hero: Success (${status.statusCode})`;
+        this.item.tooltip =
+          status.statusCode === undefined
+            ? 'Request completed successfully.'
+            : `Request completed with HTTP status ${status.statusCode}.`;
         break;
       case 'failed':
         this.item.text = '$(error) API Hero: Failed';

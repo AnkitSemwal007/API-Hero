@@ -120,6 +120,7 @@ export interface McpRunSummaryDto {
     readonly transport: number;
     readonly assertion: number;
     readonly extraction: number;
+    readonly protocol: number;
   };
   readonly requests: readonly McpRequestRunDto[];
 }
@@ -336,12 +337,14 @@ export function projectFailureCategoryCounts(stats: RunStatistics): {
   readonly transport: number;
   readonly assertion: number;
   readonly extraction: number;
+  readonly protocol: number;
 } {
   return {
     precondition: stats.preconditionFailures,
     transport: stats.transportFailures,
     assertion: stats.assertionFailures,
     extraction: stats.extractionFailures,
+    protocol: stats.protocolFailures,
   };
 }
 
@@ -356,7 +359,8 @@ export function projectRequestRunResult(
     ordinal: result.ordinal,
     label: result.label,
     status: result.outcome,
-    ...(result.statusCode !== undefined
+    ...(result.statusCode !== undefined &&
+    result.presentation?.websocket === undefined
       ? { httpStatus: result.statusCode }
       : {}),
     ...(result.durationMs !== undefined
@@ -394,7 +398,9 @@ export function projectRequestRunResult(
         ? {
             response: {
               success: result.presentation.success,
-              status: result.presentation.status,
+              ...(result.presentation.status === undefined
+                ? {}
+                : { status: result.presentation.status }),
               summary: result.presentation.summary,
             },
           }
@@ -430,7 +436,6 @@ function projectPresentation(presentation: ResponsePresentation): unknown {
     success: presentation.success,
     method: presentation.method,
     requestUrl: presentation.requestUrl,
-    status: presentation.status,
     headers: presentation.headers,
     body: presentation.body,
     statistics: presentation.statistics,
@@ -438,6 +443,11 @@ function projectPresentation(presentation: ResponsePresentation): unknown {
     ...(presentation.explanation === undefined
       ? {}
       : { explanation: presentation.explanation }),
+    ...(presentation.graphql === undefined ? {} : { graphql: presentation.graphql }),
+    ...(presentation.status === undefined ? {} : { status: presentation.status }),
+    ...(presentation.websocket === undefined
+      ? {}
+      : { websocket: presentation.websocket }),
     assertions: presentation.assertions,
     summary: presentation.summary,
   };

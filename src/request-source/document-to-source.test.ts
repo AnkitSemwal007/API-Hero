@@ -318,4 +318,78 @@ describe('documentToRequestSource / parseSourceToRequestDocument', () => {
       ]);
     }
   });
+
+  test('projects @protocol graphql and omits it when absent', () => {
+    const omitted = parseSourceToRequestDocument(
+      '@name REST\n\nGET https://example.test\n',
+    );
+    assert.equal(omitted.kind, 'single');
+    if (omitted.kind === 'single') {
+      assert.equal(omitted.document.protocol, undefined);
+    }
+
+    const parsed = parseSourceToRequestDocument(
+      [
+        '@name GetUser',
+        '@protocol graphql',
+        '',
+        'POST https://example.test/graphql',
+        '',
+        '{ "query": "{ ping }" }',
+        '',
+      ].join('\n'),
+    );
+    assert.equal(parsed.kind, 'single');
+    if (parsed.kind !== 'single') {
+      return;
+    }
+    assert.equal(parsed.document.protocol, 'graphql');
+    const roundTrip = parseSourceToRequestDocument(
+      serializeRequestDocument(parsed.document),
+    );
+    assert.equal(roundTrip.kind, 'single');
+    if (roundTrip.kind === 'single') {
+      assert.equal(roundTrip.document.protocol, 'graphql');
+    }
+  });
+
+  test('projects @protocol websocket', () => {
+    const parsed = parseSourceToRequestDocument(
+      [
+        '@name Echo',
+        '@protocol websocket',
+        '',
+        'GET ws://example.test/socket',
+        '',
+        'ping',
+        '',
+      ].join('\n'),
+    );
+    assert.equal(parsed.kind, 'single');
+    if (parsed.kind !== 'single') {
+      return;
+    }
+    assert.equal(parsed.document.protocol, 'websocket');
+    const roundTrip = parseSourceToRequestDocument(
+      serializeRequestDocument(parsed.document),
+    );
+    assert.equal(roundTrip.kind, 'single');
+    if (roundTrip.kind === 'single') {
+      assert.equal(roundTrip.document.protocol, 'websocket');
+    }
+  });
+
+  test('preserves unknown @protocol so serialize cannot convert it to HTTP', () => {
+    const parsed = parseSourceToRequestDocument(
+      '@name Bad\n@protocol mqtt\n\nGET https://example.test\n',
+    );
+    assert.equal(parsed.kind, 'single');
+    if (parsed.kind !== 'single') {
+      return;
+    }
+    assert.equal(parsed.document.protocol, 'mqtt');
+    const serialized = serializeRequestDocument(parsed.document);
+    assert.match(serialized, /@protocol mqtt\n/u);
+    assert.doesNotMatch(serialized, /@protocol http\n/u);
+  });
 });

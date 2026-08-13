@@ -450,6 +450,53 @@ describe('request editor webview helpers', () => {
     );
   });
 
+  test('parseRequestSourceDocument round-trips protocol', () => {
+    assert.equal(
+      parseRequestSourceDocument({
+        name: 'GetUser',
+        method: 'POST',
+        url: 'https://example.test/graphql',
+        protocol: 'graphql',
+      })?.protocol,
+      'graphql',
+    );
+    assert.equal(
+      parseRequestSourceDocument({
+        name: 'REST',
+        method: 'GET',
+        url: 'https://example.test',
+        protocol: 'HTTP',
+      })?.protocol,
+      'http',
+    );
+    assert.equal(
+      parseRequestSourceDocument({
+        name: 'REST',
+        method: 'GET',
+        url: 'https://example.test',
+      })?.protocol,
+      undefined,
+    );
+    assert.equal(
+      parseRequestSourceDocument({
+        name: 'Bad',
+        method: 'GET',
+        url: 'https://example.test',
+        protocol: 'mqtt',
+      })?.protocol,
+      'mqtt',
+    );
+    assert.equal(
+      parseRequestSourceDocument({
+        name: 'Echo',
+        method: 'GET',
+        url: 'ws://example.test/socket',
+        protocol: 'websocket',
+      })?.protocol,
+      'websocket',
+    );
+  });
+
   test('masks and restores sensitive variables for the webview', () => {
     const baseline = {
       name: 'S',

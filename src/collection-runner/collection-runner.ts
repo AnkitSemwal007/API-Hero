@@ -795,6 +795,15 @@ function describeExecutionFailure(
         ...(explanation === undefined ? {} : { explanation }),
       };
     }
+    if (runResult.graphqlFailed === true) {
+      return {
+        category: RequestFailureCategory.Protocol,
+        reason: describeGraphqlFailure(runResult),
+        httpRequestSent,
+        failedAtStage: 'graphql',
+        ...(explanation === undefined ? {} : { explanation }),
+      };
+    }
     if (hasBlockingExtractionFailure(runResult.extraction)) {
       return {
         category: RequestFailureCategory.Extraction,
@@ -812,6 +821,27 @@ function describeExecutionFailure(
     failedAtStage: 'transport',
     ...(explanation === undefined ? {} : { explanation }),
   };
+}
+
+function describeGraphqlFailure(runResult: RunAtSourceLocationResult): string {
+  const status = runResult.statusCode;
+  if (status !== undefined && (status < 200 || status > 299)) {
+    return `GraphQL request failed with HTTP ${status}.`;
+  }
+  const envelope =
+    runResult.execution?.success === true
+      ? runResult.execution.graphql
+      : undefined;
+  if (envelope === undefined || envelope.validEnvelope === false) {
+    return 'GraphQL response is not a valid envelope.';
+  }
+  if (envelope.hasErrors) {
+    const messages = envelope.errorMessages.slice(0, 3).join('; ');
+    return messages.length > 0
+      ? `GraphQL errors: ${messages}`
+      : 'GraphQL response contains errors.';
+  }
+  return 'GraphQL request failed.';
 }
 
 function describeTransportFailure(

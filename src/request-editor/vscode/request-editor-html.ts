@@ -1022,6 +1022,14 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
     }
     // oneshot: leave authProfileId unchanged — never strip @auth or write token.
     model.body = readBody();
+    // Preserve @protocol from the in-memory model (no protocol dropdown in Phase 1).
+    // Unknown values are kept so save cannot silently convert them to HTTP.
+    const protocol = state && state.model ? state.model.protocol : model.protocol;
+    if (typeof protocol === 'string' && protocol.trim().length > 0) {
+      model.protocol = protocol.trim().toLowerCase();
+    } else {
+      delete model.protocol;
+    }
     return model;
   }
 

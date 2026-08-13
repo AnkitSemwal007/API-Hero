@@ -72,7 +72,7 @@ export interface RunRequestSource {
 export type ExecutionStatus =
   | { readonly kind: 'idle' }
   | { readonly kind: 'running' }
-  | { readonly kind: 'success'; readonly statusCode: number }
+  | { readonly kind: 'success'; readonly statusCode?: number }
   | { readonly kind: 'failed' }
   | { readonly kind: 'cancelled' };
 
@@ -211,6 +211,11 @@ export interface SideEffectCommitContext {
   /** True when an assertion report was produced for this attempt. */
   readonly assertionsEvaluated: boolean;
   readonly assertionFailed: boolean;
+  /**
+   * True when `@protocol graphql` succeeded at HTTP transport but failed as a
+   * GraphQL operation. Absent/false for REST.
+   */
+  readonly graphqlFailed?: boolean;
   readonly cancelledAtTransport: boolean;
   /**
    * From `ExecutionResult.error.retryable` when the HTTP attempt failed.
@@ -278,6 +283,12 @@ export interface RunAtSourceLocationResult {
    * malformed. HTTP 4xx/5xx alone does not set this — only assertion outcomes.
    */
   readonly assertionFailed?: boolean;
+  /**
+   * True when `@protocol graphql` transport succeeded but the GraphQL
+   * operation failed (non-2xx, invalid envelope, or `errors` present).
+   * REST/HTTP requests never set this.
+   */
+  readonly graphqlFailed?: boolean;
   /**
    * Extraction outcome for this attempt, when the post-execution observer
    * returned one (Phase 2 — Collection Runner reads `producedVariables` /
@@ -589,8 +600,12 @@ export class ExecutionOrchestrator {
               : { resolvedVariables };
 
           reporter.report('Sending request');
+          const hostContext = this.getExecutionContext();
           const result = await this.executor.execute(authenticated, {
-            ...this.getExecutionContext(),
+            ...hostContext,
+            ...(authenticated.timeoutMs === undefined
+              ? {}
+              : { timeoutMs: authenticated.timeoutMs }),
             signal: run.controller.signal,
           });
           if (!this.isCurrent(run.id)) {
@@ -629,15 +644,15 @@ export class ExecutionOrchestrator {
           const assertionFailed =
             assertionReport !== undefined &&
             hasAssertionFailures(assertionReport);
+          const graphqlFailed = graphqlOperationFailed(authenticated, result);
 
-          const statusCode = result.success
-            ? result.response.statusCode
-            : undefined;
+          const statusCode = httpStatusCodeFromResult(result);
           const sideEffectContext: SideEffectCommitContext = {
             ...(statusCode === undefined ? {} : { statusCode }),
             httpSuccess: result.success,
             assertionsEvaluated: assertionReport !== undefined,
             assertionFailed,
+            ...(graphqlFailed ? { graphqlFailed: true } : {}),
             cancelledAtTransport,
             ...(!result.success && result.error.retryable !== undefined
               ? { transportRetryable: result.error.retryable }
@@ -749,12 +764,11 @@ export class ExecutionOrchestrator {
                 durationMs: result.timing.durationMs,
                 execution: result,
                 ...resolvedVariableFields,
-                ...(result.success
-                  ? { statusCode: result.response.statusCode }
-                  : {}),
+                ...(statusCode === undefined ? {} : { statusCode }),
                 ...(assertionReport === undefined
                   ? {}
                   : { assertions: assertionReport, assertionFailed }),
+                ...(graphqlFailed ? { graphqlFailed: true } : {}),
                 ...(extractionReport === undefined
                   ? {}
                   : { extraction: extractionReport }),
@@ -771,15 +785,15 @@ export class ExecutionOrchestrator {
               ...resolvedVariableFields,
             };
           }
-          if (result.success && !assertionFailed) {
+          if (result.success && !assertionFailed && !graphqlFailed) {
             this.status.update({
               kind: 'success',
-              statusCode: result.response.statusCode,
+              ...(statusCode === undefined ? {} : { statusCode }),
             });
             return {
               outcome: 'success',
               durationMs: result.timing.durationMs,
-              statusCode: result.response.statusCode,
+              ...(statusCode === undefined ? {} : { statusCode }),
               execution: result,
               ...resolvedVariableFields,
               ...(assertionReport === undefined
@@ -796,15 +810,14 @@ export class ExecutionOrchestrator {
             durationMs: result.timing.durationMs,
             execution: result,
             ...resolvedVariableFields,
-            ...(result.success
-              ? { statusCode: result.response.statusCode }
-              : {}),
+            ...(statusCode === undefined ? {} : { statusCode }),
             ...(extractionReport === undefined
               ? {}
               : { extraction: extractionReport }),
             ...(assertionReport === undefined
               ? {}
               : { assertions: assertionReport, assertionFailed }),
+            ...(graphqlFailed ? { graphqlFailed: true } : {}),
           };
         } finally {
           progressSignal.removeEventListener(
@@ -1080,5 +1093,32 @@ function isRequestBuildError(error: unknown): error is RequestBuildError {
     (error.name === 'RequestBuildError' ||
       error.name === 'RequestBuilderError' ||
       error.name === 'BuilderInvariantError')
+  );
+}
+
+/** HTTP status for reports and retry. WebSocket results have no HTTP status. */
+function httpStatusCodeFromResult(result: ExecutionResult): number | undefined {
+  if (!result.success || result.websocket !== undefined) {
+    return undefined;
+  }
+  return result.response.statusCode;
+}
+
+function graphqlOperationFailed(
+  request: AuthenticatedRequest,
+  result: ExecutionResult,
+): boolean {
+  if (request.protocol !== 'graphql' || !result.success) {
+    return false;
+  }
+  const status = result.response.statusCode;
+  if (status < 200 || status > 299) {
+    return true;
+  }
+  const envelope = result.graphql;
+  return (
+    envelope === undefined ||
+    envelope.validEnvelope === false ||
+    envelope.hasErrors === true
   );
 }

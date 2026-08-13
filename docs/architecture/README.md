@@ -66,6 +66,8 @@ sequenceDiagram
 | [ADR-0001](./adr/0001-variables-extraction-auth-dependencies.md) | Accepted | Variables, Response Extraction, Variable Manager, Authentication, Request Dependencies, Create Variable From Response |
 | [ADR-0002](./adr/0002-authored-request-ids.md) | Accepted | Human-readable `@depends-on` refs; runtime discovery IDs only |
 | [ADR-0003](./adr/0003-intelligent-variable-dependency-autofill.md) | Accepted | Autofill is editor projection of one dependency engine; Auto never persisted |
+| [ADR-0004](./adr/0004-graphql-phase-1.md) | Accepted | GraphQL Phase 1 is an HTTP adapter above `NodeHttpTransport`; no second runner |
+| [ADR-0005](./adr/0005-websocket-phase-1.md) | Accepted | WebSocket Phase 1 is a dedicated bounded-session transport; not HTTP |
 | [P0 Implementation Spec](./adr/0001-phase-0-implementation-spec.md) | Ready | Exact Phase 0 build checklist (files, APIs, tests) — not an ADR |
 | [P1 Implementation Spec](./adr/0001-phase-1-implementation-spec.md) | Ready | Exact Phase 1 extraction build checklist — not an ADR |
 | [P1 Task Plan](./adr/0001-phase-1-task-plan.md) | Ready | Developer tasks P1-001…019 for tracking / sequential commits |

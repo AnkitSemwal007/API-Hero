@@ -177,6 +177,44 @@ test('buildHistoryEntry captures success metadata without bodies', () => {
   assert.doesNotMatch(JSON.stringify(entry), /secret|Bearer|abc|user:secret/iu);
 });
 
+test('buildHistoryEntry omits HTTP status for WebSocket success', () => {
+  const request = authenticatedRequest({
+    url: 'ws://example.test/socket',
+    protocol: 'websocket',
+    resolution: {
+      kind: 'resolved',
+      presentationUrl: 'ws://example.test/socket',
+      sensitiveVariableNames: [],
+      sensitiveHeaderNames: [],
+      sensitiveQueryParameterNames: [],
+    },
+  });
+  const result = successResult(request, 0);
+  const websocketResult: ExecutionResult = result.success
+    ? {
+        ...result,
+        response: {
+          ...result.response,
+          statusText: 'received',
+        },
+        websocket: {
+          connected: true,
+          sent: true,
+          received: true,
+          closed: true,
+        },
+      }
+    : result;
+  const entry = buildHistoryEntry({
+    runId: 8,
+    request,
+    result: websocketResult,
+  });
+  assert.equal(entry.summary.status, HistoryExecutionStatus.Success);
+  assert.equal(entry.summary.statusCode, undefined);
+  assert.equal(entry.summary.statusText, undefined);
+});
+
 test('buildHistoryEntry records cancelled and failed outcomes safely', () => {
   const request = authenticatedRequest();
   const cancelled = buildHistoryEntry({

@@ -48,7 +48,7 @@ If document- or operation-level `security` names a scheme that is **missing** fr
 - Max file / response size: `apiHero.import.maxFileBytes` (default 5 MiB).
 - Local `#/` `$ref` resolution with depth/cycle caps; remote `$ref` is out of scope (not fetched over the network).
 - Error diagnostics prevent writes and settings patches; warnings alone may still succeed.
-- Swagger 2.0 and GraphQL import are not supported (GraphQL bodies from Postman/Insomnia are best-effort stubs with warnings).
+- Swagger 2.0 and GraphQL **import** are not supported (GraphQL bodies from Postman/Insomnia remain best-effort stubs with warnings). Authored `@protocol graphql` requests are supported — see [GraphQL](./graphql.md).
 
 ## Postman Collection import
 

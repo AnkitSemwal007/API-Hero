@@ -94,7 +94,7 @@ export function buildHistoryEntry(
     summary: deepFreeze({
       method: request.method,
       url,
-      ...(result.success
+      ...(result.success && result.websocket === undefined
         ? {
             statusCode: result.response.statusCode,
             statusText: result.response.statusText,

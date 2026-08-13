@@ -37,6 +37,35 @@ export function scrubSecretTokensInText(text: string): string {
 }
 
 /**
+ * Replaces known secret substrings (longest first), matching curl / presentation
+ * exact-value masking. Empty strings are ignored.
+ */
+export function replaceKnownSecretValues(
+  text: string,
+  secrets: readonly string[],
+): string {
+  let next = text;
+  const ordered = [...secrets]
+    .filter((secret) => secret.length > 0)
+    .sort((a, b) => b.length - a.length);
+  for (const secret of ordered) {
+    next = next.split(secret).join(SECRET_SCRUB_MASK);
+  }
+  return next;
+}
+
+/**
+ * Heuristic token/JSON-property scrub plus exact replacement of known secrets
+ * from the request (sensitive headers and variable values).
+ */
+export function scrubTextWithKnownSecrets(
+  text: string,
+  secrets: readonly string[] = [],
+): string {
+  return replaceKnownSecretValues(scrubSecretTokensInText(text), secrets);
+}
+
+/**
  * Deep-clones JSON-compatible values and masks secret-like keys / tokens.
  * Non-JSON inputs fall through to {@link scrubSecretTokensInText}.
  */

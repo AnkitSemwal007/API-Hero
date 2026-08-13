@@ -60,6 +60,11 @@ export function serializeRequestDocument(
     lines.push(`@timeout ${document.timeoutMs}`);
   }
 
+  const protocol = document.protocol?.trim().toLowerCase();
+  if (protocol !== undefined && protocol.length > 0) {
+    lines.push(`@protocol ${protocol}`);
+  }
+
   for (const variable of document.variables ?? []) {
     const name = variable.name.trim();
     if (name.length === 0) {

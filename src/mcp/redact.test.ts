@@ -43,6 +43,15 @@ test('redactForMcp masks Authorization header values', () => {
   assert.equal(JSON.stringify(out).includes('secret-token-value'), false);
 });
 
+test('redactForMcp masks token fields inside GraphQL variables JSON', () => {
+  const out = redactForMcp({
+    variables: { token: 'sekrit-token-value' },
+    body: '{"query":"query Q($token: String!) { q }","variables":{"token":"sekrit-token-value"}}',
+  });
+  assert.doesNotMatch(JSON.stringify(out), /sekrit-token-value/u);
+  assert.equal(out.variables.token, MCP_SECRET_MASK);
+});
+
 test('redactForMcp masks JWT and password fields inside JSON body strings', () => {
   const jwt =
     'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MX0.signature';

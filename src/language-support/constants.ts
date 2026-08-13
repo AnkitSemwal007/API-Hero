@@ -11,6 +11,7 @@ export const DIRECTIVES = [
   '@connection',
   '@auth',
   '@timeout',
+  '@protocol',
   '@id',
   '@name',
   '@description',
@@ -27,6 +28,7 @@ export const SINGLETON_DIRECTIVES = [
   '@connection',
   '@auth',
   '@timeout',
+  '@protocol',
   '@id',
   '@name',
   '@description',
@@ -79,6 +81,8 @@ export const HOVER_DOCUMENTATION: Readonly<Record<string, string>> = {
   '@connection': 'Selects the connection used by this request block.',
   '@auth': 'Configures authentication for this request block.',
   '@timeout': 'Sets the request timeout in milliseconds.',
+  '@protocol':
+    'Selects the request protocol. Omit or use http for REST; graphql sends a JSON GraphQL-over-HTTP body; websocket runs a bounded connect/send/receive/close session.',
   '@id':
     'Legacy optional directive ignored for dependencies. Prefer @name; do not use for @depends-on.',
   '@name':

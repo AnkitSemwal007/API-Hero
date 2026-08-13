@@ -122,6 +122,13 @@ export interface RequestSourceDocument {
    * There is no follow-redirects directive in the `.api` format.
    */
   readonly timeoutMs?: number;
+  /**
+   * Optional `@protocol`. Omitted from source when undefined (HTTP default).
+   * Allowed values: `http`, `graphql`, `websocket`. Unknown values are preserved for
+   * round-trip so serialize cannot silently convert them to HTTP; semantic
+   * validation rejects them at run time.
+   */
+  readonly protocol?: string;
   /** Optional leading `#` comment lines (without the `#` prefix). */
   readonly comments?: readonly string[];
 }

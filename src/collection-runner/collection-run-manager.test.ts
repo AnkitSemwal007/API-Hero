@@ -103,6 +103,7 @@ function summaryFor(
       transportFailures: 0,
       assertionFailures: 0,
       extractionFailures: 0,
+      protocolFailures: 0,
     },
     completedAt: '2026-07-28T10:00:20.000Z',
     status,

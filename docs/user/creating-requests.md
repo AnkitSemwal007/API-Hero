@@ -38,11 +38,13 @@ Common directives:
 | `@sensitive-extract name from …` | Same as `@extract`, marked sensitive |
 | `@depends-on Name` | Explicit dependency on another request (Collection Runner) |
 | `@auth profileId` | Authentication profile for the request |
+| `@protocol graphql` | GraphQL-over-HTTP query or mutation (see [GraphQL](./graphql.md)) |
+| `@protocol websocket` | Bounded WebSocket connect/send/receive/close session (see [WebSocket](./websocket.md)) |
 
 For how `@extract` and `@depends-on` chain requests during a collection run, see
 [Request Dependencies & Data Flow](./collection-runner.md#request-dependencies--data-flow).
 
-Snippets (`get`, `post`, `separator`, and others) are available in the `api` language.
+Snippets (`get`, `post`, `graphql`, `websocket`, `separator`, and others) are available in the `api` language.
 
 ## Run a request
 
@@ -63,6 +65,8 @@ Snippets (`get`, `post`, `separator`, and others) are available in the `api` lan
 ## Related
 
 - [Variables](./variables.md)
+- [GraphQL](./graphql.md)
+- [WebSocket](./websocket.md)
 - [Authentication](./authentication.md)
 - [Assertions](./assertions.md)
 - [Response viewer](./response-viewer.md)

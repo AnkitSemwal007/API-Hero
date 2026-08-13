@@ -6,7 +6,8 @@ Command IDs remain under the `apiHero.*` namespace for compatibility. See [relea
 
 | Area | Description |
 | --- | --- |
-| [User guide](./user/getting-started.md) | Install, author requests, collections, env, auth, history, OpenAPI |
+| [User guide](./user/getting-started.md) | Install, author requests, GraphQL-over-HTTP, bounded WebSocket sessions, collections, env, auth, history, OpenAPI |
+| [CLI (`apihero`)](./user/cli.md) | Headless npm CLI for requests, collections, and scenarios |
 | [MCP server](./user/mcp.md) | Headless MCP tools for Cursor, Claude Code, Codex, and other agents |
 | [Architecture](./architecture/README.md) | Extension composition and domain design |
 | [Development](./development/README.md) | Repo layout, conventions, webviews, testing |
@@ -15,13 +16,16 @@ Command IDs remain under the `apiHero.*` namespace for compatibility. See [relea
 | [Product](./product/README.md) | Vision, shipped scope, roadmap |
 | [Examples](../examples/README.md) | Functional `.api` samples |
 
-> **Development note:** [CLI / CI (`apihero`)](./user/cli.md) is **Planned / In Development (not currently distributed)**. Implementation may exist in-repo; it is not a primary shipped user guide equal to getting started or MCP.
+> The public CLI is **`@ankitsemwal007/api-hero`** (`apihero`). See [CLI guide](./user/cli.md). Installing the VS Code Marketplace extension does **not** put `apihero` on PATH.
 
 ## Quick links
 
 - [Getting started](./user/getting-started.md)
+- [CLI (`apihero`)](./user/cli.md)
 - [MCP for AI agents](./user/mcp.md)
 - [Creating requests](./user/creating-requests.md)
+- [GraphQL](./user/graphql.md)
+- [WebSocket](./user/websocket.md)
 - [Scenarios](./user/scenarios.md)
 - [Commands](./reference/commands.md)
 - [Configuration](./reference/configuration.md)

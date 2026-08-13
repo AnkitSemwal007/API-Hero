@@ -9,6 +9,7 @@ import {
 } from '../parser';
 import type {
   HttpMethod,
+  RequestProtocol,
   RuntimeBody,
   RuntimeDirective,
   RuntimeHeader,
@@ -140,6 +141,9 @@ function buildRequestNode(
   const timeout = effectiveDirective(document, node, 'timeout');
   const authentication = effectiveDirective(document, node, 'auth');
   const connection = effectiveDirective(document, node, 'connection');
+  const protocol = parseProtocol(
+    effectiveDirective(document, node, 'protocol')?.value,
+  );
   const headers = node.headers.map<RuntimeHeader>((header) => ({
     name: header.name.trim(),
     value: header.value.trim(),
@@ -189,6 +193,7 @@ function buildRequestNode(
     ...(timeout === undefined
       ? {}
       : { timeoutMs: parseTimeout(timeout.value) }),
+    ...(protocol === undefined ? {} : { protocol }),
     redirectPolicy: { mode: 'follow' },
     ssl: {
       verifyCertificates: true,
@@ -329,6 +334,23 @@ function parseTimeout(value: string): number {
     );
   }
   return timeout;
+}
+
+function parseProtocol(value: string | undefined): RequestProtocol | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  const normalized = value.trim().toLowerCase();
+  if (normalized.length === 0) {
+    return undefined;
+  }
+  if (normalized === 'http' || normalized === 'graphql' || normalized === 'websocket') {
+    return normalized;
+  }
+  throw new BuilderInvariantError(
+    'INVALID_DIRECTIVE',
+    `Unknown protocol "${value.trim()}". Allowed values are http, graphql, and websocket.`,
+  );
 }
 
 function findHeaderValue(

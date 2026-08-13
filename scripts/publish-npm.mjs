@@ -69,6 +69,17 @@ try {
 } finally {
   writeFileSync(pkgPath, original, 'utf8');
   console.log(`[publish-npm] package.json restored (name: ${MARKETPLACE_NAME})`);
+  const restoreReadme = spawnSync(
+    process.execPath,
+    [join(root, 'scripts', 'npm-readme.mjs'), 'restore'],
+    { cwd: root, stdio: 'inherit' },
+  );
+  if (restoreReadme.status !== 0) {
+    console.error('[publish-npm] failed to restore marketplace README.md');
+    if (status === 0) {
+      status = restoreReadme.status ?? 1;
+    }
+  }
 }
 
 process.exit(status);

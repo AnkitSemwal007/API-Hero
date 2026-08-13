@@ -310,6 +310,16 @@ export function parseRequestSourceDocument(
   ) {
     return undefined;
   }
+  let protocol: string | undefined;
+  if (record.protocol !== undefined) {
+    if (typeof record.protocol !== 'string') {
+      return undefined;
+    }
+    const normalized = record.protocol.trim().toLowerCase();
+    if (normalized.length > 0) {
+      protocol = normalized;
+    }
+  }
   if (
     record.expectLines !== undefined &&
     !isStringArray(record.expectLines)
@@ -340,6 +350,7 @@ export function parseRequestSourceDocument(
     ...(typeof record.timeoutMs === 'number'
       ? { timeoutMs: record.timeoutMs }
       : {}),
+    ...(protocol === undefined ? {} : { protocol }),
     ...(headers !== null ? { headers } : {}),
     ...(queryParams !== null ? { queryParams } : {}),
     ...(body !== null ? { body } : {}),

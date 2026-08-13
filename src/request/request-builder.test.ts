@@ -421,6 +421,52 @@ test('does not alias AST values and deeply freezes every produced value', () => 
   }, TypeError);
 });
 
+test('projects @protocol onto RuntimeRequest and omits it when absent', () => {
+  const omitted = buildRequest(parseValid('GET /items'));
+  assert.equal(omitted.protocol, undefined);
+
+  const http = buildRequest(parseValid('@protocol HTTP\nGET /items\n'));
+  assert.equal(http.protocol, 'http');
+
+  const graphql = buildRequest(
+    parseValid('@protocol graphql\nPOST /graphql\n{"query":"{ ping }"}\n'),
+  );
+  assert.equal(graphql.protocol, 'graphql');
+
+  const websocket = buildRequest(
+    parseValid('@protocol websocket\nGET ws://example.test/socket\n'),
+  );
+  assert.equal(websocket.protocol, 'websocket');
+
+  const overrideSource = [
+    '@protocol http',
+    'POST /graphql',
+    '@protocol graphql',
+    '{"query":"{ ping }"}',
+  ].join('\n');
+  const parsed = parseApiDocument(overrideSource, { sourceId: 'override.api' });
+  const validation = validateApiDocument(parsed.ast);
+  assert.equal(validation.valid, true);
+  const overridden = buildRequest(parsed.ast, validation);
+  assert.equal(overridden.protocol, 'graphql');
+});
+
+test('unknown @protocol does not silently become HTTP', () => {
+  const parsed = parseApiDocument(
+    '@protocol mqtt\nGET https://example.test/\n',
+    { sourceId: 'mqtt.api' },
+  );
+  assert.throws(
+    () => buildRequest(parsed.ast),
+    (error: unknown) => {
+      assert.ok(error instanceof BuilderInvariantError);
+      assert.equal(error.code, 'INVALID_DIRECTIVE');
+      assert.match(error.message, /protocol/iu);
+      return true;
+    },
+  );
+});
+
 function assertBuilderError(
   action: () => unknown,
   code: RequestBuilderError['code'],

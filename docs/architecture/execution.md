@@ -168,7 +168,12 @@ in competing unused modules:
 - Secret lifecycle store/delete/orphan cleanup
 - OAuth and broader auth enhancements
 - Streaming transport (alternate `HttpTransport` method / streaming response)
-- GraphQL, WebSocket, gRPC
+- GraphQL subscriptions, persistent WebSocket connections, gRPC
+  (GraphQL query/mutation over HTTP is Phase 1 — see
+  [ADR-0004](./adr/0004-graphql-phase-1.md). Bounded WebSocket sessions are
+  Phase 1 — see [ADR-0005](./adr/0005-websocket-phase-1.md). `HttpTransport`
+  stays HTTP-only; GraphQL is an adapter above `NodeHttpTransport`; WebSocket
+  uses a dedicated transport, not a second runner.)
 - OpenAPI **export** and Swagger 2.0 (OpenAPI 3 import is implemented — see
   [openapi-import.md](./openapi-import.md))
 - AI-assisted features
@@ -192,6 +197,11 @@ protocols remain outside this subsystem except where already integrated on the
 live path above. Request History observes finished executions — see
 [history.md](./history.md). The response viewer is a downstream consumer, not
 part of execution. Run Request and CodeLens reach it through the orchestration
-layer. Future transports can implement `HttpTransport`; future callers reuse
-`RequestExecutor` without depending on parser or VS Code layers.
+layer. Future HTTP transports can implement `HttpTransport`; GraphQL query/mutation
+reuses `RequestExecutor` and `NodeHttpTransport` via a protocol adapter
+([ADR-0004](./adr/0004-graphql-phase-1.md)). Bounded WebSocket sessions use a
+dedicated `WebSocketTransport` ([ADR-0005](./adr/0005-websocket-phase-1.md)) and
+must not implement `HttpTransport`. Future callers reuse
+`RequestExecutor` without depending on parser or VS Code layers. Persistent
+WebSocket and gRPC must not implement `HttpTransport`.
 

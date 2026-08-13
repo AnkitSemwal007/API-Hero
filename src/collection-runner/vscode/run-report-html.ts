@@ -189,6 +189,7 @@ export interface CollectionRunReportModel {
   readonly transportFailures: number;
   readonly assertionFailures: number;
   readonly extractionFailures: number;
+  readonly protocolFailures: number;
   readonly rows: readonly CollectionRunReportRow[];
   /** True when the dependency-aware execution order differs from plan membership order (§6.6, §10.1). */
   readonly reordered: boolean;
@@ -344,6 +345,7 @@ export function buildCollectionRunReportModel(
     transportFailures: stats.transportFailures,
     assertionFailures: stats.assertionFailures,
     extractionFailures: stats.extractionFailures,
+    protocolFailures: stats.protocolFailures,
     rows,
     reordered: dependencies?.reordered ?? false,
     dependencyEdges: edges.map((edge) => ({
@@ -489,6 +491,7 @@ function countFailureCategories(
   | 'transportFailures'
   | 'assertionFailures'
   | 'extractionFailures'
+  | 'protocolFailures'
 > {
   const count = (category: RequestFailureCategory): number =>
     results.filter((result) => result.failureDiagnostics?.category === category)
@@ -498,6 +501,7 @@ function countFailureCategories(
     transportFailures: count(RequestFailureCategory.Transport),
     assertionFailures: count(RequestFailureCategory.Assertion),
     extractionFailures: count(RequestFailureCategory.Extraction),
+    protocolFailures: count(RequestFailureCategory.Protocol),
   };
 }
 
@@ -1592,7 +1596,9 @@ const REPORT_SCRIPT = `
     if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') {
       return CSS.escape(value);
     }
-    return String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    // REPORT_SCRIPT is a TS template literal — double every backslash so the
+    // webview receives replaceAll('\\', '\\\\').replaceAll('"', '\\"').
+    return String(value).replaceAll('\\\\', '\\\\\\\\').replaceAll('"', '\\\\"');
   }
 
   function requestRowSelector(requestId) {
@@ -2397,6 +2403,7 @@ const REPORT_SCRIPT = `
       categoryChip('HTTP/Network Failures', model.transportFailures),
       categoryChip('Assertion Failures', model.assertionFailures),
       categoryChip('Extraction Failures', model.extractionFailures),
+      categoryChip('Protocol Failures', model.protocolFailures),
     ).join('');
 
     const canRunAgain = !model.live && !!model.collectionId;

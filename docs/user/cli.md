@@ -59,7 +59,7 @@ apihero run scenario <scenario>
 | `--quiet` | Failures / final result only |
 | `--verbose` | Runtime logs on stderr |
 
-Unknown options exit with code **2**.
+Unknown options exit with code **2**. HTTP, `@protocol graphql`, and `@protocol websocket` use the same `apihero run request` / `collection` / `scenario` commands. There is no `--graphql`, `--websocket`, `--ws`, `--listen`, or `--stream` flag — protocol is chosen on the request.
 
 ### Targets
 
@@ -176,11 +176,13 @@ apihero run scenario checkout \
 - Headless **global** variables are empty (workspace / environment / collection / scenario scopes still apply)
 - No `--var` / OS-env → `{{variable}}` mapping
 - No scenario `--inputs` flag yet (MCP `apihero_run_scenario` supports `inputs`; CLI may gain parity later)
-- No remote runner, watch mode, parallel runs, Docker image, or GraphQL
+- No remote runner, watch mode, parallel runs, or Docker image
 
 ## Related
 
 - [MCP server](./mcp.md) — same headless composition for AI agents
+- [GraphQL](./graphql.md)
+- [WebSocket](./websocket.md)
 - [Getting started](./getting-started.md)
 - [Environments](./environments.md)
 - [Authentication](./authentication.md)

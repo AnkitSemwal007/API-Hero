@@ -81,5 +81,34 @@
     "prefix": "timeout",
     "body": ["@timeout ${1:30000}"],
     "description": "Set the request timeout in milliseconds"
+  },
+  "GraphQL request": {
+    "prefix": "graphql",
+    "body": [
+      "@protocol graphql",
+      "@name ${1:GetUser}",
+      "POST ${2:{{baseUrl}}/graphql}",
+      "Content-Type: application/json",
+      "",
+      "{",
+      "  \"query\": \"${3:query GetUser { user { name } }}\",",
+      "  \"variables\": {}",
+      "}",
+      "$0"
+    ],
+    "description": "Create a GraphQL-over-HTTP request"
+  },
+  "WebSocket request": {
+    "prefix": "websocket",
+    "body": [
+      "@protocol websocket",
+      "@name ${1:Echo}",
+      "@timeout ${2:5000}",
+      "GET ${3:ws://localhost:8080}",
+      "",
+      "${4:{\"type\":\"ping\"}}",
+      "$0"
+    ],
+    "description": "Create a bounded WebSocket connect/send/receive/close request"
   }
 }

@@ -47,6 +47,7 @@ export const RequestFailureCategory = {
   Transport: 'transport',
   Assertion: 'assertion',
   Extraction: 'extraction',
+  Protocol: 'protocol',
   Unread: 'unread',
   Cancelled: 'cancelled',
 } as const;
@@ -313,6 +314,8 @@ export interface RunStatistics {
   readonly transportFailures: number;
   readonly assertionFailures: number;
   readonly extractionFailures: number;
+  /** GraphQL / protocol-adapter failures (`RequestFailureCategory.Protocol`). */
+  readonly protocolFailures: number;
 }
 
 /** Immutable summary produced when a run finishes, stops, or is cancelled. */
@@ -383,6 +386,8 @@ export function describeFailureCategory(
       return 'Assertion Failed';
     case RequestFailureCategory.Extraction:
       return 'Extraction Failed';
+    case RequestFailureCategory.Protocol:
+      return 'Protocol Error';
     case RequestFailureCategory.Unread:
       return 'Request Unavailable';
     case RequestFailureCategory.Cancelled:
@@ -429,6 +434,7 @@ export function buildRunStatistics(
   let transportFailures = 0;
   let assertionFailures = 0;
   let extractionFailures = 0;
+  let protocolFailures = 0;
 
   for (const result of results) {
     switch (result.outcome) {
@@ -465,6 +471,9 @@ export function buildRunStatistics(
       case RequestFailureCategory.Extraction:
         extractionFailures += 1;
         break;
+      case RequestFailureCategory.Protocol:
+        protocolFailures += 1;
+        break;
       default:
         break;
     }
@@ -486,5 +495,6 @@ export function buildRunStatistics(
     transportFailures,
     assertionFailures,
     extractionFailures,
+    protocolFailures,
   };
 }

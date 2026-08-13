@@ -116,6 +116,8 @@ export type {
 
   RuntimePathParameter,
 
+  RequestProtocol,
+
   RuntimeProxyOptions,
 
   RuntimeQueryParameter,

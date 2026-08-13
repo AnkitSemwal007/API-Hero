@@ -1,43 +1,18 @@
 # API Hero
 
-**Git-first REST/HTTP client for Visual Studio Code**
+**Git-first API development for VS Code**
 
-Author `.api` requests beside your code, organize them in Git-friendly collections, run with assertions, and expose the same collections to AI agents via a standalone MCP server — without leaving your editor workflow.
+Author `.api` requests beside your code, organize them in Git-friendly collections, run with assertions, and reuse the same workflows from MCP or the `apihero` CLI.
 
-> Extension ID: **`ankitsemwal.api-hero`** · Version: **2.10.0** · License: [MIT](LICENSE)
+> Extension ID: **`ankitsemwal.api-hero`** · Version: **2.11.0** · License: [MIT](LICENSE)
 
-[Documentation](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/README.md) · [Changelog](CHANGELOG.md) · [Support](SUPPORT.md)
+[Website](https://apihero.in/) · [Marketplace](https://marketplace.visualstudio.com/items?itemName=ankitsemwal.api-hero) · [npm CLI](https://www.npmjs.com/package/@ankitsemwal007/api-hero) · [Documentation](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/README.md) · [Changelog](CHANGELOG.md) · [Support](SUPPORT.md)
 
 <img src="https://res.cloudinary.com/iaojzqjd/image/upload/hero_iluitq.png" alt="API Hero hero" width="800" />
 
-### Quick answers
+Install from the Marketplace, open a folder workspace, create a `.api` request, and run it with `Ctrl+Alt+R` / `Cmd+Alt+R`.
 
-| Question | Answer |
-| --- | --- |
-| **What?** | A VS Code extension for editing and running HTTP requests as plain `.api` files, plus a headless `apihero` CLI and MCP server for CI / AI clients |
-| **Why?** | Keep APIs in Git, review them in PRs, and stay in the editor — no proprietary collection cloud |
-| **Different?** | File-first collections, VS Code Secret Storage for credentials, Collection Runner + Scenarios, MCP reuses the same execution pipeline |
-| **How to start?** | Install → open a folder workspace → create a `.api` request → Run (`Ctrl+Alt+R` / `Cmd+Alt+R`) |
-
-### Feature overview
-
-- **Native `.api` language** — request line, headers, body, directives, `expect` assertions, CodeLens
-- **Git-first Collections** — `Collections/<Name>/` folders you can diff and review
-- **Variables & environments** — `{{name}}` with clear precedence; collection variables in `api-hero.variables.json`; sensitive overlays gitignored
-- **Variable autocomplete** — `{{` completions with scope / environment labels; secret-safe detail (never cleartext)
-- **Authentication** — `none` / `basic` / `bearer` / `apiKey` profiles, Login API sessions, Secret Storage
-- **Assertions** — `expect` lines with Expected/Actual in Response Viewer and Run Reports
-- **Collection Runner + Reports** — run collection / folder / selected requests with failure policies, optional **Run Options** (retries + DELETE skip), and drill-down Reports
-- **Request Dependencies / data flow** — `@depends-on`, `@extract`, topo ordering, multi-hop chains, skip on upstream failure, cycle detection (Collection Runner)
-- **Scenarios (advanced)** — multi-step workflows under `.apihero/scenarios/` (separate from `@depends-on`)
-- **Import** — OpenAPI 3.x (file + URL), Postman Collection v2/v2.1, Insomnia export v3/v4, and cURL → `.api`
-- **Copy as cURL** — resolve variables + auth and copy a redacted POSIX cURL command (no HTTP)
-- **Failure Diagnostics** — **Possible causes** for common HTTP statuses and transport errors (Response Viewer, Run Report Details, MCP)
-- **Request/Response Diff** — Compare with Previous Run (in-session) and Compare Runs from Collection Run Manager
-- **TypeScript generation** — infer types from a successful JSON response body; Copy or Create `.ts`
-- **Request History** — metadata in VS Code global storage (`request-history.json`)
-- **AI / MCP** — nine `apihero_*` tools (including `apihero_run_scenario`) over the same runner (client-owned configuration)
-- **CLI / CI** — `apihero` npm bin runs request / collection / scenario headless (same orchestrator; `--json` for CI)
+**2.11.0** includes HTTP / REST, GraphQL-over-HTTP, bounded WebSocket sessions, Collections, Scenarios, Variables, Environments, Assertions, Extraction, OpenAPI / Postman / Insomnia / cURL import, TypeScript generation, MCP, and the `apihero` CLI.
 
 ---
 
@@ -49,45 +24,17 @@ Most API clients pull you into a separate app and opaque storage. API Hero keeps
 | --- | --- | --- |
 | Storage | `.api` files + folders in your repo | Proprietary cloud / local DB |
 | Diff / PR | Native Git | Export / sync friction |
-| Editor | VS Code native + custom editor | Separate app |
+| Editor | VS Code native + custom Request Editor | Separate app |
 | Secrets | VS Code Secret Storage | Vendor vault / plaintext risk |
-| AI agents | Standalone MCP over the same runner | Separate agent tooling |
+| AI / CI | MCP and `apihero` CLI over the same runner | Separate agent / CI tooling |
 
 No context switching. No binary collections. Same workflow as the rest of your codebase.
 
 ---
 
-## Quick Start
+## API Requests as Code
 
-1. **Install** — Marketplace: search **API Hero** or install `ankitsemwal.api-hero`. From a local build:
-
-   ```bash
-   npm install
-   npm run package
-   code --install-extension release/api-hero-2.9.1.vsix
-   ```
-
-   Requires VS Code **1.90+**.
-
-2. **Open a folder workspace** — Collections need a folder root (not a single loose file alone).
-
-3. **Create or open a `.api` request** — Activity Bar → **API Hero** → **Collections** → **New Collection** / **New Request**, or create a `.api` file.
-
-4. **Run** — **Ctrl+Alt+R** / **Cmd+Alt+R**, the editor **Run** button, or CodeLens **Run Request**.
-
-5. **Inspect** the **Response Viewer** (status, body, headers, assertions).
-
-6. **Organize** requests under `Collections/<Name>/` for Git-friendly layout and collection runs.
-
-### First request (copy-paste)
-
-```http
-### Hello
-GET https://httpbin.org/get
-Accept: application/json
-```
-
-### With variables and assertions (DummyJSON style)
+`.api` files are the source of truth. The language id is `api`. The **Request Editor** reads and writes the same grammar — or switch to plain text anytime.
 
 ```api
 @name Get Products
@@ -100,21 +47,7 @@ expect status == 200
 expect body.products exists
 ```
 
-Define `baseUrl` in collection variables (`api-hero.variables.json`), an environment, or settings — for DummyJSON typically `https://dummyjson.com`.
-
-<img src="https://res.cloudinary.com/iaojzqjd/image/upload/workflow_qsb5jj.gif" alt="API Hero workflow" width="800" />
-
-Open **API Hero: Open Overview** anytime for quick actions.
-
----
-
-## Request Files (`.api` syntax)
-
-`.api` files are plain text. The language id is `api`.
-
-### Methods
-
-`GET` `POST` `PUT` `PATCH` `DELETE` `HEAD` `OPTIONS`
+Define `baseUrl` in collection variables, an environment, or settings.
 
 ### Structure
 
@@ -131,11 +64,11 @@ optional body after a blank line
 expect status == 200
 ```
 
+- **Methods:** `GET` `POST` `PUT` `PATCH` `DELETE` `HEAD` `OPTIONS`
 - **Request line** — method + URL (may use `{{variables}}`)
 - **Headers** — one per line until a blank line
 - **Body** — anything after the blank line (before `expect` / next separator)
-- **Separators** — `###` starts a new request block
-- **`expect` lines** — after the request; evaluated when you run with assertions
+- **`expect` lines** — evaluated when you run with assertions
 
 ### Directives
 
@@ -150,53 +83,15 @@ expect status == 200
 | `@extract` | Extract from response into a variable |
 | `@sensitive-extract` | Extract and mark sensitive |
 | `@depends-on` | Dependency on another request (collection chaining) |
+| `@protocol graphql` | GraphQL query or mutation over HTTP |
+| `@protocol websocket` | Bounded WebSocket connect / send / receive / close |
 | `@tag` | Tag(s) |
 | `@connection` | Connection hint |
 | `@id` | Legacy request id (prefer stable names / paths) |
 
-### Variables
+### Request Editor
 
-Use `{{name}}` where `name` matches `[A-Za-z_][A-Za-z0-9_.-]*`.
-
-### `@extract` grammar
-
-```text
-@extract <name> from <source> [scope=…] [optional|required] [when=…]
-@sensitive-extract <name> from <source> …
-```
-
-- **Sources:** `body.<path>`, `header <Name>`, `status`
-- **Scopes:** `run` | `document` | `collection` | `environment` | `workspace`  
-  Default scope is `run`. **`scope=global` is not valid** for extract.
-- `@sensitive-extract` marks the value sensitive
-
-Example (DummyJSON login — placeholders only, never real secrets):
-
-```api
-@name Login
-@description Authenticate and extract tokens into collection variables.
-@extract token from body.accessToken scope=collection
-@extract refreshToken from body.refreshToken scope=collection
-
-POST {{baseUrl}}/auth/login
-Accept: application/json
-Content-Type: application/json
-
-{
-  "username": "{{username}}",
-  "password": "{{password}}",
-  "expiresInMins": 30
-}
-expect status == 200
-expect body.accessToken exists
-expect body.refreshToken exists
-```
-
----
-
-## Request Editor
-
-Custom editor view type: **`apiHero.requestEditor`** (default for `*.api`). Reads and writes the **same `.api` source** as the text editor — or switch to plain text anytime.
+Custom editor view type: **`apiHero.requestEditor`** (default for `*.api`).
 
 | Area | What you can do |
 | --- | --- |
@@ -215,110 +110,13 @@ Open via **API Hero: Open Request Editor** when the text editor is active.
 
 <img src="https://res.cloudinary.com/iaojzqjd/image/upload/screenshot-collections-editor_idcn2j.png" alt="Collections and Request Editor" width="800" />
 
-→ [Working with Collections](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/collections.md)
+→ [Creating requests](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/creating-requests.md) · [GraphQL](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/graphql.md) · [WebSocket](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/websocket.md)
+
+WebSocket Phase 1 is a **bounded** connect → optional text send → first text frame receive → close session. It is not a persistent WebSocket client.
 
 ---
 
-## Request Dependencies / Data Flow
-
-Chain requests so producers run before consumers. Collection Runner analyzes `@depends-on` and implicit produces/consumes (from `@extract` + `{{var}}` usage), then reorders the frozen membership plan.
-
-| Capability | Behavior |
-| --- | --- |
-| `@depends-on` | Explicit edge to another request by human-readable ref (`Login` or `Authentication/Login`) |
-| `@extract` | Pull values from status / headers / body into variables for later requests |
-| Ordering | Topological order before execution; notification when reordering was needed |
-| Multi-hop | Login → Current User → further dependents in one collection run |
-| Skip on failure | Upstream fail/skip → dependents skipped with a clear reason (not run with stale values) |
-| Cycle detection | Circular graphs **block the run** before any request executes |
-
-**Collection Runner honors dependencies.** A single **Run Request** from the editor does **not** auto-run upstream producers — ensure required variables already exist in a persisted scope (e.g. `scope=collection` from an earlier run) or run via Collection Runner.
-
-**Scenarios are separate** from `@depends-on`. Scenarios use `requestRef` + connections under `.apihero/scenarios/`; collection dependency scheduling is not imported into Scenario execution.
-
-### Example (DummyJSON-style)
-
-```api
-@name Login
-@description Authenticate and extract tokens into collection variables.
-@extract token from body.accessToken scope=collection
-@extract refreshToken from body.refreshToken scope=collection
-
-POST {{baseUrl}}/auth/login
-Accept: application/json
-Content-Type: application/json
-
-{
-  "username": "{{username}}",
-  "password": "{{password}}",
-  "expiresInMins": 30
-}
-expect status == 200
-expect body.accessToken exists
-```
-
-```api
-@name Current User
-@description Return the authenticated user for the Bearer token from Login.
-@depends-on Authentication/Login
-@extract userId from body.id scope=run
-
-GET {{baseUrl}}/auth/me
-Accept: application/json
-Authorization: Bearer {{token}}
-
-expect status == 200
-expect body.id exists
-```
-
-Optional third hop (same collection run):
-
-```api
-@name Get User
-@description Fetch a user by id extracted from Current User.
-@depends-on Authentication/Current User
-
-GET {{baseUrl}}/users/{{userId}}
-Accept: application/json
-Authorization: Bearer {{token}}
-
-expect status == 200
-```
-
-Use placeholders only for secrets (`{{username}}`, `{{password}}`). Sample collection: `examples/collections/DummyJSON Complete API Collection`.
-
-→ [Collection Runner](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/collection-runner.md)
-
----
-
-## Response Viewer
-
-Inspect status, timing, pretty/raw/JSON body, headers, and assertions. Copy or save the body, search within it, and create variables from the response (**Extract Variable…** / **Save as Variable**).
-
-| Capability | Notes |
-| --- | --- |
-| **Possible causes** | Failure Diagnostics for common HTTP statuses (401/403/404/422/429/5xx) and transport/timeout facts — never speculation as fact; secrets redacted |
-| **Compare with Previous Run** | In-session Previous vs Current diff (status, headers, JSON paths, text lines) over redacted presentations |
-| **Generate TypeScript** | Infer types from one successful JSON body; **Copy** or **Create .ts** |
-
-<img src="https://res.cloudinary.com/iaojzqjd/image/upload/screenshot-response_wt1caw.png" alt="Response Viewer" width="800" />
-
-→ [Response Viewer](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/response-viewer.md)
-
----
-
-## Export / Code generation
-
-| Action | Behavior |
-| --- | --- |
-| **Copy as cURL** | Resolve variables + auth **without** sending HTTP; copy a POSIX-safe cURL command with secrets redacted |
-| **Generate TypeScript** | From a successful JSON Response view — framework-free inference; type names from JSON keys only (never from sensitive string values) |
-
-Import cURL completes the round trip (paste → preview → `.api`). See [Import](#openapi-postman-insomnia--curl-import).
-
----
-
-## Collections
+## Collections & Workflows
 
 Layout:
 
@@ -333,27 +131,52 @@ Collections/<Name>/
 - **Discovery** — folders under `Collections/` appear in the Collections tree
 - **Run** — Run Collection, Run Folder, or Run Selected Requests
 - **Import / Export** — **API Hero: Import Collection** / **Export Collection**
-- **Dependencies** — `@depends-on` reorders runs; cycles block execution
 - Loose `.api` files outside Collections may appear under **Legacy** until moved
 
-→ [Collections](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/collections.md) · [Git workflow](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/git-workflow.md)
+**Collection Runner** executes many requests in a collection, folder, or selection. Live progress appears in the **Execution** view.
+
+- **Failure policies** (`apiHero.collectionRunner.failurePolicy`): `ask` (default), `stop-on-first-error`, `continue-on-error`, `skip-invalid-requests`
+- **Run Options** — optional retries for eligible transport failures and skip DELETE for the run
+- **Outcomes:** `passed` / `failed` / `skipped` / `cancelled`
+- **Open Live Report** / **Open Run Report** when finished
+
+<img src="https://res.cloudinary.com/iaojzqjd/image/upload/screenshot-execution_il1wy7.png" alt="Execution Center" width="800" />
+
+### Scenarios
+
+A **Scenario** automates **one** multi-step API workflow (steps, connections, shared data). That is distinct from Collection Runner, which runs **many** requests in a collection, folder, or selection.
+
+| | Collection Runner | Scenarios |
+| --- | --- | --- |
+| Focus | Many requests / regression | One workflow with steps |
+| Storage | `.api` under Collections | `.apihero/scenarios/*.scenario.json` |
+
+- **Scenario Editor**, **Run Scenario**, and a **Scenario Report** when the run finishes
+- Scenario variables and step outputs flow through the same execution pipeline as collections
+- The Scenarios Activity Bar view stays hidden until scenarios load or you create one
+
+CLI scenario `--inputs` is **not** supported. MCP `apihero_run_scenario` can pass optional `inputs` for that run — see [MCP](#mcp).
+
+→ [Collections](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/collections.md) · [Collection Runner](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/collection-runner.md) · [Scenarios](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/scenarios.md)
 
 ---
 
-## Variables / Environments
+## Variables & Environments
 
-### Syntax
+Use `{{name}}` where `name` matches `[A-Za-z_][A-Za-z0-9_.-]*`.
 
-`{{variableName}}` — names match `[A-Za-z_][A-Za-z0-9_.-]*`.
-
-### Precedence (highest → lowest)
+### Scopes and precedence (highest → lowest)
 
 1. **run**
-2. **document**
-3. **environment**
-4. **collection**
+2. **document** (Request in the UI — `@variable` in the `.api` file)
+3. **environment** (the **active** named environment)
+4. **collection** (`Collections/<Name>/api-hero.variables.json`)
 5. **workspace**
 6. **global**
+
+Environments are workspace-level named variable sets — they are **not** bound to a collection. Collection variables apply only to requests in that collection.
+
+OS `process.env` is **not** mapped automatically to `{{variable}}`.
 
 ### Where values live
 
@@ -368,39 +191,81 @@ Collections/<Name>/
 
 <img src="https://res.cloudinary.com/iaojzqjd/image/upload/screenshot-environments_wfx7z1.png" alt="Environment Manager" width="800" />
 
-→ [Environments](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/environments.md) · [Variables](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/variables.md)
-
----
-
-## Authentication
+### Authentication
 
 **Providers only:** `none` · `basic` · `bearer` · `apiKey`
 
-| Capability | Notes |
-| --- | --- |
-| Profiles | **API Hero: Manage Authentication** |
-| Credential sources | `secret` (Secret Storage), `variable`, `literal` + `unsafe: true` |
-| Login API / Session | Obtain tokens via your API; access/refresh in Secret Storage |
-| One-shot Bearer | Request Editor only; not persisted to `.api` |
-| Collection default | **Set Collection Default Authentication** |
-| Attach in file | `@auth <profile-id>` (id, not label) |
+Profiles live in **API Hero: Manage Authentication**. Attach with `@auth <profile-id>`, a collection default, or a one-shot Bearer in the Request Editor (not persisted to `.api`).
 
-### Resolution order
+**OAuth2 Account Login is not available.** Authentication Login API (session login against *your* API) **is** included — that is separate from Account Login.
 
-1. Ephemeral **one-shot** (that run only)
-2. Request **`@auth`**
-3. Document **`@auth`** (when distinct from the request binding)
-4. **Collection** default authentication
-5. **Session** default profile
-6. **none**
-
-**OAuth2 Account Login is not available** (palette stubs are hidden). Authentication Login API (session login against *your* API) **is** included — that is separate from Account Login.
-
-→ [Authentication](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/authentication.md)
+→ [Variables](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/variables.md) · [Environments](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/environments.md) · [Authentication](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/authentication.md)
 
 ---
 
-## Assertions
+## Dependencies & Extraction
+
+Chain requests so producers run before consumers. Collection Runner analyzes `@depends-on` and implicit produces/consumes (from `@extract` + `{{var}}` usage), then reorders the frozen membership plan.
+
+| Capability | Behavior |
+| --- | --- |
+| `@depends-on` | Explicit edge to another request by human-readable ref (`Login` or `Authentication/Login`) |
+| `@extract` | Pull values from status / headers / body into variables for later requests |
+| Ordering | Topological order before execution |
+| Multi-hop | Login → Current User → further dependents in one collection run |
+| Skip on failure | Upstream fail/skip → dependents skipped with a clear reason |
+| Cycle detection | Circular graphs **block the run** before any request executes |
+
+**Collection Runner honors dependencies.** A single **Run Request** from the editor does **not** auto-run upstream producers — ensure required variables already exist in a persisted scope (e.g. `scope=collection` from an earlier run) or run via Collection Runner.
+
+**Scenarios are separate** from `@depends-on`. Scenarios use `requestRef` + connections under `.apihero/scenarios/`.
+
+### `@extract` grammar
+
+```text
+@extract <name> from <source> [scope=…] [optional|required] [when=…]
+@sensitive-extract <name> from <source> …
+```
+
+- **Sources:** `body.<path>`, `header <Name>`, `status`
+- **Scopes:** `run` | `document` | `collection` | `environment` | `workspace`
+  Default scope is `run`. **`scope=global` is not valid** for extract.
+
+Example (placeholders only — never real secrets):
+
+```api
+@name Login
+@extract token from body.accessToken scope=collection
+
+POST {{baseUrl}}/auth/login
+Accept: application/json
+Content-Type: application/json
+
+{
+  "username": "{{username}}",
+  "password": "{{password}}"
+}
+expect status == 200
+```
+
+```api
+@name Current User
+@depends-on Authentication/Login
+@extract userId from body.id scope=run
+
+GET {{baseUrl}}/auth/me
+Authorization: Bearer {{token}}
+
+expect status == 200
+```
+
+Sample collection: `examples/collections/DummyJSON Complete API Collection`.
+
+→ [Collection Runner](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/collection-runner.md)
+
+---
+
+## Testing & Assertions
 
 Add `expect` lines after a request. Run with assertions via CodeLens or **Run Request with Assertions**.
 
@@ -423,97 +288,128 @@ Expected/Actual appear in the **Response Viewer** and **Run Report Details**. In
 
 ---
 
-## Request Execution
+## Import Existing APIs
 
-Lifecycle for a single request:
+Bring existing definitions into Git-first `.api` collections. Preview before write. Secrets are masked. Scripts are never executed.
 
-**parse → validate → variables → authentication → build → HTTP → assertions → extraction**
-
-### Failure categories (labels)
-
-| Category | Label |
+| Source | Support |
 | --- | --- |
-| `precondition` | Validation Failed |
-| `transport` | Network Error |
-| `assertion` | Assertion Failed |
-| `extraction` | Extraction Failed |
-| `unread` | Request Unavailable |
-| `cancelled` | Cancelled |
+| **OpenAPI** | **3.0.x** and **3.1.x**, JSON or YAML, from a **local file** or **HTTP(S) URL** |
+| **Postman** | Collection **v2 / v2.1** JSON (local file) |
+| **Insomnia** | Resource-based export **v3 / v4** JSON (local file) |
+| **cURL** | Single command → one `.api` file; parsed **in-process** (no shell execution) |
 
-**`httpRequestSent`** — `true` when a network attempt ran; `false` when failure happened before send (e.g. validation / unread). Use this to distinguish “never left the client” from HTTP/assertion/extraction failures after a response.
+- **API Hero: Import OpenAPI Specification** — wizard → Collections + `.api` files
+- **API Hero: Import Postman Collection** — preserves folders, methods, URLs, `{{variables}}`, headers/query/body, and bearer/basic/apiKey auth; scripts are warnings only
+- **API Hero: Import Insomnia Export** — preserves nested folders, methods, URLs, environments, and bearer/basic/apiKey auth; Insomnia-only resource types are not migrated
+- **API Hero: Import cURL** — paste, editor selection, or text file → masked preview → save one `.api` file (round trip with **Copy as cURL**). `@file` bodies are not read from disk
+- Imported environments are created and selectable; an **existing active environment is preserved**
+- Size limit: `apiHero.import.maxFileBytes` (default 5 MiB) for OpenAPI/Postman/Insomnia; cURL paste capped at 256 KiB
 
----
+**Not supported:** Swagger 2.0, Insomnia Document / YAML v5, HAR, GraphQL **import** (Postman/Insomnia stub only), remote `$ref`, OAuth2 as a live auth flow, authenticated specification URLs, Postman/Insomnia script execution, gRPC / WebSocket request resources from Insomnia.
 
-## Collection Runner
-
-- **Run Collection** / **Run Folder** / **Run Selected Requests**
-- Live progress in the **Execution** Activity Bar view
-- **Failure policies** (`apiHero.collectionRunner.failurePolicy`):
-  - `ask` (default — prompt each run)
-  - `stop-on-first-error`
-  - `continue-on-error`
-  - `skip-invalid-requests`
-- **Run Options** — optional retries (transport / `408`/`429`/`5xx`) and skip DELETE for the run; Attempts list shows progress; only the **final** attempt writes extracts / history
-- **Outcomes:** `passed` / `failed` / `skipped` / `cancelled`
-- **Dependencies** reorder; **cycles block** the run
-- **Open Live Report** / **Open Run Report** when finished
-
-<img src="https://res.cloudinary.com/iaojzqjd/image/upload/screenshot-execution_il1wy7.png" alt="Execution Center" width="800" />
-
-→ [Collection Runner](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/collection-runner.md)
+→ [OpenAPI Import](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/openapi-import.md)
 
 ---
 
-## Run Reports
+## Debugging & Reports
 
-After a collection/folder/selection run, inspect:
+### Response Viewer
+
+Inspect status, timing, pretty/raw/JSON body, headers, and assertions. Copy or save the body, search within it, and create variables from the response (**Extract Variable…** / **Save as Variable**).
+
+<img src="https://res.cloudinary.com/iaojzqjd/image/upload/screenshot-response_wt1caw.png" alt="Response Viewer" width="800" />
+
+### Failure Diagnostics
+
+When a request fails, API Hero can show **Possible causes** next to recorded facts (status, URL, timing, transport error). Guidance covers common HTTP statuses and network/timeout failures. It is structured context to help you investigate — not a guaranteed root-cause diagnosis. Secrets stay redacted.
+
+The same explanations appear in Run Report **Details** and in MCP diagnostic fields.
+
+### Request/Response Diff
+
+Compare results **within the current run/session**:
+
+- **Compare with Previous Run** — Previous vs Current for the same request in this session (status, headers, JSON paths, text lines) over already-redacted presentations
+- **Compare Runs** — from Collection Run Manager / Report Details when a prior recent collection-run presentation exists for that request
+
+This is **not** persistent History body comparison. History stores metadata only.
+
+### Run Reports & Variable Trace
+
+After a collection/folder/selection run:
 
 - Compact summary counts (total / passed / failed / skipped / cancelled)
-- Compact per-request rows with **outcome / method / search** filters and **folder grouping**
-- Compact **Variables** status in the header (expand for Variable Trace / unresolved names)
-- **Details** drill-down — Response, Headers, Assertions (Expected/Actual), Variables, Execution Details, Dependencies, and **Possible causes** when a failure/status explanation applies
-- **Compare Runs** — when a prior recent collection-run presentation exists for that request (Details)
+- Per-request rows with outcome / method / search filters
+- **Variable Trace** — produced and consumed names (expand for unresolved names)
+- **Details** — Response, Headers, Assertions (Expected/Actual), Variables, Execution Details, Dependencies, and **Possible causes** when applicable
 
 The Collection Run Debugger holds the **last run in memory** — it is **not** Request History.
 
 <img src="https://res.cloudinary.com/iaojzqjd/image/upload/screenshot-run-report_pxwll2.png" alt="Run Report" width="800" />
 
----
+### Request History
 
-## Security
+**Storage:** VS Code extension **`globalStorageUri`** file **`request-history.json`**.
 
-| Concern | Behavior |
-| --- | --- |
-| Auth credentials | VS Code **Secret Storage** via Manage Authentication |
-| Sensitive variables | Masked in UI as `••••••••`; local overlays gitignored |
-| MCP | Tool payloads redacted (tokens, passwords, sensitive headers/keys) |
-| cURL import | Parsed **in-process** — never shells out; preview masks secrets; sensitive headers become placeholders in written `.api` |
-| Copy as cURL | Secrets redacted by default |
-| Import previews | OpenAPI / Postman / Insomnia / cURL wizards mask secrets before write |
+- Metadata only — **no response bodies**
+- Cap via `apiHero.history.maxEntries` (default **1000**)
+- Actions: re-run, reveal original request, filter, clear, copy summary
 
-Never commit real secrets in README examples or committed `api-hero.variables.json`.
+<img src="https://res.cloudinary.com/iaojzqjd/image/upload/screenshot-history_k4zaq3.png" alt="History" width="800" />
+
+→ [Response Viewer](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/response-viewer.md) · [History](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/history.md)
 
 ---
 
-## VS Code experience
+## TypeScript Generation
 
-- **Activity Bar** — Collections, Execution, History (Scenarios when disclosed)
-- **Request Editor** — UI tabs over the same `.api` source
-- **Command Palette** — `API Hero: …` for Run, Import, Auth, Environments, Diff, TypeScript, MCP docs paths
-- **Collection Runner** + **Run Reports** — progress, filters, Details, Compare Runs
-- **Import** — OpenAPI (file/URL), Postman, Insomnia, cURL
-- **Variable autocomplete** — `{{` in `.api` and Request Editor
-- **Diff / TypeScript** — from Response Viewer and report Details
-- **MCP** — standalone stdio server; client-owned configuration (installing the extension does not register MCP)
-- **CLI** — `apihero` on npm (`npm install -g @ankitsemwal007/api-hero`); Marketplace install does not put the CLI on PATH
+Generate TypeScript **types/interfaces** from a successful JSON response body (Response Viewer or **API Hero: Generate TypeScript**).
+
+- Inference from **this one observed body** — not a complete API schema
+- **Copy** to the clipboard or **Create .ts**
+- Type names come from JSON keys only (never from sensitive string values)
+
+This is type generation, not arbitrary application code generation.
 
 ---
 
-## CLI / CI (`apihero`)
+## MCP
 
-Headless runner for CI and terminals — **same** Orchestrator / Collection Runner / ScenarioEngine as the extension and MCP (no VS Code UI).
+API Hero includes a **Model Context Protocol** server so AI clients can inspect and run the same API workflows you keep in Git.
 
-npm package: **`@ankitsemwal007/api-hero`** (unscoped `api-hero` is reserved for the VS Code Marketplace extension id `ankitsemwal.api-hero`).
+```text
+AI Client
+    ↓
+API Hero MCP (standalone Node stdio)
+    ↓
+Collection Runner / Execution Orchestrator
+    ↓
+Existing execution pipeline
+```
+
+<img src="https://res.cloudinary.com/iaojzqjd/image/upload/v1786432275/api-hero-mcp_hrx7xa.gif" alt="API Hero MCP workflow" width="800" />
+
+- MCP is **not** a second HTTP client — it reuses discovery, Collection Runner, ScenarioEngine, and Execution Orchestrator
+- Runs as an **independent Node stdio process** (not inside the VS Code extension host)
+- Tools for listing collections/requests, running a request or collection, running a scenario (optional MCP `inputs`), and reading redacted run results
+- Headless hosts load filesystem collections and `.apihero` Project Store environments / auth profiles. VS Code settings globals and VS Code Secret Storage are not available — supply secrets via process environment (`APIHERO_SECRET_*` or exact Secret Storage keys)
+- **Installing the VS Code extension does not register MCP** with Codex, Cursor, Claude, or any other client. Configuration is **client-owned**.
+
+Bin: `api-hero-mcp` (also `node ./dist/mcp/server.js`). Workspace priority: `--workspace` → `APIHERO_WORKSPACE` → `cwd`. Requires **Node.js 18+**.
+
+After installing `@ankitsemwal007/api-hero` from npm, clients can spawn `api-hero-mcp`. From a repo checkout, compile first (`npm run compile`).
+
+→ Full guide: [docs/user/mcp.md](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/mcp.md)
+
+---
+
+## CLI
+
+The **`apihero`** CLI is public and shipped on npm. It runs the same Orchestrator / Collection Runner / ScenarioEngine as the extension and MCP — without VS Code.
+
+npm package: **`@ankitsemwal007/api-hero`** (binary: `apihero`).
+Marketplace extension id remains **`ankitsemwal.api-hero`**. Installing the VS Code extension does **not** put `apihero` on PATH.
 
 ```bash
 npm install -g @ankitsemwal007/api-hero
@@ -523,334 +419,46 @@ apihero run collection Demo --workspace . --json
 apihero run scenario checkout --workspace . --quiet
 ```
 
-Workspace priority: `--workspace` → `APIHERO_WORKSPACE` → `cwd`. Exit codes: **0** success · **1** execution failure · **2** usage · **3** config/not found · **4** auth/secrets. Use `--json` for redacted machine-readable output.
+Use `--json` in CI for a redacted machine-readable envelope on stdout.
 
-→ [CLI guide](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/cli.md)
+**Not included:** `--var`, OS `process.env` → `{{variable}}`, scenario `--inputs`, parent-directory workspace discovery, Docker, watch mode, or parallel execution.
 
----
-
-## Request History
-
-**Storage:** VS Code extension **`globalStorageUri`** file **`request-history.json`** (extension global storage).
-
-- Metadata only — **no response bodies**
-- **Not** `.apihero/history/` — that directory is **reserved / deferred** and gitignored; it is **not** active request history
-- Cap via `apiHero.history.maxEntries` (default **1000**)
-- Actions: re-run, reveal original request, filter, clear, copy summary
-
-<img src="https://res.cloudinary.com/iaojzqjd/image/upload/screenshot-history_k4zaq3.png" alt="History" width="800" />
-
-→ [History](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/history.md)
+→ [CLI guide](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/cli.md) · [npm package](https://www.npmjs.com/package/@ankitsemwal007/api-hero)
 
 ---
 
-## Scenarios (advanced)
+## Installation
 
-Scenarios automate **one multi-step API workflow** (branches, shared data). They are **advanced** — distinct from Collection Runner (which runs **many** requests in a collection/folder/selection).
+### VS Code
 
-| | Collection Runner | Scenarios |
-| --- | --- | --- |
-| Focus | Many requests / regression | One workflow with steps |
-| Storage | `.api` under Collections | `.apihero/scenarios/*.scenario.json` |
+Install **API Hero** from the [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=ankitsemwal.api-hero) (`ankitsemwal.api-hero`). Requires VS Code **1.90+**.
 
-- **Canonical path:** `.apihero/scenarios/*.scenario.json`
-- **Legacy:** `.api-hero/scenarios/` migrates automatically into `.apihero/scenarios/` (byte-preserving; never overwrites differing canonical files)
-- **Progressive disclosure:** Scenarios Activity Bar view stays hidden until scenarios load or you create one (`apiHero.scenariosVisible`); then it stays visible for that workspace
-- **Scenario Editor**, **Run Scenario**, **Scenario Report**, starter templates
+1. Open a **folder workspace** (Collections need a folder root).
+2. Activity Bar → **API Hero** → **Collections** → **New Collection** / **New Request**, or create a `.api` file.
+3. **Run** — **Ctrl+Alt+R** / **Cmd+Alt+R**, the editor **Run** button, or CodeLens **Run Request**.
+4. Inspect the **Response Viewer**.
 
-→ [Scenarios](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/scenarios.md)
-
----
-
-## OpenAPI, Postman, Insomnia & cURL import
-
-- **Supported:** OpenAPI **3.0.x** / **3.1.x** JSON or YAML from a **local file** or **HTTP(S) URL**; Postman Collection **v2 / v2.1** JSON (local file); Insomnia resource-based export **v3 / v4** JSON (local file); single **cURL** command → one `.api` file
-- **API Hero: Import OpenAPI Specification** — wizard → Collections + `.api` files (same serializer as the Request Editor; URL fetch uses the same importer)
-- **API Hero: Import Postman Collection** — wizard → Collections + `.api` files; preserves folders, methods, URLs, `{{variables}}`, headers/query/body (raw JSON, form-urlencoded, form-data), and bearer/basic/apiKey auth profiles; scripts are **not** executed or migrated (warnings only)
-- **API Hero: Import Insomnia Export** — wizard → Collections + `.api` files; preserves nested folders (`request_group`), methods, URLs, `{{ }}` refs, headers/query/body, environments, and bearer/basic/apiKey auth; scripts and Insomnia-only resource types are **not** executed or migrated (warnings only)
-- **API Hero: Import cURL** — paste, editor selection, or text file → in-process parse (no shell) → masked preview → save one `.api` file (round trip with **Copy as cURL**). Unsupported transfer/TLS flags are ignored with warnings; `@file` bodies are not read from disk
-- **Environments:** imported server / collection / Insomnia environments are created and selectable; an **existing active environment is preserved** (not replaced)
-- **Size limit:** `apiHero.import.maxFileBytes` (default 5 MiB) for OpenAPI/Postman/Insomnia; cURL paste capped at 256 KiB
-
-**Not supported:** Swagger 2.0, Insomnia Document / YAML v5, HAR, GraphQL (best-effort stub only from Postman/Insomnia), remote `$ref`, OAuth2 as a live auth flow, automatic assertion generation from the spec, authenticated specification URLs, Postman/Insomnia script execution, gRPC / WebSocket / GraphQL request resources from Insomnia, curl proxy/`-k`/`-L`/output/cert flags (ignored), shell execution of pasted curl.
-
-→ [OpenAPI Import](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/openapi-import.md)
-
----
-
-## AI Agents / MCP
-
-```text
-AI Client
-    ↓
-API Hero MCP (standalone Node stdio)
-    ↓
-Collection Runner / Execution Orchestrator
-    ↓
-Existing HTTP execution pipeline
-```
-
-<img src="https://res.cloudinary.com/iaojzqjd/image/upload/v1786432275/api-hero-mcp_hrx7xa.gif" alt="API Hero MCP workflow: Codex lists collections, runs Get Products via apihero_* tools, receives HTTP 200 and assertion diagnostics" width="800" />
-
-*Codex-style MCP walkthrough — list collections (`DummyJSON Complete API Collection`), run `Get Products` through API Hero’s execution engine, inspect the HTTP response, then read structured assertion diagnostics (Expected / Actual) when a check fails.*
-
-- MCP is **not** a second HTTP engine — it reuses discovery, Collection Runner, and Execution Orchestrator
-- Runs as an **independent Node stdio process** (not inside the VS Code extension host)
-- Headless MCP discovers **filesystem collections** (`Collections/<Name>/` + collection variables) and loads **`.apihero` Project Store** environments / auth profiles when present. VS Code settings globals and VS Code Secret Storage are not available in headless hosts — supply secrets via process environment (`APIHERO_SECRET_*` or exact Secret Storage keys)
-- **Installing the VS Code extension does not register MCP** with Codex, Cursor, Claude, or any other client
-- Target clients: **Codex**, **Cursor**, **Claude / Claude Code**, and other MCP-compatible tools
-- Configuration is **client-owned** — API Hero does not modify client config files
-
-→ Full guide: [docs/user/mcp.md](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/mcp.md)
-
----
-
-## MCP Server
-
-| Entry | Notes |
-| --- | --- |
-| Bin | `api-hero-mcp` → `bin/api-hero-mcp.js` → `dist/mcp/server.js` |
-| Direct | `node ./dist/mcp/server.js` |
-| Script | `npm run mcp` (compile + run) |
-
-**Workspace resolve priority** (first wins):
-
-1. `--workspace "<path>"` / `--workspace=<path>`
-2. `APIHERO_WORKSPACE`
-3. Process `cwd`
-
-Fail-fast if `--workspace` is present **without** a value. An empty or non-collection path still **starts** the server; tools return `EMPTY_WORKSPACE` when no `Collections/<Name>/` trees are found. Prefer pointing `--workspace` at a workspace root that contains collections. Requires **Node.js 18+**.
+From a local build:
 
 ```bash
-# After npm run compile (repo) or from an installed extension path:
-node ./dist/mcp/server.js --workspace "/absolute/path/to/your-api-workspace"
-# Bin wrapper (after local npm link / install of this package — not a public npm registry package):
-# node ./bin/api-hero-mcp.js --workspace "/absolute/path/to/your-api-workspace"
+npm install
+npm run package
+code --install-extension release/api-hero-2.11.0.vsix
 ```
 
----
+Open **API Hero: Open Overview** anytime for quick actions.
 
-## MCP Tools
+<img src="https://res.cloudinary.com/iaojzqjd/image/upload/workflow_qsb5jj.gif" alt="API Hero workflow" width="800" />
 
-All tools return a JSON envelope `{ ok: true, data }` or `{ ok: false, error }`, redacted for secrets.
+### CLI
 
-| Tool | Purpose | Inputs | Notes |
-| --- | --- | --- | --- |
-| `apihero_list_collections` | List collections | *(none)* | `EMPTY_WORKSPACE` if no `Collections/<Name>/` |
-| `apihero_get_collection` | Collection detail, folders, variable metadata, auth metadata | **required** `collection` | Sensitive values masked |
-| `apihero_list_requests` | List requests | **required** `collection`; **optional** `folder` | |
-| `apihero_get_request` | Request details + auth metadata + variable refs | **optional** `collection`, `request`, `requestId` | Resolve by collection+name or `requestId` |
-| `apihero_run_request` | Run one request | **optional** `collection`, `request`, `requestId` | Full redacted response presentation |
-| `apihero_run_collection` | Run a collection | **required** `collection`; **optional** `failurePolicy` | Slim per-request rows; use get_request_result for full bodies |
-| `apihero_run_scenario` | Run a Scenario | **optional** `scenario`, `inputs` | Same `ScenarioEngine` path as UI Run Scenario |
-| `apihero_get_run` | Run summary by id | **required** `runId` | |
-| `apihero_get_request_result` | One request result from a run | **required** `runId`, `request` | Full secret-redacted response |
-
-`failurePolicy` for `apihero_run_collection`: `stop-on-first-error` | `continue-on-error` | `skip-invalid-requests` (tool default: continue-on-error). Prefer collection **display names** (case-insensitive).
-
----
-
-## MCP Configuration
-
-API Hero does **not** write client configs. **"API Hero: Configure MCP for Codex" is not implemented.**
-
-### Generic (`mcpServers` JSON)
-
-```json
-{
-  "mcpServers": {
-    "api-hero": {
-      "command": "node",
-      "args": [
-        "/absolute/path/to/api-hero/dist/mcp/server.js",
-        "--workspace",
-        "/absolute/path/to/your-api-workspace"
-      ]
-    }
-  }
-}
+```bash
+npm install -g @ankitsemwal007/api-hero
+apihero --version
+apihero --help
 ```
 
-### Codex (`~/.codex/config.toml`)
-
-Installing the extension ≠ MCP registered. Add:
-
-```toml
-[mcp_servers.api-hero]
-command = "node"
-args = [
-  "C:/Users/<you>/.vscode/extensions/ankitsemwal.api-hero-2.9.1/dist/mcp/server.js",
-  "--workspace",
-  "D:/path/to/your-api-workspace"
-]
-```
-
-Replace `<you>` and paths. macOS/Linux: `~/.vscode/extensions/ankitsemwal.api-hero-<version>/dist/mcp/server.js`. Restart/reload Codex after edits.
-
-### Cursor
-
-Project `.cursor/mcp.json` or Cursor MCP settings — same `command` / `args` / `--workspace` pattern.
-
-### Claude Desktop / Claude Code
-
-`claude_desktop_config.json` or `claude mcp add` with the same Node command, `dist/mcp/server.js`, and `--workspace`.
-
----
-
-## MCP Example Workflow
-
-1. `apihero_list_collections` — discover workspace
-2. `apihero_get_collection` — inspect folders / variables / auth metadata
-3. `apihero_list_requests` — find targets
-4. `apihero_get_request` — inspect one request
-5. `apihero_run_request`, `apihero_run_collection`, or `apihero_run_scenario`
-6. `apihero_get_run` — summary / status
-7. `apihero_get_request_result` — full redacted response; inspect failure diagnostics
-
-Sample collection: copy `examples/collections/DummyJSON Complete API Collection` into a workspace `Collections/` folder and point `--workspace` at that workspace root.
-
----
-
-## MCP Security / Redaction
-
-Before tool JSON is returned, API Hero redacts:
-
-- Passwords and password-like fields
-- JWTs / compact token strings
-- `accessToken` / `refreshToken` (and similar) in JSON bodies
-- `Bearer` / `Basic` credentials in text and headers
-- Sensitive JSON keys (token, secret, apiKey, authorization, …)
-- Token-like assertion Expected/Actual values
-- Sensitive headers (masked presentation)
-
-Masked values appear as **`••••••••`**.
-
-Headless MCP uses a **process-env SecretStore** (exact Secret Storage keys or `APIHERO_SECRET_*`) — not VS Code Secret Storage. Prefer **variables** or injected process-env secrets for agent workspaces. **Never** put real secrets in README examples or committed `api-hero.variables.json`.
-
----
-
-## Workspace Layout
-
-Project-store layout under **`.apihero/`** (canonical paths created by Initialize Project Store). Day-to-day **environments** and **workspace/global variables** also still use VS Code settings (`apiHero.environments`, `apiHero.variables.*`) — dual-read with the project store until settings are fully deprecated.
-
-```text
-Collections/<Name>/          # requests, folders, api-hero.variables.json, markers
-.apihero/
-  config.json
-  workspace.json
-  environments/
-  auth/profiles.json         # metadata; secrets in Secret Storage
-  scenarios/*.scenario.json
-  local/                     # gitignored — variables.local.json, etc.
-  cache/                     # gitignored
-  history/                   # reserved/deferred — NOT active request history
-```
-
-| Concern | Location |
-| --- | --- |
-| Requests / collections | `Collections/` (commit) |
-| Project config / scenarios | `.apihero/` (commit non-secret parts) |
-| Environments / workspace vars (UI) | Settings + project store (dual-read) |
-| Local secrets / overlays | `.apihero/local/` (do **not** commit) |
-| Auth credentials | VS Code **Secret Storage** |
-| Request History | Extension **globalStorageUri** / `request-history.json` |
-
----
-
-## Git Workflow
-
-**Commit:** `.api` files, collection folders, non-secret collection variables, scenarios, appropriate `.apihero` config.
-
-**Do not commit:** secrets, `.apihero/local/`, credentials, or anything that belongs in Secret Storage.
-
-→ [Git workflow](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/git-workflow.md)
-
----
-
-## Troubleshooting
-
-| Symptom | What to check |
-| --- | --- |
-| Won't run | Folder workspace open? `.api` focused? Run shortcut / CodeLens? |
-| Lexer / syntax errors | Request line, blank line before body, `###` separators, `expect` placement |
-| Unresolved variables | Precedence + spelling; collection `api-hero.variables.json` / active environment |
-| Auth failures | Profile id vs label; Secret Storage populated; one-shot vs `@auth` vs collection default |
-| Assertion failures | Expected/Actual in Response Viewer; operator/subject spelling |
-| Collection failures | Failure policy; dependencies/cycles; Execution + Run Report Details |
-| Scenarios not visible | Create a scenario or load existing `.apihero/scenarios/` (progressive disclosure) |
-| MCP tools unavailable | Client config present? Server path exists? Node 18+? |
-| Codex/Cursor can't see API Hero | **Extension installed ≠ MCP registered** — add client MCP entry yourself |
-| MCP won't start | `--workspace` missing value (fail-fast); `dist/mcp/server.js` missing → `npm run compile` |
-| Workspace not discovered | Path must be workspace **root** containing `Collections/<Name>/` (`EMPTY_WORKSPACE`) |
-
-→ [Troubleshooting](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/troubleshooting.md) · [MCP guide](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/mcp.md)
-
----
-
-## FAQ
-
-**What is the extension ID?**  
-`ankitsemwal.api-hero`. Commands use the `apiHero.*` prefix.
-
-**Why Collections, Execution, and History in the Activity Bar?**  
-Those three are the default views. **Scenarios** appears after a successful scenario load or when you create a scenario, then stays visible for that workspace.
-
-**Is GraphQL supported?**  
-No. API Hero targets REST/HTTP `.api` requests.
-
-**Is OAuth2 supported?**  
-Not yet. Use `basic`, `bearer`, or `apiKey`. OAuth2 Account Login is not available.
-
-**Does History store response bodies?**  
-No. Entries are sanitized metadata for browse, filter, and re-run.
-
-**Where is history stored?**  
-VS Code extension `globalStorageUri` as `request-history.json` — not `.apihero/history/`.
-
-**Can I run an entire `.api` file at once?**  
-**Run File** is a stub. Use Collection Runner for multi-request runs, or run one request at a time.
-
-**Does installing the extension configure Codex/Cursor/Claude MCP?**  
-No. MCP registration is client-owned. Configure each client yourself.
-
-**Is “Configure MCP for Codex” available?**  
-No — not implemented.
-
-**Is there a headless CLI / CI runner?**  
-Yes. Install `@ankitsemwal007/api-hero` (`npm install -g @ankitsemwal007/api-hero`) and run `apihero run request|collection|scenario`. Same headless runtime as MCP (no VS Code required). See [CLI guide](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/cli.md).
-
-**Where are settings documented?**  
-[Configuration](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/reference/configuration.md) · [Commands](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/reference/commands.md) · [FAQ](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/faq.md)
-
----
-
-## Keyboard shortcuts
-
-| Action | Shortcut |
-| --- | --- |
-| Run Request | `Ctrl+Alt+R` / `Cmd+Alt+R` (`.api` editor focused) |
-
-More actions: Command Palette (`API Hero: …`) and view title / context menus. Rename/delete in Collections use `F2` / `Delete` when the tree is focused.
-
----
-
-## Settings
-
-Open **API Hero: Open Settings** or filter Settings with `@ext:ankitsemwal.api-hero`.
-
-Notable keys:
-
-- `apiHero.requestTimeout` · `apiHero.maxResponseBytes`
-- `apiHero.history.maxEntries`
-- `apiHero.environments` · `apiHero.activeEnvironment`
-- `apiHero.authentication.profiles`
-- `apiHero.collectionRunner.failurePolicy`
-- `apiHero.import.maxFileBytes`
-- `apiHero.languageFeatures.hover` / `outline` / `diagnostics`
-- `apiHero.variables.global` / `apiHero.variables.workspace`
-- `apiHero.logLevel`
-
-→ [Configuration reference](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/reference/configuration.md)
+Requires **Node.js 18+**. See [CLI](#cli).
 
 ---
 
@@ -858,21 +466,22 @@ Notable keys:
 
 | Topic | Link |
 | --- | --- |
+| Website | [apihero.in](https://apihero.in/) |
 | Docs home | [docs/README.md](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/README.md) |
 | Getting started | [getting-started.md](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/getting-started.md) |
+| GraphQL | [graphql.md](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/graphql.md) |
+| WebSocket | [websocket.md](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/websocket.md) |
+| CLI | [cli.md](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/cli.md) |
 | MCP for AI agents | [mcp.md](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/mcp.md) |
-| Product overview | [product/README.md](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/product/README.md) |
-| Marketplace assets | [marketplace-assets.md](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/release/marketplace-assets.md) |
-| Release notes 2.9.1 | [v2.9.1-release-notes.md](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/release/v2.9.1-release-notes.md) |
-| Release notes 2.9.0 | [v2.9.0-release-notes.md](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/release/v2.9.0-release-notes.md) |
+| Configuration | [configuration.md](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/reference/configuration.md) |
+| Release notes 2.11.0 | [v2.11.0-release-notes.md](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/release/v2.11.0-release-notes.md) |
+| Release notes 2.10.1 | [v2.10.1-release-notes.md](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/release/v2.10.1-release-notes.md) |
 
 Listing media (hero, screenshots, banner, social preview, workflow GIF) is hosted on **Cloudinary** so the VSIX stays small. Extension icons still ship in-package.
 
 Also used for listing / social: [banner](https://res.cloudinary.com/iaojzqjd/image/upload/banner_psgrx2.png), [social preview](https://res.cloudinary.com/iaojzqjd/image/upload/social-preview_jspifx.png).
 
----
-
-## Development / Contributing
+### Development
 
 ```bash
 npm install
@@ -885,33 +494,6 @@ npm run package
 
 - `npm run mcp` — compile and start the MCP server on stdio
 - See [CONTRIBUTING.md](CONTRIBUTING.md) and [development docs](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/development/README.md)
-- Stable contribution IDs must not change casually — [stable-identifiers.md](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/release/stable-identifiers.md)
-
----
-
-## Architecture
-
-Concise layers:
-
-| Layer | Role |
-| --- | --- |
-| Parser | `.api` → request model |
-| Request model / builder | Variables, auth attach, HTTP build |
-| Project store | `.apihero` workspace layout |
-| Collections | Discovery, tree, import/export |
-| Runner | Collection / folder / selection runs |
-| Orchestrator | Single-request lifecycle |
-| Transport | Node HTTP |
-| Scenarios | Multi-step workflows |
-| MCP | Stdio tools over runner / orchestrator |
-
-```text
-.api source → Parser → Request builder → Variables → Auth → Executor → Response / Assertions / History
-                                      ↘ Collections / Scenarios / Runner / Execution / OpenAPI / Overview
-AI client → MCP stdio → same Runner / Orchestrator (no parallel HTTP client)
-```
-
-→ [Architecture](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/architecture/README.md)
 
 ---
 

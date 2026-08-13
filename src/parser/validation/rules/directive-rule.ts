@@ -11,10 +11,13 @@ const SINGLETON_DIRECTIVES = new Set([
   'connection',
   'auth',
   'timeout',
+  'protocol',
   'id',
   'name',
   'description',
 ]);
+
+const ALLOWED_PROTOCOLS = new Set(['http', 'graphql', 'websocket']);
 
 export const directiveValidationRule: ValidationRule = Object.freeze({
   id: 'directives',
@@ -45,6 +48,17 @@ export const directiveValidationRule: ValidationRule = Object.freeze({
           'The @timeout value must be a non-negative safe integer.',
           context,
         );
+      } else if (
+        directive.knownName === 'protocol' &&
+        !ALLOWED_PROTOCOLS.has(directive.value.trim().toLowerCase())
+      ) {
+        context.report({
+          code: VALIDATION_DIAGNOSTIC_CODES.unknownProtocol,
+          message:
+            `Unknown protocol "${directive.value.trim()}". Allowed values are http, graphql, and websocket.`,
+          severity: 'error',
+          range: directive.range,
+        });
       }
 
       if (!hasValidParent(directive.parent)) {

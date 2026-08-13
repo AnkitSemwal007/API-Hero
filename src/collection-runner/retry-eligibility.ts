@@ -69,7 +69,16 @@ export function assertionsPassedSuccessfully(
  *
  * Retryable HTTP statuses (`408` / `429` / `502` / `503` / `504`) are eligible
  * even when the orchestrator outcome is {@link RequestRunOutcomeKind.Passed},
- * unless assertions were evaluated and all passed.
+ * unless assertions were evaluated and all passed. The same statuses remain
+ * eligible when the failure category is {@link RequestFailureCategory.Protocol}
+ * (GraphQL uses HTTP transport; a 503 is not fundamentally non-retryable).
+ * Protocol failures without a retryable status (HTTP 200 + GraphQL `errors`,
+ * HTTP 500, invalid envelope) stay non-retryable.
+ *
+ * WebSocket attempts have no HTTP status. Connect / DNS / timeout stay
+ * retryable through `presentation.failure.retryable` (a new bounded session).
+ * Send and receive failures set retryable false so a half-open session is
+ * not retried as if it were an HTTP GET.
  */
 export function isCollectionRetryEligible(result: RequestRunResult): boolean {
   return isCollectionRetryEligibleFromAttempt(toAttemptView(result));
@@ -139,6 +148,9 @@ export function isCollectionRetryEligibleFromAttempt(
 
   const category = attempt.failureCategory;
   if (category === RequestFailureCategory.Assertion) {
+    return false;
+  }
+  if (category === RequestFailureCategory.Protocol) {
     return false;
   }
   if (category === RequestFailureCategory.Transport) {
@@ -251,6 +263,7 @@ export function isCollectionRetryEligibleFromSideEffectContext(ctx: {
   readonly httpSuccess: boolean;
   readonly assertionsEvaluated: boolean;
   readonly assertionFailed: boolean;
+  readonly graphqlFailed?: boolean;
   readonly cancelledAtTransport: boolean;
   readonly transportRetryable?: boolean;
 }): boolean {
@@ -266,6 +279,9 @@ export function isCollectionRetryEligibleFromSideEffectContext(ctx: {
   } else if (ctx.assertionFailed) {
     outcome = RequestRunOutcomeKind.Failed;
     failureCategory = RequestFailureCategory.Assertion;
+  } else if (ctx.graphqlFailed === true) {
+    outcome = RequestRunOutcomeKind.Failed;
+    failureCategory = RequestFailureCategory.Protocol;
   } else {
     outcome = RequestRunOutcomeKind.Passed;
   }

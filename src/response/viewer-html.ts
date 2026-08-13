@@ -166,9 +166,12 @@ function renderStatusCard(
   model: ResponsePresentation,
   options: ResponseViewerRenderOptions = {},
 ): string {
-  const status = model.status === undefined
-    ? `<span class="status-badge status-error">${escapeHtml(model.failure?.title ?? 'Failed')}</span>`
-    : `<span class="status-badge status-${statusClass(model.status.code)}">${model.status.code} ${escapeHtml(model.status.text)}</span>`;
+  const status =
+    model.websocket !== undefined
+      ? '<span class="status-badge status-success">WebSocket received</span>'
+      : model.status === undefined
+        ? `<span class="status-badge status-error">${escapeHtml(model.failure?.title ?? 'Failed')}</span>`
+        : `<span class="status-badge status-${statusClass(model.status.code)}">${model.status.code} ${escapeHtml(model.status.text)}</span>`;
   const methodClass = methodBadgeClass(model.method);
   const assertionChip = model.assertions === undefined
     ? ''

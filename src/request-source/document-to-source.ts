@@ -84,6 +84,9 @@ export function documentToRequestSource(
   const authProfileId = directiveValue(document, request, 'auth')?.trim();
   const timeoutRaw = directiveValue(document, request, 'timeout')?.trim();
   const timeoutMs = parseTimeoutMs(timeoutRaw);
+  const protocol = parseProtocol(
+    directiveValue(document, request, 'protocol')?.trim(),
+  );
 
   const { baseUrl, queryParams } = splitUrlAndQuery(request.url);
   const headers = collectHeaders(request);
@@ -115,6 +118,7 @@ export function documentToRequestSource(
       ? { authProfileId }
       : {}),
     ...(timeoutMs !== undefined ? { timeoutMs } : {}),
+    ...(protocol === undefined ? {} : { protocol }),
     ...(headers.length > 0 ? { headers } : {}),
     ...(queryParams.length > 0 ? { queryParams } : {}),
     ...(body !== undefined ? { body } : {}),
@@ -170,6 +174,14 @@ function parseTimeoutMs(value: string | undefined): number | undefined {
     return undefined;
   }
   return parsed;
+}
+
+function parseProtocol(value: string | undefined): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  const normalized = value.trim().toLowerCase();
+  return normalized.length > 0 ? normalized : undefined;
 }
 
 function splitUrlAndQuery(rawUrl: string): {

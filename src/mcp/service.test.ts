@@ -482,6 +482,7 @@ describe('ApiHeroMcpService', () => {
         transportFailures: 0,
         assertionFailures: 1,
         extractionFailures: 0,
+        protocolFailures: 0,
       },
       completedAt: '2020-01-01T00:00:01.000Z',
       status: CollectionRunStatuses.Completed,

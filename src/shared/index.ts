@@ -26,7 +26,9 @@ export {
 export {
   SECRET_SCRUB_MASK,
   isSensitiveSecretKey,
+  replaceKnownSecretValues,
   scrubBodyTextForDisplay,
   scrubJsonSecrets,
   scrubSecretTokensInText,
+  scrubTextWithKnownSecrets,
 } from './secret-scrub';

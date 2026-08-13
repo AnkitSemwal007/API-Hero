@@ -1,7 +1,9 @@
 import type {
   ExecutionErrorCode,
   ExecutionResult,
+  GraphqlEnvelopeSummary,
   RuntimeResponse,
+  WebsocketSessionSummary,
 } from '../execution';
 import type { TestReport } from '../assertions';
 import { maskAssertionText } from '../assertions';
@@ -175,6 +177,15 @@ export interface ResponsePresentation {
   readonly explanation?: FailureExplanation;
   readonly assertions?: PresentedAssertions;
   readonly extraction?: PresentedExtraction;
+  /**
+   * Additive GraphQL envelope summary. Present only for `@protocol graphql`
+   * successful HTTP responses. REST results omit this field.
+   */
+  readonly graphql?: GraphqlEnvelopeSummary;
+  /**
+   * Bounded WebSocket session summary. Present only for `@protocol websocket`.
+   */
+  readonly websocket?: WebsocketSessionSummary;
   readonly summary: string;
 }
 
@@ -288,13 +299,18 @@ export function presentExecutionResult(
       ? {}
       : { contentType: response.contentType }),
     bodySizeBytes: response.bodySizeBytes,
+    ...(result.graphql === undefined
+      ? {}
+      : {
+          graphqlErrorMessages: result.graphql.errorMessages,
+          graphqlValidEnvelope: result.graphql.validEnvelope,
+        }),
   });
   return deepFreeze({
     success: true,
     requestId: result.requestId,
     method,
     requestUrl,
-    status: { code: response.statusCode, text: response.statusText },
     headers,
     cookies: { available: false, setCookieHeaderCount },
     statistics: {
@@ -320,7 +336,15 @@ export function presentExecutionResult(
     ...(presentedExtraction === undefined
       ? {}
       : { extraction: presentedExtraction }),
-    summary: `${response.statusCode} ${response.statusText} · ${formatDuration(result.timing.durationMs)} · ${formatBytes(response.bodySizeBytes)}${assertionSuffix}${extractionSuffix}`,
+    ...(result.graphql === undefined ? {} : { graphql: result.graphql }),
+    ...(result.websocket === undefined ? {} : { websocket: result.websocket }),
+    ...(result.websocket === undefined
+      ? { status: { code: response.statusCode, text: response.statusText } }
+      : {}),
+    summary:
+      result.websocket === undefined
+        ? `${response.statusCode} ${response.statusText} · ${formatDuration(result.timing.durationMs)} · ${formatBytes(response.bodySizeBytes)}${assertionSuffix}${extractionSuffix}`
+        : `WebSocket received · ${formatDuration(result.timing.durationMs)} · ${formatBytes(response.bodySizeBytes)}${assertionSuffix}${extractionSuffix}`,
   });
 }
 

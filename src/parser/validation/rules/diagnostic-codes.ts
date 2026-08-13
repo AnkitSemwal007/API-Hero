@@ -10,6 +10,7 @@ export const VALIDATION_DIAGNOSTIC_CODES = Object.freeze({
   duplicateDirective: 'api-runner.duplicate-directive',
   unknownDirective: 'parser.unknown-directive',
   invalidDirective: 'api-runner.invalid-directive',
+  unknownProtocol: 'validation.unknown-protocol',
   invalidDirectivePlacement: 'validation.invalid-directive-placement',
   malformedVariable: 'validation.malformed-variable',
   extractionInvalidDirective: 'extraction.invalid-directive',

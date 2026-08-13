@@ -180,9 +180,14 @@ the Collections explorer ([collections.md](./collections.md)). Sequential
 Collection Runner reuses this pipeline through
 `ExecutionOrchestrator.runAtSourceLocation` with viewer suppression — see
 [collection-runner.md](./collection-runner.md). Deferred product work (OpenAPI
-export / Swagger 2.0, GraphQL, WebSocket, gRPC, OAuth, streaming transport,
-secret lifecycle cleanup, AI) is listed in [execution.md](./execution.md) and
-must not be partially reintroduced as unused service scaffolding. OpenAPI 3
+export / Swagger 2.0, GraphQL subscriptions, persistent WebSocket, gRPC, OAuth, streaming
+transport, secret lifecycle cleanup, AI) is listed in
+[execution.md](./execution.md) and must not be partially reintroduced as unused
+service scaffolding. GraphQL query/mutation over HTTP is specified in
+[ADR-0004](./adr/0004-graphql-phase-1.md). Bounded WebSocket sessions are specified in
+[ADR-0005](./adr/0005-websocket-phase-1.md): missing `@protocol` is HTTP;
+unknown protocols are validation errors (never HTTP fallback); there is no
+second runner. OpenAPI 3
 import is implemented — see [openapi-import.md](./openapi-import.md). Variables,
 authentication, the response viewer, and request history are already on (or
 observing) the live orchestration path. See [history.md](./history.md).

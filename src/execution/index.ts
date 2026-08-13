@@ -11,6 +11,7 @@ export type {
   ExecutionResult,
   ExecutionTiming,
   FailedExecutionResult,
+  GraphqlEnvelopeSummary,
   HttpTransport,
   HttpTransportContext,
   HttpTransportErrorKind,
@@ -22,7 +23,26 @@ export type {
   RuntimeResponseBody,
   RuntimeResponseHeader,
   SuccessfulExecutionResult,
+  WebsocketSessionSummary,
 } from './contracts';
 export { NodeHttpTransport } from './node-http-transport';
 export { DefaultRequestExecutor } from './request-executor';
 export type { ExecutionClock } from './request-executor';
+export {
+  graphqlEnvelopeFromJson,
+  prepareGraphqlHttpRequest,
+} from './graphql-http';
+export {
+  NodeWebSocketTransport,
+  WebSocketTransportError,
+} from './websocket-transport';
+export type {
+  WebSocketTransport,
+  WebSocketTransportContext,
+  WebSocketTransportRequest,
+  WebSocketTransportResult,
+} from './websocket-transport';
+export {
+  prepareWebsocketSession,
+  websocketResponseFromMessage,
+} from './websocket-session';

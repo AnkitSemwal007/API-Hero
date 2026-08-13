@@ -7,6 +7,8 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, test } from 'node:test';
 
+const repoRoot = path.join(__dirname, '..', '..');
+
 describe('npm pack manifest (package.json)', () => {
   const pkg = JSON.parse(
     readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf8'),
@@ -68,5 +70,31 @@ describe('npm pack manifest (package.json)', () => {
         pkg.bin?.apihero === './bin/apihero.js',
       `unexpected bin.apihero: ${pkg.bin?.apihero}`,
     );
+  });
+
+  test('README.cli.md is the npm listing (not the Marketplace README)', () => {
+    const cliReadme = readFileSync(path.join(repoRoot, 'README.cli.md'), 'utf8');
+    assert.match(cliReadme, /^# API Hero CLI\b/u);
+    assert.match(cliReadme, /@ankitsemwal007\/api-hero/);
+    assert.match(cliReadme, /apihero run request/);
+    assert.match(cliReadme, /apihero run collection/);
+    assert.match(cliReadme, /apihero run scenario/);
+    assert.match(cliReadme, /--json/);
+    assert.doesNotMatch(cliReadme, /npm install -g api-hero(?:\s|$|@)/u);
+    assert.doesNotMatch(cliReadme, /apihero[^\n]*--inputs/);
+    assert.doesNotMatch(cliReadme, /apihero[^\n]*--var\b/);
+  });
+
+  test('Marketplace README.md is Git-first VS Code product copy', () => {
+    const marketplace = readFileSync(path.join(repoRoot, 'README.md'), 'utf8');
+    assert.match(marketplace, /^# API Hero\b/u);
+    assert.doesNotMatch(marketplace, /^# API Hero CLI\b/u);
+    assert.match(
+      marketplace,
+      /marketplace\.visualstudio\.com\/items\?itemName=ankitsemwal\.api-hero/,
+    );
+    assert.match(marketplace, /@ankitsemwal007\/api-hero/);
+    assert.doesNotMatch(marketplace, /not currently distributed/i);
+    assert.doesNotMatch(marketplace, /release\/api-hero-2\.9\./u);
   });
 });

@@ -5,9 +5,9 @@
  *   node ./scripts/verify-npm-pack-contents.mjs [tarball.tgz]
  *
  * When no tarball path is given, runs `npm pack` into a temp directory
- * (triggers prepack → compile + bundle).
+ * (triggers prepack → compile + bundle + CLI README swap; postpack restores).
  */
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -51,9 +51,35 @@ function assertPackContents(entries) {
     throw new Error(`Pack must not include .env (found ${envEntries[0]})`);
   }
 
+  const readmeEntry = entries.find(
+    (e) => e === 'package/README.md' || e.endsWith('/README.md'),
+  );
+  if (readmeEntry === undefined) {
+    throw new Error('Pack missing README.md');
+  }
+
   console.log(
     `OK: ${entries.length} entries; dist/cli/main.js present; src/ and .env absent`,
   );
+}
+
+function assertPackedReadme(tarballPath) {
+  const readme = execFileSync('tar', ['-xOf', tarballPath, 'package/README.md'], {
+    encoding: 'utf8',
+    cwd: root,
+  });
+  if (!/^\s*#\s+API Hero CLI\b/u.test(readme)) {
+    throw new Error(
+      'Packed README.md must be the CLI README (expected heading "# API Hero CLI")',
+    );
+  }
+  if (!readme.includes('@ankitsemwal007/api-hero')) {
+    throw new Error('Packed README.md must mention @ankitsemwal007/api-hero');
+  }
+  if (/npm install -g api-hero(?:\s|$|@)/u.test(readme)) {
+    throw new Error('Packed README.md must not advertise unscoped api-hero install');
+  }
+  console.log('OK: packed README.md is the CLI listing');
 }
 
 let tempDir;
@@ -81,11 +107,23 @@ try {
   }
 
   assertPackContents(listTarball(tarballPath));
+  assertPackedReadme(tarballPath);
 } catch (error) {
   const message = error instanceof Error ? error.message : String(error);
   console.error(message);
   process.exitCode = 1;
 } finally {
+  const restore = spawnSync(
+    process.execPath,
+    [path.join(root, 'scripts', 'npm-readme.mjs'), 'restore'],
+    {
+      cwd: root,
+      stdio: 'inherit',
+    },
+  );
+  if (restore.status !== 0 && process.exitCode !== 1) {
+    process.exitCode = restore.status ?? 1;
+  }
   if (tempDir !== undefined) {
     rmSync(tempDir, { recursive: true, force: true });
   }

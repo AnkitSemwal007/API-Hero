@@ -18,6 +18,20 @@ import {
   type RuntimeResponse,
   type RuntimeResponseBody,
 } from './contracts';
+import {
+  graphqlEnvelopeFromRequest,
+  prepareGraphqlHttpRequest,
+} from './graphql-http';
+import {
+  prepareWebsocketSession,
+  websocketResponseFromMessage,
+  websocketSessionSummary,
+} from './websocket-session';
+import {
+  NodeWebSocketTransport,
+  WebSocketTransportError,
+  type WebSocketTransport,
+} from './websocket-transport';
 
 export interface ExecutionClock {
   now(): number;
@@ -38,6 +52,7 @@ export class DefaultRequestExecutor implements RequestExecutor {
   public constructor(
     private readonly transport: HttpTransport,
     private readonly clock: ExecutionClock = SYSTEM_CLOCK,
+    private readonly websocketTransport: WebSocketTransport = new NodeWebSocketTransport(),
   ) {}
 
   public async execute(
@@ -50,6 +65,34 @@ export class DefaultRequestExecutor implements RequestExecutor {
 
     if (context.signal?.aborted === true) {
       return failure(request, cancellationError('cancelled'), timing(started, this.clock.now()));
+    }
+
+    const protocol: string | undefined = request.protocol;
+    if (
+      protocol !== undefined &&
+      protocol !== 'http' &&
+      protocol !== 'graphql' &&
+      protocol !== 'websocket'
+    ) {
+      return failure(
+        request,
+        executionError(
+          'UNSUPPORTED_BODY',
+          `Unsupported request protocol: ${String(protocol)}. Allowed values are http, graphql, and websocket.`,
+          false,
+        ),
+        timing(started, this.clock.now()),
+      );
+    }
+
+    if (protocol === 'websocket') {
+      return this.executeWebsocket(
+        request,
+        context,
+        started,
+        timeoutMs,
+        maxResponseBytes,
+      );
     }
 
     let parsedUrl: URL;
@@ -71,7 +114,22 @@ export class DefaultRequestExecutor implements RequestExecutor {
       );
     }
 
-    const serializedBody = serializeBody(request.body);
+    let headers = request.headers;
+    let serializedBody: { readonly body?: Uint8Array; readonly error?: ExecutionError };
+    if (protocol === 'graphql') {
+      const prepared = prepareGraphqlHttpRequest(request);
+      if (!prepared.ok) {
+        return failure(
+          request,
+          prepared.error,
+          timing(started, this.clock.now()),
+        );
+      }
+      headers = prepared.headers;
+      serializedBody = { body: prepared.body };
+    } else {
+      serializedBody = serializeBody(request.body);
+    }
     if (serializedBody.error !== undefined) {
       return failure(
         request,
@@ -101,7 +159,7 @@ export class DefaultRequestExecutor implements RequestExecutor {
         {
           method: request.method,
           url: request.url,
-          headers: request.headers,
+          headers,
           ...(serializedBody.body === undefined
             ? {}
             : { body: serializedBody.body }),
@@ -143,6 +201,9 @@ export class DefaultRequestExecutor implements RequestExecutor {
         request: requestSummary(request),
         response,
         timing: responseTiming,
+        ...(protocol === 'graphql'
+          ? { graphql: graphqlEnvelopeFromRequest(response.body.json, request) }
+          : {}),
       });
     } catch (error) {
       if (error instanceof HttpTransportInvariantError) {
@@ -151,6 +212,117 @@ export class DefaultRequestExecutor implements RequestExecutor {
       const completedTiming = timing(started, this.clock.now());
       if (error instanceof ExecutionAborted) {
         return failure(request, cancellationError(error.kind), completedTiming);
+      }
+      return failure(request, classifyFailure(error), completedTiming);
+    } finally {
+      if (timeout !== undefined) {
+        clearTimeout(timeout);
+      }
+      if (onInternalAbort !== undefined) {
+        controller.signal.removeEventListener('abort', onInternalAbort);
+      }
+      context.signal?.removeEventListener('abort', onCallerAbort);
+    }
+  }
+
+  private async executeWebsocket(
+    request: AuthenticatedRequest,
+    context: ExecutionContext,
+    started: number,
+    timeoutMs: number | undefined,
+    maxResponseBytes: number | undefined,
+  ): Promise<ExecutionResult> {
+    const prepared = prepareWebsocketSession(request);
+    if (!prepared.ok) {
+      return failure(request, prepared.error, timing(started, this.clock.now()));
+    }
+
+    const controller = new AbortController();
+    let cancellationKind: CancellationKind | undefined;
+    const abort = (kind: CancellationKind): void => {
+      if (cancellationKind === undefined) {
+        cancellationKind = kind;
+        controller.abort(kind);
+      }
+    };
+    const onCallerAbort = (): void => abort('cancelled');
+    if (context.signal !== undefined) {
+      if (context.signal.aborted) {
+        return failure(
+          request,
+          cancellationError('cancelled'),
+          timing(started, this.clock.now()),
+        );
+      }
+      context.signal.addEventListener('abort', onCallerAbort, { once: true });
+    }
+    const timeout =
+      timeoutMs !== undefined && timeoutMs > 0
+        ? setTimeout(() => abort('timeout'), timeoutMs)
+        : undefined;
+
+    const transportTimeoutMs =
+      timeoutMs !== undefined && timeoutMs > 0 ? timeoutMs : undefined;
+    const transportPromise = this.websocketTransport.execute(
+      {
+        url: prepared.url,
+        headers: request.headers,
+        ...(prepared.message === undefined ? {} : { message: prepared.message }),
+        ssl: request.ssl,
+      },
+      {
+        signal: controller.signal,
+        ...(transportTimeoutMs === undefined ? {} : { timeoutMs: transportTimeoutMs }),
+        ...(maxResponseBytes === undefined ? {} : { maxResponseBytes }),
+      },
+    );
+    void transportPromise.catch(() => undefined);
+    let onInternalAbort: (() => void) | undefined;
+    const abortPromise = new Promise<never>((_resolve, reject) => {
+      onInternalAbort = (): void =>
+        reject(new ExecutionAborted(cancellationKind ?? 'cancelled'));
+      if (controller.signal.aborted) {
+        onInternalAbort();
+      } else {
+        controller.signal.addEventListener('abort', onInternalAbort, {
+          once: true,
+        });
+      }
+    });
+
+    try {
+      const raw = await Promise.race([abortPromise, transportPromise]);
+      const responseTiming = timing(started, this.clock.now());
+      const response = websocketResponseFromMessage(
+        request,
+        raw.message,
+        responseTiming,
+      );
+      return deepFreeze({
+        success: true,
+        requestId: request.id,
+        request: requestSummary(request),
+        response,
+        timing: responseTiming,
+        websocket: websocketSessionSummary({
+          sent: raw.sent,
+          ...(raw.closeCode === undefined ? {} : { closeCode: raw.closeCode }),
+          ...(raw.closeReason === undefined
+            ? {}
+            : { closeReason: raw.closeReason }),
+        }),
+      });
+    } catch (error) {
+      const completedTiming = timing(started, this.clock.now());
+      if (error instanceof ExecutionAborted) {
+        return failure(request, cancellationError(error.kind), completedTiming);
+      }
+      if (controller.signal.aborted) {
+        return failure(
+          request,
+          cancellationError(cancellationKind ?? 'cancelled'),
+          completedTiming,
+        );
       }
       return failure(request, classifyFailure(error), completedTiming);
     } finally {
@@ -324,6 +496,9 @@ function findLastHeader(
 }
 
 function classifyFailure(error: unknown): ExecutionError {
+  if (error instanceof WebSocketTransportError) {
+    return classifyWebsocketFailure(error);
+  }
   if (error instanceof HttpTransportError) {
     const mapping: Readonly<
       Record<
@@ -354,6 +529,38 @@ function classifyFailure(error: unknown): ExecutionError {
     'An unexpected runtime error occurred while executing the request.',
     false,
     error,
+  );
+}
+
+function classifyWebsocketFailure(
+  error: WebSocketTransportError,
+): ExecutionError {
+  if (error.causeCode === 'ABORTED') {
+    return cancellationError('cancelled');
+  }
+  const mapping: Readonly<
+    Record<
+      WebSocketTransportError['kind'],
+      { readonly code: ExecutionErrorCode; readonly retryable: boolean }
+    >
+  > = {
+    dns: { code: 'DNS', retryable: true },
+    'connection-refused': { code: 'CONNECTION_REFUSED', retryable: true },
+    network: { code: 'NETWORK', retryable: true },
+    connect: { code: 'NETWORK', retryable: true },
+    send: { code: 'NETWORK', retryable: false },
+    receive: { code: 'NETWORK', retryable: false },
+    'ssl-tls': { code: 'SSL_TLS', retryable: false },
+    'response-too-large': { code: 'RESPONSE_TOO_LARGE', retryable: false },
+    'unsupported-frame': { code: 'UNSUPPORTED_BODY', retryable: false },
+  };
+  const classified = mapping[error.kind];
+  return executionError(
+    classified.code,
+    error.message,
+    classified.retryable,
+    error,
+    error.causeCode,
   );
 }
 

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
+import { runInNewContext } from 'node:vm';
 
 import {
   CollectionRunMode,
@@ -21,6 +22,7 @@ import {
   renderCollectionRunReportHtml,
   resolveFailurePolicyForRun,
   FailurePolicySettingValue,
+  type CollectionRunReportModel,
 } from './run-report-html';
 
 describe('collection-run-report-html', () => {
@@ -907,6 +909,68 @@ describe('collection-run-report-html', () => {
     assert.equal(model.rows[1]?.folderRelativePath, 'Assistants');
     assert.equal(model.rows[0]?.outcome, 'running');
   });
+
+  test('embedded report script parses and emits a valid cssEscapeAttr fallback', () => {
+    const script = extractReportScript(renderCollectionRunReportHtml('reportNonce'));
+    assert.doesNotThrow(() => {
+      new Function(script);
+    });
+    assert.ok(
+      script.includes("replaceAll('\\\\', '\\\\\\\\')"),
+      'emitted script must contain replaceAll(\'\\\\\', \'\\\\\\\\\')',
+    );
+    assert.ok(
+      !script.includes('replace(/\\/g'),
+      'emitted script must not contain the broken /\\/g regex',
+    );
+  });
+
+  test('init message replaces loading with a successful collection report', () => {
+    const model = buildCollectionRunReportModel(sampleSummary());
+    const { root } = runInitRender(model);
+    assert.doesNotMatch(root.innerHTML, /Loading run report/u);
+    assert.match(root.innerHTML, /Demo/u);
+  });
+
+  test('init message renders failed requests section', () => {
+    const model = buildCollectionRunReportModel(sampleSummary());
+    const { root } = runInitRender(model);
+    assert.doesNotMatch(root.innerHTML, /Loading run report/u);
+    assert.match(root.innerHTML, /Create user/u);
+    assert.match(root.innerHTML, /failed-section/u);
+  });
+
+  test('init message renders unresolved variable status', () => {
+    const model = buildCollectionRunReportModel(sampleDependencySummary());
+    const { root } = runInitRender(model);
+    assert.doesNotMatch(root.innerHTML, /Loading run report/u);
+    assert.match(root.innerHTML, /unresolved/u);
+    assert.match(root.innerHTML, /accessToken|orderId|Variables/u);
+  });
+
+  test('large collection init payload serializes and replaces loading', () => {
+    const model = buildCollectionRunReportModel(largeSummary(80));
+    const serialized = JSON.stringify({ type: 'init', model });
+    const parsed = JSON.parse(serialized) as {
+      type: string;
+      model: CollectionRunReportModel;
+    };
+    const { root } = runInitRender(parsed.model);
+    assert.doesNotMatch(root.innerHTML, /Loading run report/u);
+    assert.match(root.innerHTML, /Demo/u);
+  });
+
+  test('historical open uses the same init handoff and render path', () => {
+    const model = buildCollectionRunReportModel(sampleSummary());
+    const applied = applyCollectionRunReportHostMessage(undefined, {
+      type: 'init',
+      model,
+    });
+    assert.deepEqual(applied, { model, resetExpanded: true });
+    const { root } = runInitRender(applied?.model ?? model);
+    assert.doesNotMatch(root.innerHTML, /Loading run report/u);
+    assert.match(root.innerHTML, /Demo/u);
+  });
 });
 
 function sampleFolderSummary(): RunSummary {
@@ -998,6 +1062,7 @@ function sampleFolderSummary(): RunSummary {
       transportFailures: 0,
       assertionFailures: 0,
       extractionFailures: 0,
+      protocolFailures: 0,
     },
     completedAt: '2026-07-21T10:00:01.000Z',
     status: CollectionRunStatus.Completed,
@@ -1108,6 +1173,7 @@ function sampleDependencySummary(): RunSummary {
       transportFailures: 0,
       assertionFailures: 0,
       extractionFailures: 0,
+      protocolFailures: 0,
     },
     completedAt: '2026-07-21T10:00:01.000Z',
     status: CollectionRunStatus.Completed,
@@ -1193,8 +1259,91 @@ function sampleSummary(): RunSummary {
       transportFailures: 0,
       assertionFailures: 1,
       extractionFailures: 0,
+      protocolFailures: 0,
     },
     completedAt: '2026-07-21T10:00:01.000Z',
     status: CollectionRunStatus.Completed,
   };
+}
+
+function extractReportScript(html: string): string {
+  const match = /<script[^>]*>([\s\S]*)<\/script>/u.exec(html);
+  assert.ok(match?.[1], 'expected embedded report script');
+  return match[1];
+}
+
+function largeSummary(rowCount: number): RunSummary {
+  const base = sampleSummary();
+  const templateRequest = base.plan.requests[0]!;
+  const templateResult = base.results[0]!;
+  const requests = Array.from({ length: rowCount }, (_, index) => ({
+    ...templateRequest,
+    requestId: `req_${index}`,
+    label: `Request ${index}`,
+    ordinal: index,
+    filePath: `file:///demo/r${index}.api`,
+  }));
+  const results = requests.map((request, index) => ({
+    ...templateResult,
+    requestId: request.requestId,
+    label: request.label,
+    ordinal: index,
+    outcome:
+      index % 10 === 0
+        ? RequestRunOutcomeKind.Failed
+        : RequestRunOutcomeKind.Passed,
+  }));
+  const failed = results.filter(
+    (result) => result.outcome === RequestRunOutcomeKind.Failed,
+  ).length;
+  return {
+    ...base,
+    plan: { ...base.plan, requests },
+    results,
+    statistics: {
+      ...base.statistics,
+      total: rowCount,
+      passed: rowCount - failed,
+      failed,
+    },
+  };
+}
+
+function runInitRender(model: CollectionRunReportModel): { root: { innerHTML: string } } {
+  const script = extractReportScript(renderCollectionRunReportHtml('reportNonce'));
+  const messageListeners: Array<(event: { data: unknown }) => void> = [];
+  const root = {
+    innerHTML: 'Loading run report…',
+    querySelectorAll() {
+      return [];
+    },
+    querySelector() {
+      return null;
+    },
+  };
+  runInNewContext(script, {
+    acquireVsCodeApi() {
+      return {
+        postMessage() {
+          /* unused in this harness */
+        },
+      };
+    },
+    document: {
+      getElementById(id: string) {
+        return id === 'root' ? root : null;
+      },
+    },
+    window: {
+      addEventListener(type: string, listener: (event: { data: unknown }) => void) {
+        if (type === 'message') {
+          messageListeners.push(listener);
+        }
+      },
+    },
+  });
+  for (const listener of messageListeners) {
+    listener({ data: { type: 'init', model } });
+  }
+  return { root };
 }
