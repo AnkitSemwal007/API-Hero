@@ -11,38 +11,32 @@ The CLI reuses the same headless composition as MCP: `ExecutionOrchestrator`, `C
 
 ## Installation
 
-The CLI ships in the **`api-hero`** npm package (same package as the VS Code extension metadata; the published tarball contains bundled CLI/MCP/extension entry points only).
+The CLI is published to npm as **`@ankitsemwal007/api-hero`** (binary: `apihero`).  
+The VS Code Marketplace extension id remains **`ankitsemwal.api-hero`** — npm cannot use unscoped `api-hero` (too similar to an existing `apihero` package), and vsce requires an unscoped `package.json` `name`.
 
 ```bash
-npm install -g api-hero
+npm install -g @ankitsemwal007/api-hero
 apihero --version
 apihero --help
 ```
 
-Or without a global install:
+Without a global install:
 
 ```bash
-npx apihero --help
+npx --package=@ankitsemwal007/api-hero apihero --help
 ```
 
-If the release is not yet on the registry, install from a local pack:
-
-```bash
-npm pack
-npm install -g ./api-hero-*.tgz
-```
-
-From a local checkout (contributors):
+From a local checkout (contributors / before registry publish):
 
 ```bash
 npm install
 npm run compile   # or: npm run bundle
-npx apihero --help
-# or
 node ./bin/apihero.js --help
+# publish to npm (scoped rewrite handled by script):
+npm run publish:npm
 ```
 
-Installing the VS Code extension from the Marketplace does **not** put `apihero` on your PATH. Install the npm package (or use `npx`) for the CLI.
+Installing the VS Code extension from the Marketplace does **not** put `apihero` on your PATH.
 
 ## Commands
 
@@ -155,7 +149,7 @@ Secrets and Authorization values are always redacted (same helpers as MCP).
 ### Generic shell
 
 ```bash
-npm install -g api-hero
+npm install -g @ankitsemwal007/api-hero
 export APIHERO_SECRET_apiHero_auth_profile_demo_token="$DEMO_TOKEN"
 apihero run scenario checkout \
   --workspace "$PWD" \
@@ -167,20 +161,12 @@ apihero run scenario checkout \
 
 ```yaml
 - name: Install API Hero CLI
-  run: npm install -g api-hero
+  run: npm install -g @ankitsemwal007/api-hero
 
 - name: Run scenario
   env:
     APIHERO_SECRET_apiHero_auth_profile_demo_token: ${{ secrets.DEMO_TOKEN }}
   run: apihero run scenario checkout --workspace . --environment staging --json
-```
-
-### From a packed tarball (release verification)
-
-```bash
-npm pack
-npm install -g ./api-hero-*.tgz
-apihero --version
 ```
 
 ## Limitations

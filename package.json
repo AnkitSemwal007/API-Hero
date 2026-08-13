@@ -2239,6 +2239,7 @@
     "mcp": "npm run compile && node ./dist/mcp/server.js",
     "prepack": "npm run compile && npm run bundle",
     "pack:cli": "npm pack",
+    "publish:npm": "node ./scripts/publish-npm.mjs",
     "package": "npm run clean && npm run build && npm test && node ./scripts/package-vsix.mjs",
     "package:fast": "node ./scripts/package-vsix.mjs",
     "vscode:prepublish": "npm run compile && npm run bundle:vsix"

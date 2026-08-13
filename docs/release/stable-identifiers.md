@@ -8,7 +8,8 @@ Canonical contribution IDs use the **`apiHero.*`** namespace. Legacy **`apiRunne
 
 | Kind | Value |
 | --- | --- |
-| `package.json` `name` | `api-hero` |
+| `package.json` `name` (Marketplace / vsce) | `api-hero` |
+| npm registry package (CLI publish) | `@ankitsemwal007/api-hero` (via `npm run publish:npm`) |
 | `package.json` `publisher` | `ankitsemwal` |
 | Extension ID | `ankitsemwal.api-hero` |
 | `EXTENSION_ID` constant | `ankitsemwal.api-hero` |

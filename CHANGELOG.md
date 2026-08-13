@@ -24,7 +24,8 @@ Public headless CLI / CI distribution via npm (`apihero` bin) on the shared head
 
 ### Notes
 
-- Installing the VS Code Marketplace extension does **not** put `apihero` on PATH — install the `api-hero` npm package (or use `npx`).
+- **npm package name:** `@ankitsemwal007/api-hero` (binary `apihero`). Unscoped `api-hero` cannot be published (npm typosquat guard vs existing `apihero`); Marketplace / vsce keep unscoped `package.json` `name` `api-hero` → extension id `ankitsemwal.api-hero`. Publish with `npm run publish:npm`.
+- Installing the VS Code Marketplace extension does **not** put `apihero` on PATH — install `@ankitsemwal007/api-hero` from npm.
 - Deferred: `--var`, OS env → `{{variable}}`, scenario `--inputs` on CLI, parent-directory workspace discovery.
 
 ## [2.9.1] - 2026-08-12

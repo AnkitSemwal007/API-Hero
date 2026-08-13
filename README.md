@@ -505,7 +505,7 @@ Never commit real secrets in README examples or committed `api-hero.variables.js
 - **Variable autocomplete** — `{{` in `.api` and Request Editor
 - **Diff / TypeScript** — from Response Viewer and report Details
 - **MCP** — standalone stdio server; client-owned configuration (installing the extension does not register MCP)
-- **CLI** — `apihero` on npm (`npm install -g api-hero` / `npx apihero`); Marketplace install does not put the CLI on PATH
+- **CLI** — `apihero` on npm (`npm install -g @ankitsemwal007/api-hero`); Marketplace install does not put the CLI on PATH
 
 ---
 
@@ -513,8 +513,10 @@ Never commit real secrets in README examples or committed `api-hero.variables.js
 
 Headless runner for CI and terminals — **same** Orchestrator / Collection Runner / ScenarioEngine as the extension and MCP (no VS Code UI).
 
+npm package: **`@ankitsemwal007/api-hero`** (unscoped `api-hero` is reserved for the VS Code Marketplace extension id `ankitsemwal.api-hero`).
+
 ```bash
-npm install -g api-hero
+npm install -g @ankitsemwal007/api-hero
 apihero --help
 apihero run request Login --workspace . --environment local
 apihero run collection Demo --workspace . --json
@@ -815,7 +817,7 @@ No. MCP registration is client-owned. Configure each client yourself.
 No — not implemented.
 
 **Is there a headless CLI / CI runner?**  
-Yes. Install the `api-hero` npm package (`npm install -g api-hero` or `npx apihero`) and run `apihero run request|collection|scenario`. Same headless runtime as MCP (no VS Code required). See [CLI guide](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/cli.md).
+Yes. Install `@ankitsemwal007/api-hero` (`npm install -g @ankitsemwal007/api-hero`) and run `apihero run request|collection|scenario`. Same headless runtime as MCP (no VS Code required). See [CLI guide](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/cli.md).
 
 **Where are settings documented?**  
 [Configuration](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/reference/configuration.md) · [Commands](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/reference/commands.md) · [FAQ](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/faq.md)
