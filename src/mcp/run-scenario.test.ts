@@ -208,7 +208,7 @@ describe('apihero_run_scenario', () => {
     }
   });
 
-  test('registers apihero_run_scenario alongside collection tools', () => {
+  test('does not register apihero_run_scenario; collection tools remain', () => {
     const registered: string[] = [];
     const server = {
       registerTool: (name: string) => {
@@ -216,7 +216,7 @@ describe('apihero_run_scenario', () => {
       },
     };
     registerApiHeroMcpTools(server as never, service);
-    assert.ok(registered.includes('apihero_run_scenario'));
+    assert.equal(registered.includes('apihero_run_scenario'), false);
     assert.ok(registered.includes('apihero_run_collection'));
   });
 

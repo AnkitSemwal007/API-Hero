@@ -320,3 +320,20 @@ test('emits @protocol only when set', () => {
   });
   assert.match(unknown, /@protocol mqtt\n/u);
 });
+
+test('emits @source only when set', () => {
+  const omitted = serializeRequestDocument({
+    name: 'Get user',
+    method: 'GET',
+    url: 'https://example.test/users',
+  });
+  assert.doesNotMatch(omitted, /@source/u);
+
+  const withSource = serializeRequestDocument({
+    name: 'Get user',
+    method: 'GET',
+    url: 'https://example.test/users',
+    source: 'src/services/user.ts:12',
+  });
+  assert.match(withSource, /@source src\/services\/user\.ts:12\n/u);
+});

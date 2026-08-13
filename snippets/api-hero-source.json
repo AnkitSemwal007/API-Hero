@@ -1,0 +1,18 @@
+{
+  "API Hero mapping": {
+    "prefix": "apihero",
+    "body": [
+      "// @api-hero name: ${1:Request Name}",
+      "${0}"
+    ],
+    "description": "Explicit API Hero mapping to a uniquely named .api request"
+  },
+  "API Hero mapping by file": {
+    "prefix": "apihero-request",
+    "body": [
+      "// @api-hero request: ${1:Collections/Demo/Get-User.api}",
+      "${0}"
+    ],
+    "description": "Explicit API Hero mapping to a .api file path"
+  }
+}

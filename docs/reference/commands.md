@@ -19,6 +19,9 @@ These are **account / file stubs**, not Authentication Login API.
 | --- | --- |
 | `apiHero.runRequest` | Run Request |
 | `apiHero.runRequestWithAssertions` | Run Request with Assertions |
+| `apiHero.openApiDefinition` | Open API Definition (mapped source → `.api`) |
+| `apiHero.openRelatedSource` | Open Related Source (`.api` `@source` → file) |
+| `apiHero.generateTypeScript` | Generate TypeScript |
 
 ## Environments and authentication
 
@@ -34,7 +37,9 @@ These are **account / file stubs**, not Authentication Login API.
 | `apiHero.useResponseAsAuthentication` | Use Response Token as Authentication | |
 | `apiHero.setCollectionDefaultAuthentication` | Set Collection Default Authentication | |
 | `apiHero.initializeProjectStore` | Initialize Project Store | |
-| `apiHero.resetWorkspace` | Reset Workspace... | Command Palette only; destructive confirm. Removes `.apihero` (auth, environments, workspace/local variables, scenarios, project config), request history (extension-wide / globalStorage), and related workspace state. Does **not** remove Collections, `.api` files, collection variables, or project source. Primary workspace folder only. |
+| `apiHero.exportProject` | Export Project | Writes a portable `.apihero` project package (no secrets) |
+| `apiHero.importProject` | Import Project | Validates and restores a `.apihero` package |
+| `apiHero.resetWorkspace` | Reset Workspace... | Command Palette only; destructive confirm. Removes `.apihero` (auth, environments, workspace/local variables, project config), request history (extension-wide / globalStorage), and related workspace state. Does **not** remove Collections, `.api` files, collection variables, or project source. Primary workspace folder only. |
 
 ## Collections
 
@@ -70,11 +75,13 @@ These are **account / file stubs**, not Authentication Login API.
 | `apiHero.runFolder` | Run Folder |
 | `apiHero.runSelectedRequests` | Run Selected Requests |
 
-## Scenarios
+## Hidden (not a current product capability)
+
+Hidden from the Command Palette (`when: false`). These IDs remain registered for compatibility. They are **not** a current user-facing feature.
 
 | ID | Title |
 | --- | --- |
-| `apiHero.focusScenarios` | Focus Scenarios (only when already visible; does not unlock the view) |
+| `apiHero.focusScenarios` | Focus Scenarios |
 | `apiHero.refreshScenarios` | Refresh Scenarios |
 | `apiHero.createScenario` | New Scenario |
 | `apiHero.openScenarioEditor` | Open Scenario Editor |
@@ -110,3 +117,4 @@ These are **account / file stubs**, not Authentication Login API.
 - [Configuration](./configuration.md)
 - [Stable identifiers](../release/stable-identifiers.md)
 - [User guide](../user/getting-started.md)
+- [Source-code integration](../user/source-integration.md)

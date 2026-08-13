@@ -10,6 +10,10 @@ export interface ParsedRequestSummary {
   readonly label: string;
   /** Legacy `@id` (`req_*`) when still present on disk (migration only). */
   readonly legacyAuthoredId?: string;
+  /** Effective `@protocol` when authored (http / graphql / websocket). */
+  readonly protocol?: string;
+  /** Authored `@source` value when present. */
+  readonly sourceRef?: string;
   readonly range: Range;
 }
 
@@ -130,14 +134,52 @@ function summarizeRequest(
       ? legacyAuthoredIdRaw
       : undefined;
 
+  const protocolRaw = (
+    findBlockDirective(documentDirectives, request, blockStartLine, 'protocol') ??
+    request.directives.find((directive) => directive.knownName === 'protocol')
+      ?.value
+  )?.trim().toLowerCase();
+  const protocol =
+    protocolRaw !== undefined && protocolRaw.length > 0 ? protocolRaw : undefined;
+
+  const sourceRaw = (
+    findBlockDirective(documentDirectives, request, blockStartLine, 'source') ??
+    request.directives.find((directive) => directive.knownName === 'source')
+      ?.value
+  )?.trim();
+  const sourceRef =
+    sourceRaw !== undefined && sourceRaw.length > 0 ? sourceRaw : undefined;
+
   return {
     index,
     method: request.method,
     url: request.url,
     label,
     ...(legacyAuthoredId !== undefined ? { legacyAuthoredId } : {}),
+    ...(protocol !== undefined ? { protocol } : {}),
+    ...(sourceRef !== undefined ? { sourceRef } : {}),
     range: request.range,
   };
+}
+
+function findBlockDirective(
+  documentDirectives: readonly {
+    readonly knownName?: string;
+    readonly value: string;
+    readonly range: Range;
+  }[],
+  request: RequestNode,
+  blockStartLine: number,
+  knownName: string,
+): string | undefined {
+  return documentDirectives
+    .filter(
+      (directive) =>
+        directive.knownName === knownName &&
+        directive.range.start.line >= blockStartLine &&
+        directive.range.end.offset <= request.range.start.offset,
+    )
+    .at(-1)?.value;
 }
 
 function findBlockStartLine(

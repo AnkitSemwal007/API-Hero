@@ -1,6 +1,6 @@
 # Marketplace assets — 2.9.1
 
-Guidance for listing media for **API Hero 2.9.1**.
+Guidance for listing media. Current product version is **2.12.0**; screenshot inventory below remains the 2.9.1 Cloudinary set (no new screenshots invented for 2.12.0).
 
 **Strategy:** README screenshots, banner, social preview, and workflow GIFs are hosted on **Cloudinary** (absolute HTTPS URLs). That keeps the VSIX small. Only in-extension chrome icons ship inside the package (`images/icon.png`, `images/api-*.svg`, `images/execution-*.svg`).
 
@@ -47,7 +47,7 @@ Cloud: `iaojzqjd` · Folder: `api-hero` · Base: `https://res.cloudinary.com/iao
 
 Root `README.md` embeds these CDN URLs beside the sections they describe (hero first; screenshots not stacked in one gallery). Use the same links for Marketplace portal media / GitHub social cards.
 
-**Follow-up:** capture and host **Auth Manager** and **Scenario Editor** screenshots when ready. Existing screenshots remain valid for Collections, Response, History, Execution, Environments, Run Report, and MCP. Prefer a refreshed Run Report shot when compact summary/filters ship in listing media.
+**Follow-up:** capture and host **Auth Manager** screenshots when ready. Existing screenshots remain valid for Collections, Response, History, Execution, Environments, Run Report, and MCP. Prefer a refreshed Run Report shot when compact summary/filters ship in listing media.
 
 ## Banner
 
@@ -57,7 +57,6 @@ See [banner-placeholder.md](../marketplace/banner-placeholder.md). Gallery banne
 
 - [x] Screenshots reflect **2.3.3+** product UI (Execution view, Dependencies, Run Report Debugger, Env Manager)
 - [ ] Auth Manager screenshot (recommended for listing; text coverage in README)
-- [ ] Scenarios / Scenario Editor screenshot (recommended for listing; text coverage in README)
 - [ ] Optional: refreshed Collection Run Report screenshot (compact summary / filters)
 - [x] No GraphQL / OAuth screenshots implying support
 - [x] Icon and banner contrast well in Marketplace dark/light cards

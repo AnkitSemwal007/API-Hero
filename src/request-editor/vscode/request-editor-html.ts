@@ -1030,6 +1030,12 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
     } else {
       delete model.protocol;
     }
+    const source = state && state.model ? state.model.source : model.source;
+    if (typeof source === 'string' && source.trim().length > 0) {
+      model.source = source.trim();
+    } else {
+      delete model.source;
+    }
     return model;
   }
 

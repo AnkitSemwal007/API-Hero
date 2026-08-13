@@ -1,6 +1,6 @@
 # Roadmap
 
-Honest near-term plan for **API Hero** after **2.11.0** (docs + Marketplace icon patch on top of **2.9.0** Postman Import, Insomnia Import, cURL→`.api`, Variable Autocomplete polish, Failure Diagnostics Possible causes, Request/Response Diff, TypeScript generation, VSIX esbuild bundling; **2.8.4** Collection Execution Controls, OpenAPI environment safety + sensitive server vars, header masking alignment, Collection Run Report / Variable Trace UX, Scenario menu cleanup; **2.8.3** Copy as cURL + MCP `apihero_run_scenario`; **2.8.2** OpenAPI URL import; **2.8.1** complete README + Marketplace documentation; **2.8.0** universal MCP `--workspace` + client-owned MCP docs; **2.7.0** MCP server for AI agents; **2.6.0** Scenarios progressive disclosure, project-store scenario paths, Reset Workspace, Run Report failure diagnostics; Authentication Premium UX + Scenario Experience shipped in **2.5.0**; Scenarios Phase 1 foundation in **2.4.0**). Product features through **2.3.x** already ship — Execution Center, Collection Runner / Run Report polish, dependency workflow, Collection Run Debugger, Managers (Environments, Auth), Overview, History Detail, OpenAPI wizard, Response copy/save/search, response variable extraction, and collection chaining (`@depends-on`, per-run store, collection variables). Those are not roadmap gaps.
+Honest near-term plan for **API Hero** after **2.12.0** (docs + Marketplace icon patch on top of **2.9.0** Postman Import, Insomnia Import, cURL→`.api`, Variable Autocomplete polish, Failure Diagnostics Possible causes, Request/Response Diff, TypeScript generation, VSIX esbuild bundling; **2.8.4** Collection Execution Controls, OpenAPI environment safety + sensitive server vars, header masking alignment, Collection Run Report / Variable Trace UX, Scenario menu cleanup; **2.8.3** Copy as cURL + MCP `apihero_run_scenario`; **2.8.2** OpenAPI URL import; **2.8.1** complete README + Marketplace documentation; **2.8.0** universal MCP `--workspace` + client-owned MCP docs; **2.7.0** MCP server for AI agents; **2.6.0** Scenarios progressive disclosure, project-store scenario paths, Reset Workspace, Run Report failure diagnostics; Authentication Premium UX + Scenario Experience shipped in **2.5.0**; Scenarios Phase 1 foundation in **2.4.0**). Product features through **2.3.x** already ship — Execution Center, Collection Runner / Run Report polish, dependency workflow, Collection Run Debugger, Managers (Environments, Auth), Overview, History Detail, OpenAPI wizard, Response copy/save/search, response variable extraction, and collection chaining (`@depends-on`, per-run store, collection variables). Those are not roadmap gaps.
 
 ## Shipped in 2.9.1
 
@@ -88,6 +88,15 @@ Honest near-term plan for **API Hero** after **2.11.0** (docs + Marketplace icon
 | --- | --- |
 | Scenarios Phase 1 | `.apihero/scenarios/*.scenario.json`, Scenario Editor, Run Reports, `apiHero.explorer` view |
 
+## Shipped in 2.12.0
+
+| Item | Notes |
+| --- | --- |
+| Source-code integration | Explicit `@api-hero` / `@source` mappings; CodeLens, hover, Open Definition / Related Source; Run and Generate TypeScript reuse existing engines |
+| Collection Run Report export | Redacted JSON and standalone HTML snapshots of the existing report model |
+| Project package v1 | VS Code Export / Import of `.apihero` (formatVersion 1); secrets and Scenarios excluded |
+| Scenario product surface | Scenarios are not a current VS Code product capability |
+
 ## Near term
 
 | Item | Notes |
@@ -95,10 +104,9 @@ Honest near-term plan for **API Hero** after **2.11.0** (docs + Marketplace icon
 | **Headless CLI / CI Runner** | Shipped in **2.10.0** — `apihero` npm bin; shared headless runtime with MCP |
 | **GraphQL query / mutation over HTTP** | Shipped in **2.11.0** — `@protocol graphql`; reuses `NodeHttpTransport`; no subscriptions |
 | **WebSocket bounded sessions** | Shipped in **2.11.0** — `@protocol websocket`; dedicated transport; no persistent connections |
-| Marketplace asset refresh | Capture Auth Manager + Scenario Editor screenshots; keep README section images in sync |
-| Scenarios Phase 2+ | Deeper step types / orchestration polish after Experience feedback |
+| Marketplace asset refresh | Capture Auth Manager screenshots; keep README section images in sync |
 | Run File | Implement multi-request file execution (today: stub, palette-hidden) |
-| Examples pack | Curated `.api` samples including extract flows; optional scenario samples |
+| Examples pack | Curated `.api` samples including extract flows |
 | Docs drift checks | Keep user/architecture docs matched to `package.json` |
 | Configure MCP for Codex | Convenience command to write/open official Codex config with user consent (**not implemented**) |
 
@@ -115,13 +123,12 @@ Honest near-term plan for **API Hero** after **2.11.0** (docs + Marketplace icon
 
 ## Explicitly not claiming
 
-Do not schedule "build Env Manager / Auth Manager / Overview / Extraction / collection chaining / Execution Center / Scenarios Phase 1 / Authentication Premium UX / Scenario Experience / Postman Import / Insomnia Import / cURL→.api" — those exist. Prefer polish, docs, and assets before large new auth protocols.
+Do not schedule "build Env Manager / Auth Manager / Overview / Extraction / collection chaining / Execution Center / Postman Import / Insomnia Import / cURL→.api" — those exist. Prefer polish, docs, and assets before large new auth protocols. Historical shipped tables above already record past Scenario work; do not treat Scenario UX as a current product capability to build upon.
 
 ## Related
 
 - [Product index](./README.md)
 - [Vision](./vision.md)
 - [User guide](../user/getting-started.md)
-- [Scenarios](../user/scenarios.md)
 - [CLI](../user/cli.md)
 - [ADR-0001](../architecture/adr/0001-variables-extraction-auth-dependencies.md)

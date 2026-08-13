@@ -1,5 +1,5 @@
 import type { ExtensionContext } from 'vscode';
-import { commands, languages, window } from 'vscode';
+import { commands, languages, Position, Uri, window, workspace } from 'vscode';
 
 import {
   CommandRegistrar,
@@ -9,6 +9,7 @@ import {
   createRunRequestWithAssertionsCommand,
   createSelectAuthenticationCommand,
   createSwitchEnvironmentCommand,
+  type RunRequestCommandOptions,
 } from './commands';
 import {
   ApiKeyAuthenticationProvider,
@@ -48,6 +49,7 @@ import { registerCurlImport } from './curl/vscode';
 import { registerOpenApiImport, registerPostmanImport, registerInsomniaImport } from './openapi-import/vscode';
 import { registerRequestEditor } from './request-editor/vscode';
 import { registerScenarios } from './scenarios/vscode';
+import { registerSourceIntegration } from './source-integration/vscode';
 import { COMMAND_IDS, EXTENSION_NAME, normalizeHistoryMaxEntries } from './constants';
 import {
   API_LANGUAGE_ID,
@@ -101,6 +103,7 @@ import {
   registerProjectStore,
   registerResetWorkspace,
 } from './project-store/vscode';
+import { registerProjectPackage } from './project-package/vscode';
 import { VsCodeCollectionFilesystem } from './collections/vscode/mutation-filesystem';
 import {
   createVsCodeNamespaceMigrationPorts,
@@ -130,6 +133,7 @@ export async function activate(context: ExtensionContext): Promise<void> {
   // Migrate / load `.apihero` before EnvironmentManager first capture so
   // dual-read repositories prefer project files when present.
   const projectStoreRegistration = await registerProjectStore(context, logger);
+  registerProjectPackage({ context, logger });
   const environmentManager = new EnvironmentManager(
     new VsCodeVariableConfigurationRepository(),
   );
@@ -497,9 +501,18 @@ export async function activate(context: ExtensionContext): Promise<void> {
     assertionsRegistration.observer,
     extractionRegistration.observer,
   );
+  const mappedRunHolder: {
+    current?: RunRequestCommandOptions['resolveMappedRequest'];
+  } = {};
   const registrations = registrar.register([
-    createRunRequestCommand(orchestrator),
-    createRunRequestWithAssertionsCommand(orchestrator),
+    createRunRequestCommand(orchestrator, {
+      resolveMappedRequest: async (argument) =>
+        mappedRunHolder.current?.(argument),
+    }),
+    createRunRequestWithAssertionsCommand(orchestrator, {
+      resolveMappedRequest: async (argument) =>
+        mappedRunHolder.current?.(argument),
+    }),
     createCopyAsCurlCommand(orchestrator),
     createSwitchEnvironmentCommand(environmentManager),
     createSelectAuthenticationCommand(authenticationProfiles),
@@ -757,6 +770,25 @@ export async function activate(context: ExtensionContext): Promise<void> {
     historyRepository: historyInfrastructure.repository,
     discovery: collectionsRegistration.discovery,
   });
+  const sourceIntegration = registerSourceIntegration({
+    context,
+    logger,
+    discovery: collectionsRegistration.discovery,
+  });
+  mappedRunHolder.current = async (argument) => {
+    const request = await sourceIntegration.resolveMappedRun(argument);
+    if (request === undefined) {
+      return undefined;
+    }
+    const document = await workspace.openTextDocument(Uri.parse(request.filePath));
+    return {
+      text: document.getText(),
+      sourceId: document.uri.toString(),
+      offset: document.offsetAt(
+        new Position(request.range.start.line, request.range.start.column),
+      ),
+    };
+  };
 
   context.subscriptions.push(
     outputChannel,

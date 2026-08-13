@@ -24,7 +24,7 @@ export type ParsedCliArgs =
 
 const RUN_TARGETS = new Set<string>(['request', 'collection', 'scenario']);
 
-export const ROOT_HELP = `API Hero CLI — run requests, collections, and scenarios in CI.
+export const ROOT_HELP = `API Hero CLI — run requests and collections in CI.
 
 Usage:
   apihero --help
@@ -32,7 +32,6 @@ Usage:
   apihero run --help
   apihero run request <request> [options]
   apihero run collection <collection> [options]
-  apihero run scenario <scenario> [options]
 
 Options:
   --workspace <path>       Workspace root (or APIHERO_WORKSPACE / cwd)
@@ -49,16 +48,14 @@ Exit codes:
   4  auth / secret resolution error
 `;
 
-export const RUN_HELP = `apihero run — execute a request, collection, or scenario.
+export const RUN_HELP = `apihero run — execute a request or collection.
 
 Usage:
   apihero run request <request> [options]
   apihero run collection <collection> [options]
-  apihero run scenario <scenario> [options]
 
 <request> may be a label, id, or path fragment (e.g. hello.api).
 <collection> is a collection display name or id.
-<scenario> is a scenario name, id, or .scenario.json path.
 
 Options:
   --workspace <path>       Workspace root (or APIHERO_WORKSPACE / cwd)
@@ -92,7 +89,7 @@ export function parseCliArgs(argv: readonly string[]): ParsedCliArgs {
     }
     return {
       kind: 'error',
-      message: `Unknown command "${argv[0]}". Use: apihero run <request|collection|scenario> …`,
+      message: `Unknown command "${argv[0]}". Use: apihero run <request|collection> …`,
     };
   }
 
@@ -105,7 +102,7 @@ export function parseCliArgs(argv: readonly string[]): ParsedCliArgs {
   if (!RUN_TARGETS.has(targetTypeRaw)) {
     return {
       kind: 'error',
-      message: `Unknown run target "${targetTypeRaw}". Use request, collection, or scenario.`,
+      message: `Unknown run target "${targetTypeRaw}". Use request or collection.`,
     };
   }
   const targetType = targetTypeRaw as CliRunTargetType;

@@ -4,21 +4,32 @@
  */
 import {
   commands,
+  Uri,
   ViewColumn,
   window,
+  workspace,
   type Disposable,
   type WebviewPanel,
 } from 'vscode';
 import { createWebviewNonce } from '../../ui/webview';
 import { COMMAND_IDS } from '../../constants';
+import { describeFilesystemFailure } from '../../shared';
 import type { ResponsePresentation } from '../../response/presentation';
 import type { RunIdentifier, RunSummary } from '../index';
 import type { CollectionRunSessionSnapshot } from '../run-session-models';
+import {
+  renderStandaloneCollectionRunReportHtml,
+  serializeCollectionRunReportJson,
+  suggestedRunReportFileName,
+  confirmOverwriteIfExists,
+  type RunReportExportFormat,
+} from './run-report-export';
 import {
   buildCollectionRunReportModel,
   buildLiveCollectionRunReportModel,
   parseCollectionRunReportMessage,
   renderCollectionRunReportHtml,
+  type CollectionRunReportModel,
 } from './run-report-html';
 
 const PANEL_VIEW_TYPE = 'apiHero.collectionRunReport';
@@ -166,7 +177,6 @@ export class CollectionRunReportPanel implements Disposable {
       { enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [] },
     );
     this.panel = panel;
-    panel.webview.html = renderCollectionRunReportHtml(createWebviewNonce());
     const panelDisposables: Disposable[] = [
       panel.webview.onDidReceiveMessage((raw) => { void this.onMessage(raw); }),
       panel.onDidDispose(() => {
@@ -174,6 +184,7 @@ export class CollectionRunReportPanel implements Disposable {
         this.panel = undefined;
       }),
     ];
+    panel.webview.html = renderCollectionRunReportHtml(createWebviewNonce());
   }
 
   private async onMessage(raw: unknown): Promise<void> {
@@ -182,6 +193,14 @@ export class CollectionRunReportPanel implements Disposable {
     if (message.type === 'ready') {
       if (this.summary !== undefined) { await this.postInit(); return; }
       if (this.lastLiveSnapshot !== undefined) await this.postInitFromLive(this.lastLiveSnapshot);
+      return;
+    }
+    if (message.type === 'export') {
+      try {
+        await this.exportReport();
+      } catch (cause) {
+        await this.notifyExportFailure(cause);
+      }
       return;
     }
     try {
@@ -200,6 +219,9 @@ export class CollectionRunReportPanel implements Disposable {
           : message.type === 'compareRuns'
             ? 'Unable to compare runs for that request.'
             : 'Unable to open that request.';
+      if (this.panel === undefined) {
+        return;
+      }
       await this.panel.webview.postMessage({
         type: 'error',
         message: text || fallback,
@@ -236,6 +258,119 @@ export class CollectionRunReportPanel implements Disposable {
     return this.lastLiveSnapshot?.results.find(
       (result) => result.requestId === requestId,
     )?.presentation;
+  }
+
+  private currentModel(): CollectionRunReportModel | undefined {
+    if (this.summary !== undefined) {
+      return buildCollectionRunReportModel(this.summary, this.reportOptions());
+    }
+    if (this.lastLiveSnapshot !== undefined) {
+      return buildLiveCollectionRunReportModel(
+        this.lastLiveSnapshot,
+        this.reportOptions(),
+      );
+    }
+    return undefined;
+  }
+
+  private async exportReport(): Promise<void> {
+    const model = this.currentModel();
+    if (model === undefined) {
+      await window.showInformationMessage(
+        'No collection run report is available to export.',
+      );
+      return;
+    }
+
+    const choice = await window.showQuickPick(
+      [
+        {
+          label: 'JSON',
+          description: 'Save a .json file',
+          format: 'json' as const,
+        },
+        {
+          label: 'HTML',
+          description: 'Save a standalone .html file',
+          format: 'html' as const,
+        },
+      ],
+      { title: 'Export Run Report', placeHolder: 'Choose an export format' },
+    );
+    if (choice === undefined) {
+      return;
+    }
+
+    await this.saveExportedReport(model, choice.format);
+  }
+
+  private async saveExportedReport(
+    model: CollectionRunReportModel,
+    format: RunReportExportFormat,
+  ): Promise<void> {
+    const fileName = suggestedRunReportFileName(model.collectionName, format);
+    const workspaceFolder = workspace.workspaceFolders?.[0]?.uri;
+    const defaultUri =
+      workspaceFolder === undefined
+        ? Uri.file(fileName)
+        : Uri.joinPath(workspaceFolder, fileName);
+    const uri = await window.showSaveDialog({
+      defaultUri,
+      saveLabel: format === 'json' ? 'Export JSON' : 'Export HTML',
+      filters:
+        format === 'json' ? { JSON: ['json'] } : { HTML: ['html'] },
+    });
+    if (uri === undefined) {
+      return;
+    }
+
+    let exists = false;
+    try {
+      await workspace.fs.stat(uri);
+      exists = true;
+    } catch {
+      // Keep exists=false when the target is not already on disk.
+    }
+
+    const allowed = await confirmOverwriteIfExists(exists, async () => {
+      const overwrite = await window.showWarningMessage(
+        `"${uri.fsPath}" already exists. Overwrite?`,
+        { modal: true },
+        'Overwrite',
+      );
+      return overwrite === 'Overwrite';
+    });
+    if (!allowed) {
+      return;
+    }
+
+    let content: string;
+    try {
+      content =
+        format === 'json'
+          ? serializeCollectionRunReportJson(model)
+          : renderStandaloneCollectionRunReportHtml(model);
+    } catch (cause) {
+      await this.notifyExportFailure(cause);
+      return;
+    }
+
+    try {
+      await workspace.fs.writeFile(uri, Buffer.from(content, 'utf8'));
+    } catch (cause) {
+      await this.notifyExportFailure(cause);
+      return;
+    }
+
+    window.setStatusBarMessage(`Run report saved to ${uri.fsPath}`, 3_000);
+  }
+
+  private async notifyExportFailure(cause: unknown): Promise<void> {
+    const described = describeFilesystemFailure(cause);
+    const text =
+      described ??
+      (cause instanceof Error ? cause.message : String(cause));
+    await window.showErrorMessage(text || 'Unable to export the run report.');
   }
 
   /**

@@ -530,6 +530,20 @@ test('parseApiFileRequests uses @name labels and ranges', () => {
   assert.ok((result.requests[0]?.range.start.offset ?? -1) >= 0);
 });
 
+test('parseApiFileRequests captures protocol and sourceRef', () => {
+  const result = parseApiFileRequests(
+    [
+      '@name Get User',
+      '@protocol graphql',
+      '@source src/services/user.ts',
+      'POST /graphql',
+    ].join('\n'),
+    'sample.api',
+  );
+  assert.equal(result.requests[0]?.protocol, 'graphql');
+  assert.equal(result.requests[0]?.sourceRef, 'src/services/user.ts');
+});
+
 test('parseCollectionMarker accepts name description order and sibling arrays', () => {
   const parsed = parseCollectionMarker(
     JSON.stringify({

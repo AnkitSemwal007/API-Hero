@@ -31,6 +31,9 @@ import {
   MIME_TYPES,
 } from '../constants';
 import {
+  formatRequestHover,
+} from '../../shared/request-hover';
+import {
   createAuthenticationDiagnostics,
   type AuthenticationDiagnosticContext,
 } from './authentication-diagnostics';
@@ -243,9 +246,23 @@ export class RuntimeParserAdapter {
         range: variable.range,
       };
     }
-    for (const request of this.document.requests) {
+    for (let index = 0; index < this.document.requests.length; index += 1) {
+      const request = this.document.requests[index]!;
       const range = methodRange(request);
       if (containsPosition(range, position)) {
+        const previous = this.document.requests[index - 1];
+        const metadata = requestHoverMetadata(
+          this.document,
+          request,
+          this.findBlockStartLine(
+            previous?.range.end.line ?? -1,
+            request.range.start.line,
+          ),
+          range,
+        );
+        if (metadata !== undefined) {
+          return metadata;
+        }
         return hoverFor(request.method, range);
       }
     }
@@ -507,6 +524,65 @@ function directiveNameRange(directive: DirectiveNode): Range {
 function hoverFor(key: string, range: Range): RuntimeHover | undefined {
   const documentation = HOVER_DOCUMENTATION[key];
   return documentation === undefined ? undefined : { key, documentation, range };
+}
+
+function requestHoverMetadata(
+  document: ApiDocument,
+  request: RequestNode,
+  blockStartLine: number,
+  range: Range,
+): RuntimeHover | undefined {
+  const name =
+    findDirectiveValue(request.directives, 'name') ??
+    findPrecedingDirective(document, blockStartLine, request, 'name') ??
+    `${request.method} ${request.url}`.trim();
+  const protocol =
+    findDirectiveValue(request.directives, 'protocol') ??
+    findPrecedingDirective(document, blockStartLine, request, 'protocol');
+  const sourceRef =
+    findDirectiveValue(request.directives, 'source') ??
+    findPrecedingDirective(document, blockStartLine, request, 'source');
+  const hover = formatRequestHover({
+    method: String(request.method),
+    url: request.url,
+    name,
+    protocol: (protocol ?? 'http').trim().toLowerCase() || 'http',
+    ...(sourceRef === undefined ? {} : { sourceRef }),
+  });
+  const methodDocs = HOVER_DOCUMENTATION[request.method];
+  const documentation =
+    methodDocs === undefined
+      ? hover.body
+      : `${hover.body}\n\n${methodDocs}`;
+  return {
+    key: hover.title,
+    documentation,
+    range,
+  };
+}
+
+function findDirectiveValue(
+  directives: readonly DirectiveNode[],
+  knownName: string,
+): string | undefined {
+  return directives.find((directive) => directive.knownName === knownName)
+    ?.value.trim();
+}
+
+function findPrecedingDirective(
+  document: ApiDocument,
+  blockStartLine: number,
+  request: RequestNode,
+  knownName: string,
+): string | undefined {
+  return document.directives
+    .filter(
+      (directive) =>
+        directive.knownName === knownName &&
+        directive.range.start.line >= blockStartLine &&
+        directive.range.end.offset <= request.range.start.offset,
+    )
+    .at(-1)?.value.trim();
 }
 
 function containsPosition(range: Range, position: Position): boolean {

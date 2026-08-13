@@ -33,7 +33,7 @@ Unknown `@protocol` values are a validation error. They are never treated as HTT
 
 ## Variables, auth, collections
 
-GraphQL `variables` in the JSON body use the same `{{name}}` substitution and precedence as REST (`run > document > environment > collection > workspace > global`). Existing authentication profiles and headers apply to the HTTP request. GraphQL requests can run in collections, scenarios, CLI (`apihero run request`), and MCP through the shared execution path.
+GraphQL `variables` in the JSON body use the same `{{name}}` substitution and precedence as REST (`run > document > environment > collection > workspace > global`). Existing authentication profiles and headers apply to the HTTP request. GraphQL requests can run in collections, CLI (`apihero run request`), and MCP through the shared execution path.
 
 ## Success and errors
 

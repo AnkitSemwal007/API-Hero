@@ -82,8 +82,24 @@ test('offers hover only for parser-recognized methods and directives', () => {
   const adapter = new RuntimeParserAdapter(source);
 
   assert.equal(adapter.getHover(positionAt(source, '@timeout', 2))?.key, '@timeout');
-  assert.equal(adapter.getHover(positionAt(source, 'GET /users', 1))?.key, 'GET');
+  assert.equal(adapter.getHover(positionAt(source, 'GET /users', 1))?.key, 'GET /users');
   assert.equal(adapter.getHover(positionAt(source, '# GET', 3)), undefined);
+});
+
+test('request method hover includes protocol-agnostic API Hero metadata', () => {
+  const source = [
+    '@name Get User',
+    '@protocol graphql',
+    '@source src/services/user.ts',
+    'POST /graphql',
+  ].join('\n');
+  const hover = new RuntimeParserAdapter(source).getHover(
+    positionAt(source, 'POST /graphql', 1),
+  );
+  assert.equal(hover?.key, 'POST /graphql');
+  assert.match(hover?.documentation ?? '', /Name: Get User/u);
+  assert.match(hover?.documentation ?? '', /Protocol: GraphQL/u);
+  assert.match(hover?.documentation ?? '', /Source: src\/services\/user\.ts/u);
 });
 
 test('preserves completion candidates for incomplete cursor contexts', () => {

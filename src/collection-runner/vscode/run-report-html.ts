@@ -208,6 +208,7 @@ export type CollectionRunReportInboundMessage =
   | { readonly type: 'open'; readonly requestId: string }
   | { readonly type: 'reveal'; readonly requestId: string }
   | { readonly type: 'runAgain' }
+  | { readonly type: 'export' }
   | { readonly type: 'compareRuns'; readonly requestId: string };
 
 /**
@@ -231,7 +232,14 @@ export const FailurePolicySettingValue = {
 export type FailurePolicySettingValue =
   (typeof FailurePolicySettingValue)[keyof typeof FailurePolicySettingValue];
 
-const INBOUND_TYPES = new Set(['ready', 'open', 'reveal', 'runAgain', 'compareRuns']);
+const INBOUND_TYPES = new Set([
+  'ready',
+  'open',
+  'reveal',
+  'runAgain',
+  'export',
+  'compareRuns',
+]);
 
 const POLICY_LABELS: Readonly<Record<FailurePolicyKindType, string>> =
   Object.freeze(
@@ -878,7 +886,11 @@ export function parseCollectionRunReportMessage(
   if (typeof record.type !== 'string' || !INBOUND_TYPES.has(record.type)) {
     return undefined;
   }
-  if (record.type === 'ready' || record.type === 'runAgain') {
+  if (
+    record.type === 'ready' ||
+    record.type === 'runAgain' ||
+    record.type === 'export'
+  ) {
     if (Object.keys(record).length !== 1) {
       return undefined;
     }
@@ -937,7 +949,7 @@ export function renderCollectionRunReportHtml(nonce: string): string {
 <main id="root">
   <p class="muted loading" id="loading">Loading run report…</p>
 </main>
-<script nonce="${safeNonce}">${REPORT_SCRIPT}</script>
+<script nonce="${safeNonce}">${buildCollectionRunReportScript()}</script>
 </body>
 </html>`;
 }
@@ -1107,7 +1119,7 @@ function resolveOutcomeBadge(
   }
 }
 
-const REPORT_CSS = `
+export const REPORT_CSS = `
 ${WEBVIEW_SHARED_CSS}
 :root { color-scheme: light dark; }
 * { box-sizing: border-box; }
@@ -1577,9 +1589,21 @@ main { display: flex; flex-direction: column; min-height: 100vh; }
 }
 `;
 
-const REPORT_SCRIPT = `
+/**
+ * Builds the Collection Run Report client script.
+ * Standalone mode uses a no-op host API and seeds `model` from `#report-model`.
+ */
+export function buildCollectionRunReportScript(
+  options?: { readonly standalone?: boolean },
+): string {
+  const standalone = options?.standalone === true;
+  const vscodeInit = standalone
+    ? 'const vscode = { postMessage: function () {} };'
+    : 'const vscode = acquireVsCodeApi();';
+  return `
 (function () {
-  const vscode = acquireVsCodeApi();
+  const STANDALONE = ${standalone ? 'true' : 'false'};
+  ${vscodeInit}
   const root = document.getElementById('root');
   let model = null;
   /** @type {'all'|'passed'|'failed'|'skipped'} */
@@ -2168,6 +2192,9 @@ const REPORT_SCRIPT = `
   }
 
   function renderDetailActions(row) {
+    if (STANDALONE) {
+      return '';
+    }
     const canCompare = !!(row.details && row.details.presentation);
     return '<div class="detail-actions">' +
       '<button type="button" class="primary open-btn"' +
@@ -2406,7 +2433,8 @@ const REPORT_SCRIPT = `
       categoryChip('Protocol Failures', model.protocolFailures),
     ).join('');
 
-    const canRunAgain = !model.live && !!model.collectionId;
+    const canRunAgain = !STANDALONE && !model.live && !!model.collectionId;
+    const canExport = !STANDALONE;
     const envLine = model.environmentName
       ? '<span class="sep">·</span> Environment: ' + escapeHtml(model.environmentName)
       : '';
@@ -2439,6 +2467,9 @@ const REPORT_SCRIPT = `
           '<div class="header-actions">' +
             (canRunAgain
               ? '<button type="button" class="primary" id="runAgainBtn">Run Again</button>'
+              : '') +
+            (canExport
+              ? '<button type="button" class="secondary" id="exportBtn">Export</button>'
               : '') +
           '</div>' +
         '</div>' +
@@ -2475,6 +2506,12 @@ const REPORT_SCRIPT = `
     if (runAgainBtn) {
       runAgainBtn.addEventListener('click', function () {
         vscode.postMessage({ type: 'runAgain' });
+      });
+    }
+    const exportBtn = document.getElementById('exportBtn');
+    if (exportBtn) {
+      exportBtn.addEventListener('click', function () {
+        vscode.postMessage({ type: 'export' });
       });
     }
 
@@ -2636,7 +2673,22 @@ const REPORT_SCRIPT = `
     }
   });
 
+  if (STANDALONE) {
+    const seed = document.getElementById('report-model');
+    if (seed && seed.textContent) {
+      try {
+        model = JSON.parse(seed.textContent);
+        render();
+      } catch (err) {
+        root.innerHTML = '<div class="empty-state" role="alert"><strong>Unable to load report</strong>' +
+          escapeHtml(err && err.message ? err.message : String(err)) + '</div>';
+      }
+    }
+    return;
+  }
+
   vscode.postMessage({ type: 'ready' });
 })();
 `;
+}
 

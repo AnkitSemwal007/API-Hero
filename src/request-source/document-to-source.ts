@@ -87,6 +87,7 @@ export function documentToRequestSource(
   const protocol = parseProtocol(
     directiveValue(document, request, 'protocol')?.trim(),
   );
+  const source = directiveValue(document, request, 'source')?.trim();
 
   const { baseUrl, queryParams } = splitUrlAndQuery(request.url);
   const headers = collectHeaders(request);
@@ -119,6 +120,7 @@ export function documentToRequestSource(
       : {}),
     ...(timeoutMs !== undefined ? { timeoutMs } : {}),
     ...(protocol === undefined ? {} : { protocol }),
+    ...(source !== undefined && source.length > 0 ? { source } : {}),
     ...(headers.length > 0 ? { headers } : {}),
     ...(queryParams.length > 0 ? { queryParams } : {}),
     ...(body !== undefined ? { body } : {}),

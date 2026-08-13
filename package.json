@@ -1,8 +1,8 @@
 {
   "name": "api-hero",
   "displayName": "API Hero",
-  "description": "Git-first REST/HTTP, GraphQL-over-HTTP (queries/mutations), and bounded WebSocket client for VS Code plus headless apihero CLI and MCP. Edit .api requests in a UI Request Editor, run with assertions, orchestrate Scenarios, manage Authentication (profiles, Login API sessions, Secret Storage), collections, and environments, import OpenAPI / Postman / Insomnia / cURL, inspect Execution, History, and Run Reports, and run the same collections from CI or AI agents.",
-  "version": "2.11.0",
+  "description": "Git-first REST/HTTP, GraphQL-over-HTTP (queries/mutations), and bounded WebSocket client for VS Code plus headless apihero CLI and MCP. Edit .api requests in a UI Request Editor, run with assertions, manage Authentication (profiles, Login API sessions, Secret Storage), collections, and environments, map source to .api with CodeLens, export Collection Run Reports, import/export portable .apihero project packages, import OpenAPI / Postman / Insomnia / cURL, inspect Execution, History, and Run Reports, and run the same collections from CI or AI agents.",
+  "version": "2.12.0",
   "publisher": "ankitsemwal",
   "license": "MIT",
   "homepage": "https://github.com/AnkitSemwal007/API-Hero",
@@ -49,8 +49,9 @@
     "openapi 3",
     "api collections",
     "collection runner",
-    "scenarios",
-    "api scenarios",
+    "codelens",
+    "project package",
+    ".apihero",
     "mcp",
     "model context protocol",
     "authentication",
@@ -105,6 +106,22 @@
       {
         "language": "api",
         "path": "./snippets/api.json"
+      },
+      {
+        "language": "typescript",
+        "path": "./snippets/api-hero-source.json"
+      },
+      {
+        "language": "javascript",
+        "path": "./snippets/api-hero-source.json"
+      },
+      {
+        "language": "typescriptreact",
+        "path": "./snippets/api-hero-source.json"
+      },
+      {
+        "language": "javascriptreact",
+        "path": "./snippets/api-hero-source.json"
       }
     ],
     "commands": [
@@ -112,7 +129,6 @@
         "command": "apiHero.runRequest",
         "title": "Run Request",
         "icon": "$(play)",
-        "enablement": "editorLangId == api",
         "category": "API Hero"
       },
       {
@@ -170,6 +186,18 @@
       {
         "command": "apiHero.initializeProjectStore",
         "title": "Initialize Project Store",
+        "category": "API Hero"
+      },
+      {
+        "command": "apiHero.exportProject",
+        "title": "Export Project",
+        "icon": "$(export)",
+        "category": "API Hero"
+      },
+      {
+        "command": "apiHero.importProject",
+        "title": "Import Project",
+        "icon": "$(desktop-download)",
         "category": "API Hero"
       },
       {
@@ -537,6 +565,18 @@
         "category": "API Hero"
       },
       {
+        "command": "apiHero.openApiDefinition",
+        "title": "Open API Definition",
+        "icon": "$(go-to-file)",
+        "category": "API Hero"
+      },
+      {
+        "command": "apiHero.openRelatedSource",
+        "title": "Open Related Source",
+        "icon": "$(go-to-file)",
+        "category": "API Hero"
+      },
+      {
         "command": "apiRunner.runRequest",
         "title": "Run Request (legacy)",
         "category": "API Hero"
@@ -589,6 +629,16 @@
       {
         "command": "apiRunner.initializeProjectStore",
         "title": "Initialize Project Store (legacy)",
+        "category": "API Hero"
+      },
+      {
+        "command": "apiRunner.exportProject",
+        "title": "Export Project (legacy)",
+        "category": "API Hero"
+      },
+      {
+        "command": "apiRunner.importProject",
+        "title": "Import Project (legacy)",
         "category": "API Hero"
       },
       {
@@ -928,6 +978,26 @@
           "when": "false"
         },
         {
+          "command": "apiHero.refreshScenarios",
+          "when": "false"
+        },
+        {
+          "command": "apiHero.openScenarioEditor",
+          "when": "false"
+        },
+        {
+          "command": "apiHero.runScenario",
+          "when": "false"
+        },
+        {
+          "command": "apiHero.createScenario",
+          "when": "false"
+        },
+        {
+          "command": "apiHero.focusScenarios",
+          "when": "false"
+        },
+        {
           "command": "apiRunner.runRequest",
           "when": "false"
         },
@@ -969,6 +1039,14 @@
         },
         {
           "command": "apiRunner.initializeProjectStore",
+          "when": "false"
+        },
+        {
+          "command": "apiRunner.exportProject",
+          "when": "false"
+        },
+        {
+          "command": "apiRunner.importProject",
           "when": "false"
         },
         {
@@ -1250,6 +1328,26 @@
           "command": "apiHero.revealActiveRequest",
           "when": "(editorLangId == api && editorTextFocus) || (activeCustomEditorId == 'apiHero.requestEditor' || activeCustomEditorId == 'apiRunner.requestEditor')",
           "group": "navigation@11"
+        },
+        {
+          "command": "apiHero.openRelatedSource",
+          "when": "(editorLangId == api && editorTextFocus) || (activeCustomEditorId == 'apiHero.requestEditor' || activeCustomEditorId == 'apiRunner.requestEditor')",
+          "group": "navigation@12"
+        },
+        {
+          "command": "apiHero.runRequest",
+          "when": "editorTextFocus && resourceLangId =~ /^(typescript|javascript|typescriptreact|javascriptreact)$/",
+          "group": "navigation@10"
+        },
+        {
+          "command": "apiHero.openApiDefinition",
+          "when": "editorTextFocus && resourceLangId =~ /^(typescript|javascript|typescriptreact|javascriptreact)$/",
+          "group": "navigation@11"
+        },
+        {
+          "command": "apiHero.generateTypeScript",
+          "when": "editorTextFocus && resourceLangId =~ /^(typescript|javascript|typescriptreact|javascriptreact)$/",
+          "group": "navigation@12"
         }
       ],
       "view/title": [
@@ -1357,39 +1455,9 @@
           "command": "apiHero.openOverview",
           "when": "view == apiHero.execution",
           "group": "1_more@2"
-        },
-        {
-          "command": "apiHero.createScenario",
-          "when": "view == apiHero.explorer",
-          "group": "navigation@1"
-        },
-        {
-          "command": "apiHero.refreshScenarios",
-          "when": "view == apiHero.explorer",
-          "group": "navigation@2"
         }
       ],
       "view/item/context": [
-        {
-          "command": "apiHero.runScenario",
-          "when": "view == apiHero.explorer && viewItem == scenario",
-          "group": "inline@1"
-        },
-        {
-          "command": "apiHero.openScenarioEditor",
-          "when": "view == apiHero.explorer && viewItem == scenario",
-          "group": "inline@2"
-        },
-        {
-          "command": "apiHero.runScenario",
-          "when": "view == apiHero.explorer && viewItem == scenario",
-          "group": "1_run"
-        },
-        {
-          "command": "apiHero.openScenarioEditor",
-          "when": "view == apiHero.explorer && viewItem == scenario",
-          "group": "2_open"
-        },
         {
           "command": "apiHero.runCollection",
           "when": "view == apiHero.collections && viewItem =~ /^collection/",
@@ -1456,12 +1524,6 @@
           "group": "3_new@2"
         },
         {
-          "command": "apiHero.createScenario",
-          "when": "view == apiHero.collections && viewItem == collection",
-          "group": "3_new@3",
-          "title": "New Scenario..."
-        },
-        {
           "command": "apiHero.createRequest",
           "when": "view == apiHero.collections && viewItem == folder",
           "group": "3_new@1"
@@ -1470,18 +1532,6 @@
           "command": "apiHero.createFolder",
           "when": "view == apiHero.collections && viewItem == folder",
           "group": "3_new@2"
-        },
-        {
-          "command": "apiHero.createScenario",
-          "when": "view == apiHero.collections && viewItem == folder",
-          "group": "3_new@3",
-          "title": "New Scenario..."
-        },
-        {
-          "command": "apiHero.createScenario",
-          "when": "view == apiHero.collections && viewItem =~ /^request/",
-          "group": "3_new@1",
-          "title": "Create Scenario from Request..."
         },
         {
           "command": "apiHero.renameCollection",
@@ -1628,7 +1678,7 @@
         {
           "id": "apiHero.explorer",
           "name": "Scenarios",
-          "when": "apiHero.scenariosVisible"
+          "when": "false"
         },
         {
           "id": "apiHero.execution",
@@ -1645,10 +1695,6 @@
       {
         "view": "apiHero.collections",
         "contents": "No collections yet.\nOpen a folder workspace, create a collection, then add a request — or import OpenAPI / Postman / Insomnia / cURL.\n\n[New Collection](command:apiHero.createCollection)\n[New Request](command:apiHero.createRequest)\n[Import OpenAPI](command:apiHero.importOpenApi)\n[Import Postman](command:apiHero.importPostman)\n[Import Insomnia](command:apiHero.importInsomnia)\n[Import cURL](command:apiHero.importCurl)\n\n[Open Overview](command:apiHero.openOverview)"
-      },
-      {
-        "view": "apiHero.explorer",
-        "contents": "No scenarios yet.\nCollection Runner executes many requests. A Scenario automates one API workflow with branches and shared data.\nCreate one under `.apihero/scenarios/` or pick a starter template.\n\n[New Scenario](command:apiHero.createScenario)\n[Open Overview](command:apiHero.openOverview)"
       },
       {
         "view": "apiHero.execution",
@@ -2249,6 +2295,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
+    "fflate": "^0.8.3",
     "ws": "^8.18.3",
     "yaml": "^2.9.0",
     "zod": "^3.25.76"

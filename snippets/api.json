@@ -77,6 +77,11 @@
     "body": ["@connection ${1:connection-name}"],
     "description": "Select a connection"
   },
+  "Source mapping": {
+    "prefix": "source",
+    "body": ["@source ${1:src/services/example.ts}"],
+    "description": "Link this request to a related source file"
+  },
   "Timeout directive": {
     "prefix": "timeout",
     "body": ["@timeout ${1:30000}"],

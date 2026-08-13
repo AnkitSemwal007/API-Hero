@@ -28,6 +28,14 @@ export {
   renderCollectionRunReportHtml,
   resolveFailurePolicyForRun,
 } from './run-report-html';
+export {
+  redactCollectionRunReportModel,
+  renderStandaloneCollectionRunReportHtml,
+  sanitizeRunReportFileStem,
+  serializeCollectionRunReportJson,
+  suggestedRunReportFileName,
+} from './run-report-export';
+export type { RunReportExportFormat } from './run-report-export';
 export type {
   CollectionRunReportInboundMessage,
   CollectionRunReportModel,

@@ -12,6 +12,8 @@ export const COMMAND_IDS = {
   manageAuthProfiles: 'apiHero.manageAuthProfiles',
   selectAuthentication: 'apiHero.selectAuthentication',
   initializeProjectStore: 'apiHero.initializeProjectStore',
+  exportProject: 'apiHero.exportProject',
+  importProject: 'apiHero.importProject',
   resetWorkspace: 'apiHero.resetWorkspace',
   refreshCollections: 'apiHero.refreshCollections',
 
@@ -80,6 +82,8 @@ export const COMMAND_IDS = {
   compareWithPreviousRun: 'apiHero.compareWithPreviousRun',
   compareCollectionRuns: 'apiHero.compareCollectionRuns',
   generateTypeScript: 'apiHero.generateTypeScript',
+  openApiDefinition: 'apiHero.openApiDefinition',
+  openRelatedSource: 'apiHero.openRelatedSource',
 } as const;
 
 /** A command identifier contributed by API Hero. */
@@ -102,6 +106,8 @@ export const LEGACY_COMMAND_IDS = {
   manageAuthProfiles: 'apiRunner.manageAuthProfiles',
   selectAuthentication: 'apiRunner.selectAuthentication',
   initializeProjectStore: 'apiRunner.initializeProjectStore',
+  exportProject: 'apiRunner.exportProject',
+  importProject: 'apiRunner.importProject',
   resetWorkspace: 'apiRunner.resetWorkspace',
   refreshCollections: 'apiRunner.refreshCollections',
 
@@ -165,6 +171,8 @@ export const LEGACY_COMMAND_IDS = {
   compareWithPreviousRun: 'apiRunner.compareWithPreviousRun',
   compareCollectionRuns: 'apiRunner.compareCollectionRuns',
   generateTypeScript: 'apiRunner.generateTypeScript',
+  openApiDefinition: 'apiRunner.openApiDefinition',
+  openRelatedSource: 'apiRunner.openRelatedSource',
 } as const;
 
 /** A legacy `apiRunner.*` command alias. */

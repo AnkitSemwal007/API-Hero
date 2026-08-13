@@ -4,6 +4,10 @@ export { CommandRegistrar } from './command-registrar';
 export { createPlaceholderCommands } from './placeholder-commands';
 export { registerCommandWithLegacyAlias } from './register-command-with-legacy-alias';
 export { createRunRequestCommand, createRunRequestWithAssertionsCommand } from './run-request-command';
+export type {
+  MappedRunRequestSource,
+  RunRequestCommandOptions,
+} from './run-request-command';
 export {
   createSelectAuthenticationCommand,
 } from './select-authentication-command';

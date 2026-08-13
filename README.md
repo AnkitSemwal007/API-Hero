@@ -4,7 +4,7 @@
 
 Author `.api` requests beside your code, organize them in Git-friendly collections, run with assertions, and reuse the same workflows from MCP or the `apihero` CLI.
 
-> Extension ID: **`ankitsemwal.api-hero`** · Version: **2.11.0** · License: [MIT](LICENSE)
+> Extension ID: **`ankitsemwal.api-hero`** · Version: **2.12.0** · License: [MIT](LICENSE)
 
 [Website](https://apihero.in/) · [Marketplace](https://marketplace.visualstudio.com/items?itemName=ankitsemwal.api-hero) · [npm CLI](https://www.npmjs.com/package/@ankitsemwal007/api-hero) · [Documentation](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/README.md) · [Changelog](CHANGELOG.md) · [Support](SUPPORT.md)
 
@@ -12,7 +12,7 @@ Author `.api` requests beside your code, organize them in Git-friendly collectio
 
 Install from the Marketplace, open a folder workspace, create a `.api` request, and run it with `Ctrl+Alt+R` / `Cmd+Alt+R`.
 
-**2.11.0** includes HTTP / REST, GraphQL-over-HTTP, bounded WebSocket sessions, Collections, Scenarios, Variables, Environments, Assertions, Extraction, OpenAPI / Postman / Insomnia / cURL import, TypeScript generation, MCP, and the `apihero` CLI.
+**2.12.0** includes HTTP / REST, GraphQL-over-HTTP, bounded WebSocket sessions, Collections, Variables, Environments, Assertions, Extraction, OpenAPI / Postman / Insomnia / cURL import, TypeScript generation, source-code integration (CodeLens), Collection Run Report export, portable `.apihero` project packages, MCP, and the `apihero` CLI.
 
 ---
 
@@ -139,25 +139,17 @@ Collections/<Name>/
 - **Run Options** — optional retries for eligible transport failures and skip DELETE for the run
 - **Outcomes:** `passed` / `failed` / `skipped` / `cancelled`
 - **Open Live Report** / **Open Run Report** when finished
+- **Export** the Collection Run Report as redacted JSON or standalone HTML (snapshot of the report model; **Run Again** remains available)
 
 <img src="https://res.cloudinary.com/iaojzqjd/image/upload/screenshot-execution_il1wy7.png" alt="Execution Center" width="800" />
 
-### Scenarios
+### Project package (`.apihero`)
 
-A **Scenario** automates **one** multi-step API workflow (steps, connections, shared data). That is distinct from Collection Runner, which runs **many** requests in a collection, folder, or selection.
+**API Hero: Export Project** writes a portable `My-API-Project.apihero` file. **API Hero: Import Project** validates and restores it. This is a backup / move / share snapshot — it does not replace Git.
 
-| | Collection Runner | Scenarios |
-| --- | --- | --- |
-| Focus | Many requests / regression | One workflow with steps |
-| Storage | `.api` under Collections | `.apihero/scenarios/*.scenario.json` |
+Packages include Collections, `.api` files, environments, variables, and project configuration. Secrets are redacted and not restored. Scenarios are not included. v1 is VS Code-only (no Desktop, CLI, or MCP package commands).
 
-- **Scenario Editor**, **Run Scenario**, and a **Scenario Report** when the run finishes
-- Scenario variables and step outputs flow through the same execution pipeline as collections
-- The Scenarios Activity Bar view stays hidden until scenarios load or you create one
-
-CLI scenario `--inputs` is **not** supported. MCP `apihero_run_scenario` can pass optional `inputs` for that run — see [MCP](#mcp).
-
-→ [Collections](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/collections.md) · [Collection Runner](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/collection-runner.md) · [Scenarios](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/scenarios.md)
+→ [Collections](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/collections.md) · [Collection Runner](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/collection-runner.md) · [Project package](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/project-package.md)
 
 ---
 
@@ -217,8 +209,6 @@ Chain requests so producers run before consumers. Collection Runner analyzes `@d
 | Cycle detection | Circular graphs **block the run** before any request executes |
 
 **Collection Runner honors dependencies.** A single **Run Request** from the editor does **not** auto-run upstream producers — ensure required variables already exist in a persisted scope (e.g. `scope=collection` from an earlier run) or run via Collection Runner.
-
-**Scenarios are separate** from `@depends-on`. Scenarios use `requestRef` + connections under `.apihero/scenarios/`.
 
 ### `@extract` grammar
 
@@ -343,6 +333,7 @@ After a collection/folder/selection run:
 - Per-request rows with outcome / method / search filters
 - **Variable Trace** — produced and consumed names (expand for unresolved names)
 - **Details** — Response, Headers, Assertions (Expected/Actual), Variables, Execution Details, Dependencies, and **Possible causes** when applicable
+- **Export** — JSON or standalone HTML snapshot of the same redacted report model
 
 The Collection Run Debugger holds the **last run in memory** — it is **not** Request History.
 
@@ -362,6 +353,18 @@ The Collection Run Debugger holds the **last run in memory** — it is **not** R
 
 ---
 
+## Source-code integration
+
+Map TypeScript / JavaScript / TSX / JSX to a `.api` request with an explicit `// @api-hero` comment. On `.api` files, `@source` points back to application code.
+
+CodeLens actions: **Run Request**, **Open API Definition**, **Generate TypeScript**. Hover and **Open Related Source** use the same mappings. Ambiguous, deleted, or renamed targets produce no CodeLens.
+
+Execution still uses the existing orchestrator. Type generation still uses the existing TypeScript-from-JSON generator.
+
+→ [Source-code integration](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/source-integration.md)
+
+---
+
 ## TypeScript Generation
 
 Generate TypeScript **types/interfaces** from a successful JSON response body (Response Viewer or **API Hero: Generate TypeScript**).
@@ -369,6 +372,7 @@ Generate TypeScript **types/interfaces** from a successful JSON response body (R
 - Inference from **this one observed body** — not a complete API schema
 - **Copy** to the clipboard or **Create .ts**
 - Type names come from JSON keys only (never from sensitive string values)
+- Mapped source files can generate types via CodeLens after an `@api-hero` annotation — see [Source-code integration](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/source-integration.md)
 
 This is type generation, not arbitrary application code generation.
 
@@ -390,9 +394,9 @@ Existing execution pipeline
 
 <img src="https://res.cloudinary.com/iaojzqjd/image/upload/v1786432275/api-hero-mcp_hrx7xa.gif" alt="API Hero MCP workflow" width="800" />
 
-- MCP is **not** a second HTTP client — it reuses discovery, Collection Runner, ScenarioEngine, and Execution Orchestrator
+- MCP is **not** a second HTTP client — it reuses discovery, Collection Runner, and Execution Orchestrator
 - Runs as an **independent Node stdio process** (not inside the VS Code extension host)
-- Tools for listing collections/requests, running a request or collection, running a scenario (optional MCP `inputs`), and reading redacted run results
+- Tools for listing collections/requests, running a request or collection, and reading redacted run results
 - Headless hosts load filesystem collections and `.apihero` Project Store environments / auth profiles. VS Code settings globals and VS Code Secret Storage are not available — supply secrets via process environment (`APIHERO_SECRET_*` or exact Secret Storage keys)
 - **Installing the VS Code extension does not register MCP** with Codex, Cursor, Claude, or any other client. Configuration is **client-owned**.
 
@@ -406,7 +410,7 @@ After installing `@ankitsemwal007/api-hero` from npm, clients can spawn `api-her
 
 ## CLI
 
-The **`apihero`** CLI is public and shipped on npm. It runs the same Orchestrator / Collection Runner / ScenarioEngine as the extension and MCP — without VS Code.
+The **`apihero`** CLI is public and shipped on npm. It runs the same Orchestrator / Collection Runner as the extension and MCP — without VS Code.
 
 npm package: **`@ankitsemwal007/api-hero`** (binary: `apihero`).
 Marketplace extension id remains **`ankitsemwal.api-hero`**. Installing the VS Code extension does **not** put `apihero` on PATH.
@@ -416,12 +420,11 @@ npm install -g @ankitsemwal007/api-hero
 apihero --help
 apihero run request Login --workspace . --environment local
 apihero run collection Demo --workspace . --json
-apihero run scenario checkout --workspace . --quiet
 ```
 
 Use `--json` in CI for a redacted machine-readable envelope on stdout.
 
-**Not included:** `--var`, OS `process.env` → `{{variable}}`, scenario `--inputs`, parent-directory workspace discovery, Docker, watch mode, or parallel execution.
+**Not included:** `--var`, OS `process.env` → `{{variable}}`, parent-directory workspace discovery, Docker, watch mode, parallel execution, or project package commands.
 
 → [CLI guide](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/cli.md) · [npm package](https://www.npmjs.com/package/@ankitsemwal007/api-hero)
 
@@ -437,13 +440,14 @@ Install **API Hero** from the [Visual Studio Marketplace](https://marketplace.vi
 2. Activity Bar → **API Hero** → **Collections** → **New Collection** / **New Request**, or create a `.api` file.
 3. **Run** — **Ctrl+Alt+R** / **Cmd+Alt+R**, the editor **Run** button, or CodeLens **Run Request**.
 4. Inspect the **Response Viewer**.
+5. Optional: add `// @api-hero name: …` above a TypeScript call to get **Run Request** / **Open API Definition** / **Generate TypeScript** CodeLens. See [Source-code integration](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/source-integration.md).
 
 From a local build:
 
 ```bash
 npm install
 npm run package
-code --install-extension release/api-hero-2.11.0.vsix
+code --install-extension release/api-hero-2.12.0.vsix
 ```
 
 Open **API Hero: Open Overview** anytime for quick actions.
@@ -469,11 +473,14 @@ Requires **Node.js 18+**. See [CLI](#cli).
 | Website | [apihero.in](https://apihero.in/) |
 | Docs home | [docs/README.md](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/README.md) |
 | Getting started | [getting-started.md](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/getting-started.md) |
+| Source-code integration | [source-integration.md](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/source-integration.md) |
+| Project package | [project-package.md](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/project-package.md) |
 | GraphQL | [graphql.md](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/graphql.md) |
 | WebSocket | [websocket.md](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/websocket.md) |
 | CLI | [cli.md](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/cli.md) |
 | MCP for AI agents | [mcp.md](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/mcp.md) |
 | Configuration | [configuration.md](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/reference/configuration.md) |
+| Release notes 2.12.0 | [v2.12.0-release-notes.md](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/release/v2.12.0-release-notes.md) |
 | Release notes 2.11.0 | [v2.11.0-release-notes.md](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/release/v2.11.0-release-notes.md) |
 | Release notes 2.10.1 | [v2.10.1-release-notes.md](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/release/v2.10.1-release-notes.md) |
 

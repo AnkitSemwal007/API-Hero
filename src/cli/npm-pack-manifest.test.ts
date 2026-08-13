@@ -78,7 +78,6 @@ describe('npm pack manifest (package.json)', () => {
     assert.match(cliReadme, /@ankitsemwal007\/api-hero/);
     assert.match(cliReadme, /apihero run request/);
     assert.match(cliReadme, /apihero run collection/);
-    assert.match(cliReadme, /apihero run scenario/);
     assert.match(cliReadme, /--json/);
     assert.doesNotMatch(cliReadme, /npm install -g api-hero(?:\s|$|@)/u);
     assert.doesNotMatch(cliReadme, /apihero[^\n]*--inputs/);

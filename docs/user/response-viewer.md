@@ -93,6 +93,8 @@ Then choose:
 | Action | Behavior |
 | --- | --- |
 | Copy | Copies the generated TypeScript to the clipboard |
+| Preview | Opens generated types in an untitled TypeScript editor (not saved) |
+| Insert into editor | Appends generated types to the current TypeScript file. Existing exported type names require confirmation |
 | Create .ts | Asks for a root interface/type name, then a save destination. Existing `.ts` files require an explicit overwrite confirmation |
 
 Type names come from JSON **keys** only (never from string values such as tokens).

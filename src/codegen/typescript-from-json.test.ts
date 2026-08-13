@@ -25,6 +25,7 @@ test('generates primitives on a named root interface', () => {
   assert.match(result.code, /name: string;/u);
   assert.match(result.code, /active: boolean;/u);
   assert.match(result.code, /not a complete API schema/u);
+  assert.deepEqual(result.declarationNames, ['User']);
   assert.equal(looksLikeValidGeneratedTypeScript(result.code), true);
 });
 
@@ -176,6 +177,58 @@ test('large JSON completes within a sanity budget', () => {
   assert.match(result.code, /export interface ListResponse \{/u);
   assert.match(result.code, /rows: Row\[\];/u);
   assert.equal(looksLikeValidGeneratedTypeScript(result.code), true);
+});
+
+test('attribution comments use request name and path only', () => {
+  const result = generateTypeScriptFromJson(
+    { id: 1, accessToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.aaa.bbb' },
+    {
+      rootName: 'User',
+      attribution: {
+        requestName: 'Get User',
+        requestPath: 'Collections/Demo/Get-User.api',
+      },
+    },
+  );
+  assert.match(result.code, /@api-hero name: Get User/u);
+  assert.match(result.code, /@api-hero request: Collections\/Demo\/Get-User\.api/u);
+  assert.doesNotMatch(result.code, /eyJhbGci/u);
+  assert.doesNotMatch(result.code, /Authorization/u);
+  assert.match(result.code, /accessToken: string;/u);
+  assert.equal(looksLikeValidGeneratedTypeScript(result.code), true);
+});
+
+test('attribution comments strip query secrets from unlabeled names', () => {
+  const result = generateTypeScriptFromJson(
+    { id: 1 },
+    {
+      rootName: 'User',
+      attribution: {
+        requestName: 'GET /users?access_token=super-secret-token',
+        requestPath: 'Collections/Demo/Get-User.api',
+      },
+    },
+  );
+  assert.match(result.code, /@api-hero name: GET \/users/u);
+  assert.doesNotMatch(result.code, /super-secret-token/u);
+  assert.doesNotMatch(result.code, /access_token/u);
+});
+
+test('attribution comments cannot close the generated block comment', () => {
+  const result = generateTypeScriptFromJson(
+    { id: 1 },
+    {
+      rootName: 'User',
+      attribution: {
+        requestName: 'Get */ User',
+        requestPath: 'Collections/*/Get-User.api',
+      },
+    },
+  );
+  assert.doesNotMatch(result.code, /Get \*\/ User/u);
+  assert.doesNotMatch(result.code, /Collections\/\*\/Get-User/u);
+  assert.match(result.code, /@api-hero name: Get {2}User/u);
+  assert.match(result.code, /@api-hero request: Collections\/Get-User\.api/u);
 });
 
 test('depth cap falls back to unknown', () => {

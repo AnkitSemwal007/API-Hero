@@ -4,7 +4,7 @@
 
 ## One-paragraph North Star
 
-You install API Hero, open your repo, and use **Collections**, **Execution**, and **History** in the Activity Bar. **Scenarios** appears when you create or successfully load scenarios, then stays for that workspace. You create folders and requests visually, edit them in the **Request Editor**, pick an environment and auth profile from managers (panels — not extra sidebar views), press Run, and inspect a rich **Response** panel. Collection runs are monitored from **Execution**; per-request history stays in **History**. Everything you save is a normal `.api` file. Teammates review it in Git. Settings JSON and the raw DSL remain available, but everyday work stays UI-first.
+You install API Hero, open your repo, and use **Collections**, **Execution**, and **History** in the Activity Bar. You create folders and requests visually, edit them in the **Request Editor**, pick an environment and auth profile from managers (panels — not extra sidebar views), press Run, and inspect a rich **Response** panel. Collection runs are monitored from **Execution**; per-request history stays in **History**. Everything you save is a normal `.api` file. Teammates review it in Git. Settings JSON and the raw DSL remain available, but everyday work stays UI-first.
 
 ## Already true in v2.3.4
 

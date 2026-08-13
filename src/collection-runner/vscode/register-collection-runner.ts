@@ -1,15 +1,22 @@
 import {
+  Position,
+  Uri,
   window,
   workspace,
   type Disposable,
   type ExtensionContext,
+  type TextDocument,
   type TreeView,
 } from 'vscode';
 
 import { registerCommandWithLegacyAlias } from '../../commands';
+import { parseRunRequestCommandArgument } from '../../commands/run-request-argument';
 
-import type { CollectionDiscoveryService } from '../../collections';
-import type { CollectionTreeNode } from '../../collections';
+import {
+  parseApiFileRequests,
+  type CollectionDiscoveryService,
+  type CollectionTreeNode,
+} from '../../collections';
 import {
   COMMAND_IDS,
   CONFIGURATION_KEYS,
@@ -22,7 +29,7 @@ import {
 } from '../../dependencies';
 import type { VariableDefinition } from '../../models';
 import type { ExecutionOrchestrator } from '../../orchestration';
-import type { Logger } from '../../shared';
+import { sanitizeHoverLabel, type Logger } from '../../shared';
 import { InMemoryRunVariableStore, type CollectionVariableStore } from '../../variables';
 import {
   CollectionRunnerService,
@@ -84,7 +91,17 @@ export interface RegisterCollectionRunnerOptions {
     compareWithPrevious(): unknown;
     canCompareWithPrevious(): boolean;
     canGenerateTypeScript(): boolean;
-    generateTypeScript(rootName?: string): Promise<string | undefined>;
+    generateTypeScript(
+      rootName?: string,
+      options?: {
+        readonly attribution?: {
+          readonly requestName?: string;
+          readonly requestPath?: string;
+        };
+      },
+    ): Promise<string | undefined>;
+    lastExecutionSourceId?(): string | undefined;
+    lastExecutionOffset?(): number | undefined;
     showDiff(
       left: import('../../response/presentation').ResponsePresentation,
       right: import('../../response/presentation').ResponsePresentation,
@@ -348,10 +365,32 @@ export function registerCollectionRunner(
         'Open a Collection Run Report, expand a request’s Details, then choose Compare Runs.',
       );
     }),
-    registerCommandWithLegacyAlias(COMMAND_IDS.generateTypeScript, async () => {
+    registerCommandWithLegacyAlias(COMMAND_IDS.generateTypeScript, async (arg) => {
       if (responseViewer === undefined) {
         await window.showInformationMessage('Response viewer is not available.');
         return;
+      }
+      const argument = parseRunRequestCommandArgument(arg);
+      let mappedDocument: TextDocument | undefined;
+      if (argument !== undefined) {
+        try {
+          mappedDocument = await workspace.openTextDocument(Uri.parse(argument.uri));
+          const offset = mappedDocument.offsetAt(
+            new Position(argument.position.line, argument.position.character),
+          );
+          await orchestrator.runAtPosition({
+            text: mappedDocument.getText(),
+            sourceId: mappedDocument.uri.toString(),
+            offset,
+          });
+        } catch (error: unknown) {
+          await window.showErrorMessage(
+            error instanceof Error
+              ? error.message
+              : 'API Hero could not run the mapped request.',
+          );
+          return;
+        }
       }
       if (!responseViewer.canGenerateTypeScript()) {
         await window.showInformationMessage(
@@ -359,12 +398,54 @@ export function registerCollectionRunner(
         );
         return;
       }
-      await responseViewer.generateTypeScript();
+      if (argument !== undefined && mappedDocument !== undefined) {
+        const lastSource = responseViewer.lastExecutionSourceId?.();
+        const lastOffset = responseViewer.lastExecutionOffset?.();
+        const expectedOffset = mappedDocument.offsetAt(
+          new Position(argument.position.line, argument.position.character),
+        );
+        if (
+          lastSource !== mappedDocument.uri.toString() ||
+          lastOffset !== expectedOffset
+        ) {
+          await window.showInformationMessage(
+            'Generate TypeScript needs a successful JSON response from the mapped request.',
+          );
+          return;
+        }
+      }
+      await responseViewer.generateTypeScript(
+        undefined,
+        mappedDocument === undefined || argument === undefined
+          ? undefined
+          : {
+              attribution: attributionForMappedRequest(
+                mappedDocument,
+                argument.position.line,
+              ),
+            },
+      );
     }),
   ];
 
   context.subscriptions.push(...disposables);
   return disposables;
+}
+
+function attributionForMappedRequest(
+  document: TextDocument,
+  line: number,
+): { readonly requestName?: string; readonly requestPath?: string } {
+  const parsed = parseApiFileRequests(document.getText(), document.uri.toString());
+  const summary = parsed.requests.find((request) => request.range.start.line === line);
+  const requestName = sanitizeHoverLabel(summary?.label ?? '').trim();
+  const folder = workspace.getWorkspaceFolder(document.uri);
+  const requestPath =
+    folder === undefined ? '' : workspace.asRelativePath(document.uri, false).trim();
+  return {
+    ...(requestName.length > 0 ? { requestName } : {}),
+    ...(requestPath.length > 0 ? { requestPath } : {}),
+  };
 }
 
 function countReorderedRequests(dependencies: DependenciesExtension | undefined): number {

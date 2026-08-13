@@ -16,7 +16,7 @@ the [Custom Text Editor](./request-editor.md). Lives in `src/request-source/` â€
 
 Query parameters are encoded into the URL (`?a=1&b=2`) so runtime
 `parseParameters(queryPart(url))` sees them. Layout is the single canonical
-emitter for `.api` text (`@name`, `@description`, `@auth`, `@timeout`, METHOD
+emitter for `.api` text (`@name`, `@description`, `@auth`, `@timeout`, `@protocol`, `@source`, METHOD
 line, headers, body, `expect` lines).
 
 ## Integration

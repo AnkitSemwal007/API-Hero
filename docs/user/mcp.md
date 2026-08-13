@@ -2,7 +2,7 @@
 
 Use API Hero collections from AI agents (Cursor, Claude Code, Codex, Gemini CLI, and other MCP clients) **without the VS Code UI**.
 
-The MCP server is a **standalone Node stdio process**. It is **client-independent** — not hosted inside VS Code. It reuses the same discovery, Collection Runner, and execution orchestrator as the extension — it does **not** invent a parallel HTTP client or collection format. GraphQL-over-HTTP (`@protocol graphql`) and bounded WebSocket (`@protocol websocket`) requests run through the existing `apihero_run_request` / collection / scenario tools; there is no protocol-specific MCP tool.
+The MCP server is a **standalone Node stdio process**. It is **client-independent** — not hosted inside VS Code. It reuses the same discovery, Collection Runner, and execution orchestrator as the extension — it does **not** invent a parallel HTTP client or collection format. GraphQL-over-HTTP (`@protocol graphql`) and bounded WebSocket (`@protocol websocket`) requests run through the existing `apihero_run_request` / collection tools; there is no protocol-specific MCP tool.
 
 ## Client-owned configuration
 
@@ -71,45 +71,10 @@ Without `--workspace`, set `APIHERO_WORKSPACE` or run with cwd at the workspace 
 | `apihero_get_request` | Request details + auth metadata + variable refs |
 | `apihero_run_request` | Run one request via `ExecutionOrchestrator` |
 | `apihero_run_collection` | Run a collection via `CollectionRunnerService` (`failurePolicy`, optional `retry`, optional `skipDestructiveRequests`). Per-request rows are slim (status, diagnostics, assertion expected/actual); use `apihero_get_request_result` for full response bodies |
-| `apihero_run_scenario` | Run a Scenario via `ScenarioEngine` (same engine as UI Run Scenario). Identify by name, id, or `.scenario.json` path; optional `inputs` override variable defaults for this run |
 | `apihero_get_run` | Fetch a run summary / session by `runId` |
 | `apihero_get_request_result` | One request result from a prior run (full secret-redacted response presentation) |
 
 Agents should prefer **collection display names** (case-insensitive). Ids from list/get responses can be reused on later calls.
-
-## Run a Scenario
-
-`apihero_run_scenario` executes an existing Scenario document under `.apihero/scenarios/` through the same `ScenarioEngine` path as the VS Code **Run Scenario** command (no VS Code UI).
-
-Example args:
-
-```json
-{
-  "scenario": "checkout",
-  "inputs": {
-    "apiToken": "override-for-this-run"
-  }
-}
-```
-
-`scenario` may be the scenario **name**, **id**, or a path (absolute, workspace-relative, or under `.apihero/scenarios/`). `inputs` optionally overrides matching scenario variable `defaultValue`s for this run only; unknown keys are ignored.
-
-Result shape (success tool envelope `ok: true`):
-
-- `scenarioId`, `scenarioName`, `runId`, `status` (`completed` | `failed` | `cancelled` | …)
-- `startTime`, `endTime`, `durationMs`
-- `statistics` — `{ total, completed, failed, skipped, cancelled, durationMs }`
-- `steps` — per-step `{ stepId, stepName, status, attempt, durationMs, error?, outputs? }`
-- `variables` — `{ name, value, sensitive, displayValue }` (sensitive values already masked)
-- `timeline` — included when present on the report
-
-**Domain failure vs tool error:** when the scenario finishes with `status: "failed"` (a step failed), the tool still returns `ok: true` with the report. Tool-level errors (`ok: false`) cover missing/ambiguous scenarios, unbound request steps, validation failures, concurrent runs, and engine throws — codes such as `SCENARIO_NOT_FOUND`, `SCENARIO_AMBIGUOUS`, `SCENARIO_UNBOUND`, `SCENARIO_LOAD_FAILED`, `REQUEST_REF_UNRESOLVED`, `SCENARIO_VALIDATION_FAILED`, `RUN_ALREADY_ACTIVE`, `RUN_FAILED`.
-
-**Redaction:** sensitive scenario variables are masked in the execution report; MCP also applies `redactForMcp` before JSON is returned (Bearer tokens, Authorization-like strings, etc.).
-
-**Scenarios vs collection `@depends-on`:** Scenarios use `requestRef` + connections for orchestration. Collection `@depends-on` scheduling is **not** imported into Scenario execution — use Scenarios for multi-step workflows with branching/variables, and collection runs for dependency-ordered collection membership.
-
-Template steps may still use `pending:*` request ids; when `requestRef` uniquely matches a Collection request, MCP resolves the binding at run time (same catalog path as the UI).
 
 ## Generic MCP configuration
 
@@ -287,7 +252,6 @@ Optional live smoke (not unit tests): `node ./scripts/mcp-e2e-smoke.mjs` — doc
    - `apihero_get_request`
    - `apihero_run_request`
    - `apihero_run_collection`
-   - `apihero_run_scenario`
    - `apihero_get_run`
    - `apihero_get_request_result`
 
@@ -313,7 +277,7 @@ This command is **not available yet** — do not look for it in the Command Pale
 
 ```
 AI agent → MCP tool → ApiHeroMcpService
-  → CollectionDiscoveryService / CollectionRunnerService / ScenarioEngine / ExecutionOrchestrator
+  → CollectionDiscoveryService / CollectionRunnerService / ExecutionOrchestrator
   → DefaultRequestExecutor → NodeHttpTransport or WebSocketTransport
   → RunSummary / RequestRunResult / ExecutionReport (secret-safe presentation)
 ```

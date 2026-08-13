@@ -21,6 +21,7 @@ export const DIRECTIVES = [
   '@extract',
   '@sensitive-extract',
   '@depends-on',
+  '@source',
 ] as const;
 
 /** Directives that may occur once in a request block. */
@@ -32,6 +33,7 @@ export const SINGLETON_DIRECTIVES = [
   '@id',
   '@name',
   '@description',
+  '@source',
 ] as const;
 
 /** Frequently used HTTP header names offered by completion. */
@@ -97,4 +99,6 @@ export const HOVER_DOCUMENTATION: Readonly<Record<string, string>> = {
     'Like @extract, but marks the extracted variable as sensitive (masked in UI and reports).',
   '@depends-on':
     'Declares explicit run-order dependencies as human-readable refs: bare @name when unique, or Folder/Name when names collide across folders.',
+  '@source':
+    'Links this request to a related source file (workspace-relative path, optional :line). Used for Open Related Source — not a guessed mapping.',
 };

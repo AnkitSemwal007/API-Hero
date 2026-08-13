@@ -129,6 +129,12 @@ export interface RequestSourceDocument {
    * validation rejects them at run time.
    */
   readonly protocol?: string;
+  /**
+   * Optional `@source` path to a related source file (workspace-relative,
+   * optional `:line`). Omitted from source when empty. Round-tripped so the
+   * Request Editor cannot strip an authored mapping.
+   */
+  readonly source?: string;
   /** Optional leading `#` comment lines (without the `#` prefix). */
   readonly comments?: readonly string[];
 }

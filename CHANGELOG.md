@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.12.0] - 2026-08-14
+
+Source-code integration, Collection Run Report export, and portable `.apihero` project packages. Backward compatible with **2.11.0**.
+
+### Added
+
+- **Source-code integration (VS Code)** — explicit `@api-hero` comments in TypeScript/JavaScript/TSX/JSX and `@source` on `.api` files drive CodeLens (Run Request, Open API Definition, Generate TypeScript), hover, and Open Related Source. Mappings are unique and explicit only (REST and GraphQL). Execution still uses `ExecutionOrchestrator`. Generate TypeScript adds Preview and Insert into editor (with confirmation when type names already exist) and reuses `src/codegen/typescript-from-json.ts`. See [source-code integration](docs/user/source-integration.md).
+- **Collection Run Report export (VS Code)** — export the existing Collection Run Report as redacted JSON or standalone HTML. Export is a snapshot of the in-memory report model. **Run Again** remains available. Secrets (API keys, passwords, Bearer tokens, refresh tokens, Authorization, Cookie) are redacted. Scenario Run Report export is not included.
+- **Project package v1 (VS Code)** — **API Hero: Export Project** and **API Hero: Import Project** move a current API Hero project through a portable `.apihero` file (format `apihero-project`, formatVersion `1`, SHA-256 checksums). Packages include Collections, `.api` files (including nested folders and supported legacy files), environments, variables, project configuration, and auth profile metadata. Secrets, `.apihero/local/`, and Scenarios are not included. Desktop, CLI, and MCP package commands are not included. See [project package](docs/user/project-package.md).
+
+### Improved
+
+- Source ↔ `.api` navigation uses explicit mappings only; ambiguous, deleted, or renamed targets show no CodeLens instead of guessing.
+- Collection Run Report remains the same in-editor report, with optional JSON/HTML export of a redacted snapshot.
+- Projects can be moved between machines as a single `.apihero` file without replacing the Git-first folder workflow.
+
+### Changed
+
+- Scenarios are no longer exposed as a current VS Code product capability. The Activity Bar and Command Palette do not advertise Scenario workflows. Compatibility code may remain for CLI/MCP/tests and must not be treated as a current editor feature.
+
+### Notes
+
+- `.apihero` project packages are VS Code-only in **2.12.0**. Package signing and encryption are not implemented. Import does not restore secrets.
+- Source-code integration is not a second execution engine or a second TypeScript generator.
+
 ## [2.11.0] - 2026-08-13
 
 GraphQL Phase 1 and WebSocket Phase 1 on the shared VS Code / CLI / MCP runtime. Backward compatible with **2.10.1**.

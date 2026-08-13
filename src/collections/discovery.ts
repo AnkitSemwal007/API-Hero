@@ -403,6 +403,10 @@ export class CollectionDiscoveryService {
             detail: file.relativePath,
           },
           range: summary.range,
+          ...(summary.protocol !== undefined ? { protocol: summary.protocol } : {}),
+          ...(summary.sourceRef !== undefined
+            ? { sourceRef: summary.sourceRef }
+            : {}),
         };
         requests[id] = reference;
         if (folderId === undefined) {

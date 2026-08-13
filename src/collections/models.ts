@@ -81,6 +81,10 @@ export interface RequestReference {
   readonly display: DisplayMetadata;
   /** Canonical request range from `parseApiDocument`. */
   readonly range: Range;
+  /** Effective `@protocol` when authored. Omitted means HTTP. */
+  readonly protocol?: string;
+  /** Authored `@source` value when present. */
+  readonly sourceRef?: string;
   readonly extensions?: ExtensionBag;
 }
 

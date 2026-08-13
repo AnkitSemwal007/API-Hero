@@ -30,7 +30,7 @@ History skips runs that never reached transport (parse/validate/variables/auth f
 
 ## Reset workspace data
 
-Use **API Hero: Reset Workspace...** from the Command Palette (no Explorer or Settings UI). Confirm the modal carefully: it permanently removes `.apihero` data (auth profiles, environments, workspace/local variables, scenarios, project config), request history (extension-wide), and related workspace state for the **primary** workspace folder. **Collections**, `.api` request files, collection variables (`api-hero.variables.json`), and project source code are preserved. Workspace settings (`apiHero.*`) are not cleared.
+Use **API Hero: Reset Workspace...** from the Command Palette (no Explorer or Settings UI). Confirm the modal carefully: it permanently removes `.apihero` data (auth profiles, environments, workspace/local variables, project config), request history (extension-wide), and related workspace state for the **primary** workspace folder. **Collections**, `.api` request files, collection variables (`api-hero.variables.json`), and project source code are preserved. Workspace settings (`apiHero.*`) are not cleared.
 
 ## Stubs
 

@@ -15,6 +15,7 @@ const SINGLETON_DIRECTIVES = new Set([
   'id',
   'name',
   'description',
+  'source',
 ]);
 
 const ALLOWED_PROTOCOLS = new Set(['http', 'graphql', 'websocket']);

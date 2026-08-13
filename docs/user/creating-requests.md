@@ -40,6 +40,7 @@ Common directives:
 | `@auth profileId` | Authentication profile for the request |
 | `@protocol graphql` | GraphQL-over-HTTP query or mutation (see [GraphQL](./graphql.md)) |
 | `@protocol websocket` | Bounded WebSocket connect/send/receive/close session (see [WebSocket](./websocket.md)) |
+| `@source` | Optional related source file (`src/app.ts` or `src/app.ts:12`) for Open Related Source (see [Source-code integration](./source-integration.md)) |
 
 For how `@extract` and `@depends-on` chain requests during a collection run, see
 [Request Dependencies & Data Flow](./collection-runner.md#request-dependencies--data-flow).
@@ -70,3 +71,4 @@ Snippets (`get`, `post`, `graphql`, `websocket`, `separator`, and others) are av
 - [Authentication](./authentication.md)
 - [Assertions](./assertions.md)
 - [Response viewer](./response-viewer.md)
+- [Source-code integration](./source-integration.md)

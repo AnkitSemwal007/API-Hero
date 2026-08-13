@@ -59,6 +59,9 @@ describe('collection-run-report-html', () => {
     assert.deepEqual(parseCollectionRunReportMessage({ type: 'runAgain' }), {
       type: 'runAgain',
     });
+    assert.deepEqual(parseCollectionRunReportMessage({ type: 'export' }), {
+      type: 'export',
+    });
     assert.deepEqual(
       parseCollectionRunReportMessage({
         type: 'open',
@@ -88,6 +91,10 @@ describe('collection-run-report-html', () => {
     );
     assert.equal(
       parseCollectionRunReportMessage({ type: 'runAgain', extra: true }),
+      undefined,
+    );
+    assert.equal(
+      parseCollectionRunReportMessage({ type: 'export', extra: true }),
       undefined,
     );
     assert.equal(parseCollectionRunReportMessage(null), undefined);
@@ -607,6 +614,8 @@ describe('collection-run-report-html', () => {
     assert.match(html, /skip-reason/);
     assert.match(html, /expandedRequestId/u);
     assert.match(html, /runAgain/u);
+    assert.match(html, /id="exportBtn"/u);
+    assert.match(html, /type: 'export'/u);
     assert.match(html, /filter-chip/u);
     assert.match(html, /folder-group-header/u);
   });
@@ -930,6 +939,8 @@ describe('collection-run-report-html', () => {
     const { root } = runInitRender(model);
     assert.doesNotMatch(root.innerHTML, /Loading run report/u);
     assert.match(root.innerHTML, /Demo/u);
+    assert.match(root.innerHTML, /id="exportBtn"/u);
+    assert.match(root.innerHTML, /id="runAgainBtn"/u);
   });
 
   test('init message renders failed requests section', () => {

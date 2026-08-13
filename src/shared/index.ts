@@ -32,3 +32,9 @@ export {
   scrubSecretTokensInText,
   scrubTextWithKnownSecrets,
 } from './secret-scrub';
+export {
+  formatProtocol,
+  formatRequestHover,
+  sanitizeHoverLabel,
+} from './request-hover';
+export type { RequestHoverContent, RequestHoverInput } from './request-hover';

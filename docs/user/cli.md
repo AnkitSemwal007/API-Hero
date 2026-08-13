@@ -1,8 +1,8 @@
 # API Hero CLI (`apihero`)
 
-Run API Hero requests, collections, and scenarios from the terminal or CI — **without VS Code**.
+Run API Hero requests and collections from the terminal or CI — **without VS Code**.
 
-The CLI reuses the same headless composition as MCP: `ExecutionOrchestrator`, `CollectionRunnerService`, and `ScenarioEngine`. It does **not** start an MCP server and does **not** import `vscode`.
+The CLI reuses the same headless composition as MCP: `ExecutionOrchestrator` and `CollectionRunnerService`. It does **not** start an MCP server and does **not** import `vscode`.
 
 ## Requirements
 
@@ -46,7 +46,6 @@ apihero --version
 apihero run --help
 apihero run request <request>
 apihero run collection <collection>
-apihero run scenario <scenario>
 ```
 
 ### Options
@@ -59,13 +58,12 @@ apihero run scenario <scenario>
 | `--quiet` | Failures / final result only |
 | `--verbose` | Runtime logs on stderr |
 
-Unknown options exit with code **2**. HTTP, `@protocol graphql`, and `@protocol websocket` use the same `apihero run request` / `collection` / `scenario` commands. There is no `--graphql`, `--websocket`, `--ws`, `--listen`, or `--stream` flag — protocol is chosen on the request.
+Unknown options exit with code **2**. HTTP, `@protocol graphql`, and `@protocol websocket` use the same `apihero run request` / `collection` commands. There is no `--graphql`, `--websocket`, `--ws`, `--listen`, or `--stream` flag — protocol is chosen on the request.
 
 ### Targets
 
 - **request** — label, id, or path fragment (e.g. `hello.api`, `Hello`). Resolved the same way as MCP `runRequest` (workspace-wide when no collection is implied).
 - **collection** — collection display name or id
-- **scenario** — scenario name, id, or `.scenario.json` path under `.apihero/scenarios/`
 
 ## Workspace selection
 
@@ -109,22 +107,10 @@ The CLI does **not** map arbitrary `process.env` names to `{{variable}}` substit
 | Code | Meaning |
 | --- | --- |
 | 0 | Successful execution |
-| 1 | Execution failure (HTTP / assertions / failed scenario or collection counts / CI-unsafe scenario skips) |
+| 1 | Execution failure (HTTP / assertions / failed collection or request counts) |
 | 2 | Invalid arguments / usage |
 | 3 | Project / configuration / validation (unknown env, not found, unbound, empty plan, …) |
 | 4 | Auth / secret resolution (when detectable) |
-
-### Scenario CI semantics
-
-The ScenarioEngine / MCP report may still show an overall non-`failed` status when steps are skipped for preconditions. For **CLI / CI**, a run is **not** exit **0** when:
-
-- any step failed, or
-- the run `status` is `failed` or `cancelled`, or
-- `statistics.cancelled > 0`, or
-- any step is **skipped with an error** (e.g. “Request precondition failed.”), or
-- `total > 0` and `completed === 0`
-
-Dependent skips after a real failure already yield exit **1** via `failed > 0`. This CLI policy does **not** change ScenarioEngine or MCP tool behavior.
 
 ## Output
 
@@ -134,7 +120,7 @@ Human (default) prints a short step/request summary with ✓ / ✗ / ○ and a f
 ```json
 {
   "ok": false,
-  "target": { "type": "scenario", "name": "checkout" },
+  "target": { "type": "collection", "name": "Demo" },
   "status": "failed",
   "statistics": {},
   "steps": [],
@@ -151,7 +137,7 @@ Secrets and Authorization values are always redacted (same helpers as MCP).
 ```bash
 npm install -g @ankitsemwal007/api-hero
 export APIHERO_SECRET_apiHero_auth_profile_demo_token="$DEMO_TOKEN"
-apihero run scenario checkout \
+apihero run collection Demo \
   --workspace "$PWD" \
   --environment staging \
   --json
@@ -163,20 +149,20 @@ apihero run scenario checkout \
 - name: Install API Hero CLI
   run: npm install -g @ankitsemwal007/api-hero
 
-- name: Run scenario
+- name: Run collection
   env:
     APIHERO_SECRET_apiHero_auth_profile_demo_token: ${{ secrets.DEMO_TOKEN }}
-  run: apihero run scenario checkout --workspace . --environment staging --json
+  run: apihero run collection Demo --workspace . --environment staging --json
 ```
 
 ## Limitations
 
 - No VS Code Secret Storage (use env vars above)
 - No interactive prompts or UI failure-policy ask
-- Headless **global** variables are empty (workspace / environment / collection / scenario scopes still apply)
+- Headless **global** variables are empty (workspace / environment / collection scopes still apply)
 - No `--var` / OS-env → `{{variable}}` mapping
-- No scenario `--inputs` flag yet (MCP `apihero_run_scenario` supports `inputs`; CLI may gain parity later)
 - No remote runner, watch mode, parallel runs, or Docker image
+- No project package (`export` / `import`) commands — `.apihero` packages are VS Code-only
 
 ## Related
 

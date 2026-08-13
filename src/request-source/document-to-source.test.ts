@@ -392,4 +392,28 @@ describe('documentToRequestSource / parseSourceToRequestDocument', () => {
     assert.match(serialized, /@protocol mqtt\n/u);
     assert.doesNotMatch(serialized, /@protocol http\n/u);
   });
+
+  test('projects and round-trips @source', () => {
+    const parsed = parseSourceToRequestDocument(
+      [
+        '@name Get User',
+        '@source src/services/user.ts:12',
+        '',
+        'GET https://example.test/users/1',
+        '',
+      ].join('\n'),
+    );
+    assert.equal(parsed.kind, 'single');
+    if (parsed.kind !== 'single') {
+      return;
+    }
+    assert.equal(parsed.document.source, 'src/services/user.ts:12');
+    const roundTrip = parseSourceToRequestDocument(
+      serializeRequestDocument(parsed.document),
+    );
+    assert.equal(roundTrip.kind, 'single');
+    if (roundTrip.kind === 'single') {
+      assert.equal(roundTrip.document.source, 'src/services/user.ts:12');
+    }
+  });
 });

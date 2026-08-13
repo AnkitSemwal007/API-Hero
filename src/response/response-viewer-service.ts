@@ -1,6 +1,7 @@
 import {
   generateTypeScriptFromJsonText,
   sanitizeTypeName,
+  type GenerateTypeScriptOptions,
 } from '../codegen';
 import type { TestReport } from '../assertions';
 import { detectAuthTokensInJson } from '../auth/detect-auth-tokens';
@@ -100,7 +101,11 @@ export interface ResponseViewerHostActions {
     readonly code: string;
     readonly rootName: string;
     readonly suggestedFileName: string;
-    readonly regenerate: (rootName: string) => string;
+    readonly declarationNames: readonly string[];
+    readonly regenerate: (rootName: string) => {
+      readonly code: string;
+      readonly declarationNames: readonly string[];
+    };
   }): void | Promise<void>;
   /** Surface generation failures (no JSON body, parse errors, etc.). */
   notifyGenerateTypeScriptError?(message: string): void | Promise<void>;
@@ -267,13 +272,24 @@ export class ResponseViewerService implements ResponseViewerDisposable {
     return this.resolveJsonForTypeScript() !== undefined;
   }
 
+  /** Source id of the last presented execution, when any. */
+  public lastExecutionSourceId(): string | undefined {
+    return this.lastContext?.sourceId;
+  }
+
+  /** Offset of the last presented execution, when any. */
+  public lastExecutionOffset(): number | undefined {
+    return this.lastContext?.offset;
+  }
+
   /**
    * Infers TypeScript from the last successful JSON response and hands off to
    * the host for Copy / Create .ts. Returns the generated source, or undefined
    * when generation is unavailable.
    */
   public async generateTypeScript(
-    rootName = 'Root',
+    rootName?: string,
+    options?: { readonly attribution?: GenerateTypeScriptOptions['attribution'] },
   ): Promise<string | undefined> {
     const jsonText = this.resolveJsonForTypeScript();
     if (jsonText === undefined) {
@@ -282,24 +298,35 @@ export class ResponseViewerService implements ResponseViewerDisposable {
       );
       return undefined;
     }
-    const parsed = generateTypeScriptFromJsonText(jsonText, {
-      rootName: sanitizeTypeName(rootName),
-    });
+    const generateOptions: GenerateTypeScriptOptions = {
+      rootName: sanitizeTypeName(rootName ?? 'Root'),
+      ...(options?.attribution === undefined
+        ? {}
+        : { attribution: options.attribution }),
+    };
+    const parsed = generateTypeScriptFromJsonText(jsonText, generateOptions);
     if (!parsed.ok) {
       await this.notifyGenerateTypeScriptError(parsed.message);
       return undefined;
     }
-    const regenerate = (nextRootName: string): string => {
+    const regenerate = (nextRootName: string): {
+      readonly code: string;
+      readonly declarationNames: readonly string[];
+    } => {
       const again = generateTypeScriptFromJsonText(jsonText, {
+        ...generateOptions,
         rootName: sanitizeTypeName(nextRootName),
       });
-      return again.ok ? again.result.code : parsed.result.code;
+      return again.ok
+        ? { code: again.result.code, declarationNames: again.result.declarationNames }
+        : { code: parsed.result.code, declarationNames: parsed.result.declarationNames };
     };
     if (this.hostActions.presentGeneratedTypeScript !== undefined) {
       await this.hostActions.presentGeneratedTypeScript({
         code: parsed.result.code,
         rootName: parsed.result.rootName,
         suggestedFileName: `${toKebabFileStem(parsed.result.rootName)}.ts`,
+        declarationNames: parsed.result.declarationNames,
         regenerate,
       });
     } else {
@@ -606,15 +633,9 @@ export class ResponseViewerService implements ResponseViewerDisposable {
     if (model === undefined || model.failure !== undefined) {
       return undefined;
     }
-    const body = model.body;
-    if (
-      body === undefined
-      || body.language !== 'json'
-      || body.truncated
-      || !body.prettyAvailable
-    ) {
-      return undefined;
-    }
+    // Prefer the canonical execution body. `prettyAvailable` is a UI flag
+    // (pretty !== raw) and is false for already-pretty JSON such as
+    // jsonplaceholder — it must not gate generation.
     if (result !== undefined && result.success) {
       const fromResult =
         result.response.body.text
@@ -626,17 +647,21 @@ export class ResponseViewerService implements ResponseViewerDisposable {
           JSON.parse(fromResult);
           return fromResult;
         } catch {
-          // Fall through to presentation pretty text.
+          // Fall through to presentation text.
         }
       }
     }
-    const pretty = body.pretty?.trim();
-    if (pretty === undefined || pretty.length === 0) {
+    const body = model.body;
+    if (body === undefined || body.language !== 'json' || body.truncated) {
+      return undefined;
+    }
+    const candidate = body.pretty?.trim() || body.raw.trim();
+    if (candidate.length === 0) {
       return undefined;
     }
     try {
-      JSON.parse(pretty);
-      return pretty;
+      JSON.parse(candidate);
+      return candidate;
     } catch {
       return undefined;
     }
@@ -679,18 +704,23 @@ export class ResponseViewerService implements ResponseViewerDisposable {
   private releasePanel(disposePanel: boolean): void {
     const panel = this.panel;
     this.panel = undefined;
-    this.lastModel = undefined;
-    this.lastExtraction = undefined;
-    this.lastResult = undefined;
-    this.lastContext = undefined;
     this.lastDiff = undefined;
     for (const disposable of this.panelDisposables) {
       disposable.dispose();
     }
     this.panelDisposables = [];
     if (disposePanel) {
+      // Extension shutdown: drop the last execution snapshot.
+      this.lastModel = undefined;
+      this.lastExtraction = undefined;
+      this.lastResult = undefined;
+      this.lastContext = undefined;
       panel?.dispose();
+      return;
     }
+    // Closing the webview must not drop the last JSON snapshot. Generate
+    // TypeScript (command / CodeLens) is valid after a successful JSON run
+    // even when VS Code disposes the panel (retainContextWhenHidden: false).
   }
 }
 

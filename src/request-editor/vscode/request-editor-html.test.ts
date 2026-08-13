@@ -497,6 +497,35 @@ describe('request editor webview helpers', () => {
     );
   });
 
+  test('parseRequestSourceDocument round-trips source', () => {
+    assert.equal(
+      parseRequestSourceDocument({
+        name: 'Get User',
+        method: 'GET',
+        url: 'https://example.test/users',
+        source: 'src/services/user.ts:12',
+      })?.source,
+      'src/services/user.ts:12',
+    );
+    assert.equal(
+      parseRequestSourceDocument({
+        name: 'Get User',
+        method: 'GET',
+        url: 'https://example.test/users',
+      })?.source,
+      undefined,
+    );
+    assert.equal(
+      parseRequestSourceDocument({
+        name: 'Get User',
+        method: 'GET',
+        url: 'https://example.test/users',
+        source: 12,
+      }),
+      undefined,
+    );
+  });
+
   test('masks and restores sensitive variables for the webview', () => {
     const baseline = {
       name: 'S',

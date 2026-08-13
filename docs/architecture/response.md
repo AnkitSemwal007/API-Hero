@@ -98,7 +98,9 @@ The viewer posts `generateTypeScript`; `ResponseViewerService` reads the last
 successful JSON body text, generates declarations with an explicit “one observed
 response” disclaimer, and delegates **Copy** / **Create .ts** (name + destination,
 overwrite confirmation) to host actions. Type names are derived from JSON keys
-only — never from string values.
+only — never from string values. Host UX also offers **Preview** (untitled
+editor) and **Insert into editor** for TypeScript files (confirms when exported
+type names already exist).
 
 CSS uses VS Code foreground, background, border, focus, button, editor, and
 symbol variables. It declares light/dark color-scheme support, responsive

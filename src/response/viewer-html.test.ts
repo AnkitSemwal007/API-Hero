@@ -411,6 +411,114 @@ test('offers Generate TypeScript for successful JSON and presents via host', asy
   assert.equal(presented[1]?.rootName, 'User');
 });
 
+test('generateTypeScript attribution and lastExecutionSourceId stay request-bound', async () => {
+  const factory = new MockPanelFactory();
+  const presented: string[] = [];
+  const viewer = new ResponseViewerService(
+    factory,
+    () => 'nonce',
+    {
+      copyText: () => undefined,
+      saveText: () => undefined,
+      presentGeneratedTypeScript: (input) => {
+        presented.push(input.code);
+      },
+    },
+  );
+
+  viewer.show(result('{"id":1}'), undefined, undefined, {
+    sourceId: 'file:///ws/Collections/Demo/Get-User.api',
+    requestKey: 'request:file:///ws/Collections/Demo/Get-User.api#0',
+    offset: 0,
+  });
+  assert.equal(
+    viewer.lastExecutionSourceId(),
+    'file:///ws/Collections/Demo/Get-User.api',
+  );
+  assert.equal(viewer.lastExecutionOffset(), 0);
+
+  const code = await viewer.generateTypeScript('User', {
+    attribution: {
+      requestName: 'Get User',
+      requestPath: 'Collections/Demo/Get-User.api',
+    },
+  });
+  assert.match(code ?? '', /@api-hero name: Get User/u);
+  assert.match(code ?? '', /@api-hero request: Collections\/Demo\/Get-User\.api/u);
+  assert.equal(presented.length, 1);
+});
+
+test('Generate TypeScript remains available after the response panel is closed', async () => {
+  const factory = new MockPanelFactory();
+  const presented: string[] = [];
+  const viewer = new ResponseViewerService(
+    factory,
+    () => 'nonce',
+    {
+      copyText: () => undefined,
+      saveText: () => undefined,
+      presentGeneratedTypeScript: (input) => {
+        presented.push(input.code);
+      },
+    },
+  );
+
+  viewer.show(result('{"id":1,"name":"Ada"}'), undefined, undefined, {
+    sourceId: 'file:///ws/Collections/Demo/Get-User.api',
+    requestKey: 'request:file:///ws/Collections/Demo/Get-User.api#0',
+    offset: 12,
+  });
+  factory.panels[0]!.closeFromUser();
+  assert.equal(viewer.canGenerateTypeScript(), true);
+  assert.equal(
+    viewer.lastExecutionSourceId(),
+    'file:///ws/Collections/Demo/Get-User.api',
+  );
+  assert.equal(viewer.lastExecutionOffset(), 12);
+
+  const code = await viewer.generateTypeScript('User');
+  assert.match(code ?? '', /export interface User \{/u);
+  assert.equal(presented.length, 1);
+
+  viewer.update(result('{"id":2}'));
+  assert.equal(factory.panels.length, 2);
+  assert.equal(viewer.canGenerateTypeScript(), true);
+
+  viewer.dispose();
+  assert.equal(viewer.canGenerateTypeScript(), false);
+  assert.equal(viewer.lastExecutionSourceId(), undefined);
+  assert.equal(viewer.lastExecutionOffset(), undefined);
+});
+
+test('Generate TypeScript works when JSON is already pretty-printed', async () => {
+  const factory = new MockPanelFactory();
+  const presented: string[] = [];
+  const viewer = new ResponseViewerService(
+    factory,
+    () => 'nonce',
+    {
+      copyText: () => undefined,
+      saveText: () => undefined,
+      presentGeneratedTypeScript: (input) => {
+        presented.push(input.code);
+      },
+    },
+  );
+
+  const pretty = JSON.stringify({ id: 1, name: 'Ada' }, undefined, 2);
+  viewer.show(result(pretty));
+  assert.equal(presentExecutionResult(result(pretty)).body?.prettyAvailable, false);
+  assert.equal(viewer.canGenerateTypeScript(), true);
+  assert.match(
+    factory.panels[0]!.html,
+    /<button[^>]*data-action="generateTypeScript"/u,
+  );
+  const code = await viewer.generateTypeScript('User');
+  assert.match(code ?? '', /export interface User \{/u);
+  assert.match(code ?? '', /name: string;/u);
+  assert.equal(presented.length, 1);
+});
+
 test('Generate TypeScript is unavailable for non-JSON bodies', () => {
   const factory = new MockPanelFactory();
   const viewer = new ResponseViewerService(factory, () => 'nonce');

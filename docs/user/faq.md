@@ -6,7 +6,7 @@
 
 ## Why Collections, Execution, and History in the Activity Bar?
 
-**Collections** organize requests, **Execution** monitors live collection runs, and **History** keeps per-request results. Those three are the default Activity Bar views. **Scenarios** is progressively disclosed: it appears after a successful scenario load or when you create a scenario, then stays visible for that workspace. Managers (Environments, Auth), Overview, Response, History Detail, Run Report, and wizards open as editors or panels — Environments are intentionally not an Activity Bar view.
+**Collections** organize requests, **Execution** monitors live collection runs, and **History** keeps per-request results. Those three are the Activity Bar views. Managers (Environments, Auth), Overview, Response, History Detail, Run Report, and wizards open as editors or panels — Environments are intentionally not an Activity Bar view.
 
 ## Is GraphQL supported?
 

@@ -1,6 +1,6 @@
 # API Hero CLI
 
-Headless runner for API Hero requests, collections, and scenarios — without VS Code.
+Headless runner for API Hero requests and collections — without VS Code.
 
 The `apihero` binary reuses the same execution pipeline as the VS Code extension and MCP server. It does **not** start an MCP server and does **not** require VS Code.
 
@@ -32,7 +32,6 @@ apihero --version
 apihero run --help
 apihero run request <request>
 apihero run collection <collection>
-apihero run scenario <scenario>
 ```
 
 ### Options
@@ -67,16 +66,6 @@ apihero run collection Demo --workspace . --json
 
 `<collection>` is a collection display name or id.
 
-### Scenario
-
-```bash
-apihero run scenario checkout --workspace . --quiet
-```
-
-`<scenario>` is a scenario name, id, or `.scenario.json` path under `.apihero/scenarios/`.
-
-The CLI does **not** support `--inputs`. MCP `apihero_run_scenario` can pass optional `inputs`; that is MCP-only.
-
 ## Environment
 
 When `.apihero` exists, the CLI loads environments, workspace variables, and auth **profiles** from the Project Store. Global VS Code settings variables are empty in headless runs.
@@ -103,7 +92,7 @@ Example `--json` envelope:
 ```json
 {
   "ok": false,
-  "target": { "type": "scenario", "name": "checkout" },
+  "target": { "type": "collection", "name": "Demo" },
   "status": "failed",
   "statistics": {},
   "steps": [],
@@ -118,12 +107,10 @@ Structured output redacts credential-like values (tokens, passwords, sensitive h
 | Code | Meaning |
 | --- | --- |
 | 0 | Successful execution |
-| 1 | Request, assertion, collection, or scenario failure (including CLI skip policy for precondition-skipped scenario steps) |
+| 1 | Request, assertion, or collection failure |
 | 2 | Invalid arguments / usage |
 | 3 | Workspace / request / collection / environment resolution failure |
 | 4 | Auth / secret resolution (when detectable) |
-
-For **CLI / CI**, a scenario run is **not** exit **0** when any step failed, the run status is `failed` or `cancelled`, `statistics.cancelled > 0`, a step is skipped with an error, or `total > 0` and `completed === 0`. This CLI policy does not change ScenarioEngine or MCP tool behavior.
 
 ## CI usage
 
@@ -154,7 +141,7 @@ Do not put real API keys, tokens, or secrets in command examples or committed co
 ## Workspace requirements
 
 - A folder with `Collections/<Name>/` (standard API Hero layout)
-- Optional `.apihero/` Project Store for environments, auth profile metadata, and scenarios
+- Optional `.apihero/` Project Store for environments and auth profile metadata
 
 Workspace priority (first wins):
 
@@ -169,7 +156,6 @@ Invalid / empty workspaces return configuration errors (exit **3**), for example
 ## Not included
 
 - `--var` / OS env → `{{variable}}` mapping
-- Scenario `--inputs`
 - Parent workspace discovery
 - Docker image, watch mode, or parallel execution
 - Interactive prompts or UI failure-policy ask

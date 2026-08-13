@@ -3,7 +3,7 @@
  *
  * Layout (aligned with OpenAPI `generateRequestSource`):
  * - optional `#` comments
- * - `@name`, optional `@description`, `@auth`, `@variable`, `@extract`, `@depends-on`
+ * - `@name`, optional `@description`, `@auth`, `@variable`, `@extract`, `@depends-on`, `@source`
  * - METHOD url(?query)
  * - headers (disabled → `# Name: value`)
  * - blank line + body
@@ -63,6 +63,11 @@ export function serializeRequestDocument(
   const protocol = document.protocol?.trim().toLowerCase();
   if (protocol !== undefined && protocol.length > 0) {
     lines.push(`@protocol ${protocol}`);
+  }
+
+  const source = document.source?.trim();
+  if (source !== undefined && source.length > 0) {
+    lines.push(`@source ${singleLine(source)}`);
   }
 
   for (const variable of document.variables ?? []) {

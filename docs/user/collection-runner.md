@@ -224,14 +224,14 @@ The **Collection Run Report** opens after a collection (or folder / selection) r
 
 Dependency edges and reorder badges still appear when applicable.
 
-### How scenarios relate
+**Export**
 
-[Scenarios](./scenarios.md) orchestrate workflows with their own step graph:
-connections and `requestRef` control order and which Collection request each
-step runs. Scenario scheduling does **not** auto-import or apply collection
-`@depends-on` / implicit produces→consumes edges. Use Collection Runner for
-bulk collection dependency order; use Scenarios when you need branches and
-scenario-level control flow.
+Export writes a **snapshot** of the current Collection Run Report model:
+
+- **JSON** — redacted machine-readable report
+- **Standalone HTML** — self-contained file you can open in a browser
+
+Secrets (API keys, passwords, Bearer tokens, refresh tokens, Authorization, Cookie, and other sensitive values) are redacted. **Run Again** remains available on the live report. Export is not a Scenario Run Report.
 
 ## Collection Run Debugger
 
@@ -266,6 +266,5 @@ directly, or use `@extract … scope=collection` to write it from a response.
 
 - [Collections](./collections.md)
 - [Variables](./variables.md)
-- [Scenarios](./scenarios.md)
 - [Assertions](./assertions.md)
 - [History](./history.md)

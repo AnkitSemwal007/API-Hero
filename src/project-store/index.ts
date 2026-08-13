@@ -52,6 +52,12 @@ export {
   parseWorkspaceDocument,
 } from './parse';
 export {
+  serializeJson,
+  toAuthProfilesDocument,
+  toTrackedVariable,
+  toWorkspaceDocument,
+} from './serialize';
+export {
   readVariablesLocalOverlay,
   writeVariablesLocalOverlay,
 } from './variables-local';

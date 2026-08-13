@@ -1,22 +1,40 @@
-import { Position, window, type TextDocument } from 'vscode';
+import { Position, Uri, window, workspace, type TextDocument } from 'vscode';
 
 import { COMMAND_IDS } from '../constants';
 import { API_LANGUAGE_ID } from '../language-support/constants';
 import type { ExecutionOrchestrator } from '../orchestration';
 import { getActiveRequestEditorDocument } from '../request-editor/vscode';
 import type { CommandDefinition } from './command-definition';
+import { parseRunRequestCommandArgument } from './run-request-argument';
 import {
   resolveRunRequestInvocation,
   type RunRequestDocumentView,
 } from './resolve-run-request-invocation';
 
+export interface MappedRunRequestSource {
+  readonly text: string;
+  readonly sourceId: string;
+  readonly offset: number;
+}
+
+export interface RunRequestCommandOptions {
+  /**
+   * Resolves an explicit source-file mapping when no `.api` document is active
+   * and no CodeLens argument was supplied (Command Palette from TypeScript).
+   */
+  readonly resolveMappedRequest?: (
+    suppliedArgument: unknown,
+  ) => Promise<MappedRunRequestSource | undefined>;
+}
+
 /** Creates the sole command adapter for single-request execution. */
 export function createRunRequestCommand(
   orchestrator: ExecutionOrchestrator,
+  options?: RunRequestCommandOptions,
 ): CommandDefinition {
   return {
     id: COMMAND_IDS.runRequest,
-    execute: createRunRequestExecutor(orchestrator),
+    execute: createRunRequestExecutor(orchestrator, options),
   };
 }
 
@@ -26,44 +44,49 @@ export function createRunRequestCommand(
  */
 export function createRunRequestWithAssertionsCommand(
   orchestrator: ExecutionOrchestrator,
+  options?: RunRequestCommandOptions,
 ): CommandDefinition {
   return {
     id: COMMAND_IDS.runRequestWithAssertions,
-    execute: createRunRequestExecutor(orchestrator),
+    execute: createRunRequestExecutor(orchestrator, options),
   };
 }
 
 function createRunRequestExecutor(
   orchestrator: ExecutionOrchestrator,
+  options?: RunRequestCommandOptions,
 ): (...args: readonly unknown[]) => Promise<void> {
   return async (...args: readonly unknown[]) => {
-    const resolvedDocument = resolveRunRequestDocument();
-    const resolved = resolveRunRequestInvocation({
-      suppliedArgument: args[0],
-      activeDocument:
-        resolvedDocument === undefined
-          ? undefined
-          : toRunRequestDocumentView(resolvedDocument.document),
-      activeSelection: resolvedDocument?.selection,
-      apiLanguageId: API_LANGUAGE_ID,
-    });
-
-    if (!resolved.ok) {
-      await window.showErrorMessage(resolved.errorMessage);
+    const argument = parseRunRequestCommandArgument(args[0]);
+    const resolvedDocument = await resolveRunRequestDocument(argument);
+    if (resolvedDocument !== undefined) {
+      const resolved = resolveRunRequestInvocation({
+        suppliedArgument: args[0],
+        activeDocument: toRunRequestDocumentView(resolvedDocument.document),
+        activeSelection: resolvedDocument.selection,
+        apiLanguageId: API_LANGUAGE_ID,
+      });
+      if (!resolved.ok) {
+        await window.showErrorMessage(resolved.errorMessage);
+        return;
+      }
+      await orchestrator.runAtPosition({
+        text: resolvedDocument.document.getText(),
+        sourceId: resolvedDocument.document.uri.toString(),
+        offset: resolved.offset,
+      });
       return;
     }
-    if (resolvedDocument === undefined) {
-      await window.showErrorMessage(
-        'Open an API Hero request file and try again.',
-      );
+
+    const mapped = await options?.resolveMappedRequest?.(args[0]);
+    if (mapped !== undefined) {
+      await orchestrator.runAtPosition(mapped);
       return;
     }
 
-    await orchestrator.runAtPosition({
-      text: resolvedDocument.document.getText(),
-      sourceId: resolvedDocument.document.uri.toString(),
-      offset: resolved.offset,
-    });
+    await window.showErrorMessage(
+      'Open an API Hero request file, or add an @api-hero mapping in source, and try again.',
+    );
   };
 }
 
@@ -75,12 +98,27 @@ interface ResolvedRunRequestDocument {
   };
 }
 
-/**
- * Prefer a focused `api` text editor; otherwise the active Request Editor panel.
- */
-function resolveRunRequestDocument(): ResolvedRunRequestDocument | undefined {
+async function resolveRunRequestDocument(
+  argument: ReturnType<typeof parseRunRequestCommandArgument>,
+): Promise<ResolvedRunRequestDocument | undefined> {
+  if (argument !== undefined) {
+    try {
+      const uri = Uri.parse(argument.uri);
+      const document = await workspace.openTextDocument(uri);
+      if (!isApiDocument(document)) {
+        return undefined;
+      }
+      return {
+        document,
+        selection: argument.position,
+      };
+    } catch {
+      return undefined;
+    }
+  }
+
   const editor = window.activeTextEditor;
-  if (editor !== undefined && editor.document.languageId === API_LANGUAGE_ID) {
+  if (editor !== undefined && isApiDocument(editor.document)) {
     return {
       document: editor.document,
       selection: {
@@ -91,12 +129,18 @@ function resolveRunRequestDocument(): ResolvedRunRequestDocument | undefined {
   }
 
   const tracked = getActiveRequestEditorDocument();
-  if (tracked !== undefined && tracked.languageId === API_LANGUAGE_ID) {
-    // Request Editor is single-request — offset 0 via missing selection.
+  if (tracked !== undefined && isApiDocument(tracked)) {
     return { document: tracked };
   }
 
   return undefined;
+}
+
+function isApiDocument(document: TextDocument): boolean {
+  return (
+    document.languageId === API_LANGUAGE_ID ||
+    document.uri.path.toLowerCase().endsWith('.api')
+  );
 }
 
 function toRunRequestDocumentView(
@@ -104,7 +148,10 @@ function toRunRequestDocumentView(
 ): RunRequestDocumentView {
   return {
     uri: document.uri.toString(),
-    languageId: document.languageId,
+    languageId:
+      document.languageId === API_LANGUAGE_ID
+        ? document.languageId
+        : API_LANGUAGE_ID,
     validatePosition: (position) => {
       const validated = document.validatePosition(
         new Position(position.line, position.character),

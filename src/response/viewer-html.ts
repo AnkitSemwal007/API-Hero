@@ -503,7 +503,6 @@ function renderBody(
   const generateTypeScript =
     options.canGenerateTypeScript === true
     && body.language === 'json'
-    && body.prettyAvailable
     && !body.truncated
       ? '<button type="button" data-action="generateTypeScript" title="Generate TypeScript types from this JSON response">Generate TypeScript</button>'
       : '';

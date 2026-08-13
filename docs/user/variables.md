@@ -63,8 +63,8 @@ During a **collection run**, extract in one request and consume with `{{name}}`
 in a later one. For example: Login `@extract`s `token` → Get User uses
 `{{token}}` and `@extract`s `userId` → Get Orders uses `{{userId}}`. The
 Collection Runner reorders by produces/consumes (and optional `@depends-on`) so
-producers run first. Details, failure skip behavior, and how this differs from
-Scenarios: [Request Dependencies & Data Flow](./collection-runner.md#request-dependencies--data-flow).
+producers run first. Details and failure skip behavior:
+[Request Dependencies & Data Flow](./collection-runner.md#request-dependencies--data-flow).
 
 ## Resolution rules
 

@@ -335,6 +335,13 @@ export function parseRequestSourceDocument(
   if (record.id !== undefined && typeof record.id !== 'string') {
     return undefined;
   }
+  if (record.source !== undefined && typeof record.source !== 'string') {
+    return undefined;
+  }
+  const source =
+    typeof record.source === 'string' && record.source.trim().length > 0
+      ? record.source.trim()
+      : undefined;
 
   const model: RequestSourceDocument = {
     name: record.name,
@@ -351,6 +358,7 @@ export function parseRequestSourceDocument(
       ? { timeoutMs: record.timeoutMs }
       : {}),
     ...(protocol === undefined ? {} : { protocol }),
+    ...(source === undefined ? {} : { source }),
     ...(headers !== null ? { headers } : {}),
     ...(queryParams !== null ? { queryParams } : {}),
     ...(body !== null ? { body } : {}),

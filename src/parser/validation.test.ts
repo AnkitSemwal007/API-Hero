@@ -590,3 +590,28 @@ test('treats @protocol as a known directive and rejects unknown protocol values'
     ),
   );
 });
+
+test('treats @source as a known singleton directive', () => {
+  const known = validateApiDocument(
+    parseApiDocument('@source src/services/user.ts\nGET /users\n').ast,
+  );
+  assert.equal(
+    known.diagnostics.filter(
+      (diagnostic) =>
+        diagnostic.code === VALIDATION_DIAGNOSTIC_CODES.unknownDirective,
+    ).length,
+    0,
+  );
+
+  const duplicate = validateApiDocument(
+    parseApiDocument(
+      '@source src/a.ts\n@source src/b.ts\nGET /users\n',
+    ).ast,
+  );
+  assert.ok(
+    duplicate.diagnostics.some(
+      (diagnostic) =>
+        diagnostic.code === VALIDATION_DIAGNOSTIC_CODES.duplicateDirective,
+    ),
+  );
+});

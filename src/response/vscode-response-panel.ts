@@ -2,16 +2,24 @@ import type { WebviewPanel } from 'vscode';
 import {
   commands,
   env,
+  Position,
+  Range,
   Uri,
   ViewColumn,
   window,
   workspace,
+  WorkspaceEdit,
 } from 'vscode';
 
 import { sanitizeTypeName } from '../codegen';
 import { COMMAND_IDS } from '../constants';
 import type { VariableWriteTargetScope, VariableWriter } from '../extraction';
 import type { RequestSourceExtractionRule } from '../request-source';
+import {
+  collidingGeneratedTypeNames,
+  prepareGeneratedTypeInsertion,
+} from '../source-integration/type-insertion';
+import { isTypeScriptLanguageId } from '../source-integration/languages';
 import { insertExtractionRuleIntoSource } from './vscode-insert-extraction-rule';
 import type {
   ResponseViewerDisposable,
@@ -138,27 +146,46 @@ async function presentGeneratedTypeScriptUx(input: {
   readonly code: string;
   readonly rootName: string;
   readonly suggestedFileName: string;
-  readonly regenerate: (rootName: string) => string;
+  readonly declarationNames: readonly string[];
+  readonly regenerate: (rootName: string) => {
+    readonly code: string;
+    readonly declarationNames: readonly string[];
+  };
 }): Promise<void> {
   const copy = 'Copy';
+  const preview = 'Preview';
+  const insert = 'Insert into editor';
   const createFile = 'Create .ts';
-  const choice = await window.showQuickPick(
-    [
-      {
-        label: copy,
-        description: 'Copy generated TypeScript to the clipboard',
-      },
-      {
-        label: createFile,
-        description: 'Choose a type name and save a .ts file',
-      },
-    ],
+  const editor = window.activeTextEditor;
+  const canInsert =
+    editor !== undefined && isTypeScriptLanguageId(editor.document.languageId);
+  const items = [
     {
-      title: 'Generate TypeScript',
-      placeHolder:
-        'Types are inferred from one observed response — not a complete API schema',
+      label: copy,
+      description: 'Copy generated TypeScript to the clipboard',
     },
-  );
+    {
+      label: preview,
+      description: 'Open generated types in an untitled editor (not saved)',
+    },
+    ...(canInsert
+      ? [
+          {
+            label: insert,
+            description: 'Append generated types to the current file',
+          },
+        ]
+      : []),
+    {
+      label: createFile,
+      description: 'Choose a type name and save a .ts file',
+    },
+  ];
+  const choice = await window.showQuickPick(items, {
+    title: 'Generate TypeScript',
+    placeHolder:
+      'Types are inferred from one observed response — not a complete API schema',
+  });
   if (choice === undefined) {
     return;
   }
@@ -167,32 +194,29 @@ async function presentGeneratedTypeScriptUx(input: {
     window.setStatusBarMessage('TypeScript copied to clipboard', 2_000);
     return;
   }
-
-  const nameInput = await window.showInputBox({
-    title: 'Generate TypeScript — type name',
-    prompt: 'Root interface or type name',
-    value: input.rootName,
-    validateInput: (value) => {
-      const trimmed = value.trim();
-      if (trimmed.length === 0) {
-        return 'Type name is required.';
-      }
-      if (!/^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(trimmed)) {
-        return 'Enter a valid TypeScript identifier (e.g. User or ApiResponse).';
-      }
-      return undefined;
-    },
-  });
-  if (nameInput === undefined) {
+  if (choice.label === preview) {
+    const document = await workspace.openTextDocument({
+      language: 'typescript',
+      content: input.code,
+    });
+    await window.showTextDocument(document, { preview: true });
     return;
   }
-  const rootName = sanitizeTypeName(nameInput.trim());
-  const code =
-    rootName === input.rootName ? input.code : input.regenerate(rootName);
+
+  const named = await promptGeneratedRootName(input);
+  if (named === undefined) {
+    return;
+  }
+
+  if (choice.label === insert) {
+    await insertGeneratedTypes(named.code, named.declarationNames);
+    return;
+  }
+
   const suggestedName =
-    rootName === input.rootName
+    named.rootName === input.rootName
       ? input.suggestedFileName
-      : `${toKebabFileStem(rootName)}.ts`;
+      : `${toKebabFileStem(named.rootName)}.ts`;
 
   const workspaceFolder = workspace.workspaceFolders?.[0]?.uri;
   const defaultUri = workspaceFolder === undefined
@@ -225,7 +249,7 @@ async function presentGeneratedTypeScriptUx(input: {
     }
   }
 
-  await workspace.fs.writeFile(uri, Buffer.from(code, 'utf8'));
+  await workspace.fs.writeFile(uri, Buffer.from(named.code, 'utf8'));
   window.setStatusBarMessage(`TypeScript saved to ${uri.fsPath}`, 3_000);
   const openFile = 'Open';
   const opened = await window.showInformationMessage(
@@ -235,6 +259,94 @@ async function presentGeneratedTypeScriptUx(input: {
   if (opened === openFile) {
     const document = await workspace.openTextDocument(uri);
     await window.showTextDocument(document, { preview: false });
+  }
+}
+
+async function promptGeneratedRootName(input: {
+  readonly code: string;
+  readonly rootName: string;
+  readonly declarationNames: readonly string[];
+  readonly regenerate: (rootName: string) => {
+    readonly code: string;
+    readonly declarationNames: readonly string[];
+  };
+}): Promise<
+  | {
+      readonly rootName: string;
+      readonly code: string;
+      readonly declarationNames: readonly string[];
+    }
+  | undefined
+> {
+  const nameInput = await window.showInputBox({
+    title: 'Generate TypeScript — type name',
+    prompt: 'Root interface or type name',
+    value: input.rootName,
+    validateInput: (value) => {
+      const trimmed = value.trim();
+      if (trimmed.length === 0) {
+        return 'Type name is required.';
+      }
+      if (!/^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(trimmed)) {
+        return 'Enter a valid TypeScript identifier (e.g. User or ApiResponse).';
+      }
+      return undefined;
+    },
+  });
+  if (nameInput === undefined) {
+    return undefined;
+  }
+  const rootName = sanitizeTypeName(nameInput.trim());
+  if (rootName === input.rootName) {
+    return {
+      rootName,
+      code: input.code,
+      declarationNames: input.declarationNames,
+    };
+  }
+  const regenerated = input.regenerate(rootName);
+  return {
+    rootName,
+    code: regenerated.code,
+    declarationNames: regenerated.declarationNames,
+  };
+}
+
+async function insertGeneratedTypes(
+  code: string,
+  declarationNames: readonly string[],
+): Promise<void> {
+  const editor = window.activeTextEditor;
+  if (editor === undefined || !isTypeScriptLanguageId(editor.document.languageId)) {
+    await window.showInformationMessage(
+      'Insert into editor is available in TypeScript files.',
+    );
+    return;
+  }
+  const collisions = collidingGeneratedTypeNames(
+    declarationNames,
+    editor.document.getText(),
+  );
+  if (collisions.length > 0) {
+    const proceed = await window.showWarningMessage(
+      `These types already exist in the current file: ${collisions.join(', ')}. Insert anyway?`,
+      { modal: true },
+      'Insert',
+    );
+    if (proceed !== 'Insert') {
+      return;
+    }
+  }
+  const next = prepareGeneratedTypeInsertion(editor.document.getText(), code);
+  const edit = new WorkspaceEdit();
+  const fullRange = new Range(
+    new Position(0, 0),
+    editor.document.lineAt(editor.document.lineCount - 1).range.end,
+  );
+  edit.replace(editor.document.uri, fullRange, next);
+  const applied = await workspace.applyEdit(edit);
+  if (!applied) {
+    await window.showErrorMessage('API Hero could not insert the generated types.');
   }
 }
 
