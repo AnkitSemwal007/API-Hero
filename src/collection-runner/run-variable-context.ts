@@ -9,11 +9,30 @@
 
 import type { RunVariableStore } from '../variables';
 
+export type CollectionRunAuthenticationPreference =
+  | 'collection-default'
+  | 'resolved';
+
+export interface CollectionRunEnvironmentOverride {
+  /** Omitted/undefined = no environment for this run. */
+  readonly environmentId?: string;
+}
+
 export interface CollectionRunVariableContextBeginOptions {
   readonly runId: string;
   readonly collectionId: string;
   readonly collectionRootPath: string;
   readonly runStore: RunVariableStore;
+  /**
+   * When present, collection-run variable/auth resolution uses this override
+   * instead of the session active environment.
+   */
+  readonly environmentOverride?: CollectionRunEnvironmentOverride;
+  /**
+   * When `'resolved'`, skip collection default auth and use session/workspace
+   * default. Default: `'collection-default'`.
+   */
+  readonly authenticationPreference?: CollectionRunAuthenticationPreference;
 }
 
 export interface CollectionRunVariableContext {
@@ -25,6 +44,14 @@ export interface CollectionRunVariableContext {
   getRunStore(): RunVariableStore | undefined;
   getCollectionId(): string | undefined;
   getCollectionRootPath(): string | undefined;
+  /**
+   * `undefined` when no override was supplied (use the session active
+   * environment). Present with no `environmentId` means explicit No Environment.
+   */
+  getEnvironmentOverride(): CollectionRunEnvironmentOverride | undefined;
+  getAuthenticationPreference():
+    | CollectionRunAuthenticationPreference
+    | undefined;
 }
 
 /** Creates an inactive {@link CollectionRunVariableContext}. */
@@ -35,6 +62,8 @@ export function createCollectionRunVariableContext(): CollectionRunVariableConte
         readonly collectionId: string;
         readonly collectionRootPath: string;
         readonly runStore: RunVariableStore;
+        readonly environmentOverride?: CollectionRunEnvironmentOverride;
+        readonly authenticationPreference?: CollectionRunAuthenticationPreference;
       }
     | undefined;
 
@@ -58,6 +87,14 @@ export function createCollectionRunVariableContext(): CollectionRunVariableConte
     },
     getCollectionRootPath(): string | undefined {
       return active?.collectionRootPath;
+    },
+    getEnvironmentOverride(): CollectionRunEnvironmentOverride | undefined {
+      return active?.environmentOverride;
+    },
+    getAuthenticationPreference():
+      | CollectionRunAuthenticationPreference
+      | undefined {
+      return active?.authenticationPreference;
     },
   };
 }

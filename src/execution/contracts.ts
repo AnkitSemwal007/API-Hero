@@ -94,6 +94,11 @@ export interface WebsocketSessionSummary {
   readonly closed: true;
   readonly closeCode?: number;
   readonly closeReason?: string;
+  /**
+   * In-process echo of the prepared UTF-8 text frame when `sent` is true.
+   * Never persist this on history entries; presentation must redact it.
+   */
+  readonly sentMessage?: string;
 }
 
 export interface ExecutionErrorCause {

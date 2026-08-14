@@ -5,17 +5,27 @@ entries store **metadata** in settings; secret fields use VS Code **Secret Stora
 
 ## Providers
 
-| Provider | Behavior |
-| --- | --- |
-| `none` | No decoration |
-| `basic` | `Authorization: Basic …` |
-| `bearer` | `Authorization: Bearer …` |
-| `apiKey` | Custom header or query parameter |
+| Provider | UI label | Behavior |
+| --- | --- | --- |
+| `none` | No Auth | No decoration |
+| `bearer` | Bearer Token | `Authorization: Bearer …` |
+| `basic` | Basic Auth | `Authorization: Basic …` |
+| `apiKey` | API Key | Custom header or query parameter |
 
-OAuth2 account Login/Logout, cookie jars, and automatic token-refresh flows are **not**
+OAuth is **not** included. Cookie jars and automatic token-refresh flows are **not**
 implemented. **Authentication Login API** (session login against your API) is supported —
 see [Login API](#login-api) below. That is separate from the palette-hidden
 **Account Login (Not Available)** stub.
+
+## Centralized Authentication UI
+
+The same secret-free Authentication UI is used on:
+
+- Request Editor **Auth** tab
+- Collection default authentication
+- Collection Run Setup
+
+Types offered: **No Auth**, **Bearer Token**, **Basic Auth**, **API Key**. Secrets never enter the webview — only profile ids, labels, and masked field metadata.
 
 ## Manage Authentication
 

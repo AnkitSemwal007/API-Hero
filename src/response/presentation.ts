@@ -3,8 +3,9 @@ import type {
   ExecutionResult,
   GraphqlEnvelopeSummary,
   RuntimeResponse,
-  WebsocketSessionSummary,
 } from '../execution';
+import type { PresentedWebsocketSession } from './websocket-session-view';
+import { presentWebsocketSession } from './websocket-session-view';
 import type { TestReport } from '../assertions';
 import { maskAssertionText } from '../assertions';
 import type { ExtractionReport } from '../extraction';
@@ -183,9 +184,10 @@ export interface ResponsePresentation {
    */
   readonly graphql?: GraphqlEnvelopeSummary;
   /**
-   * Bounded WebSocket session summary. Present only for `@protocol websocket`.
+   * Presented WebSocket session (events + redacted previews). Present only for
+   * `@protocol websocket` success. Never a passthrough of `sentMessage`.
    */
-  readonly websocket?: WebsocketSessionSummary;
+  readonly websocket?: PresentedWebsocketSession;
   readonly summary: string;
 }
 
@@ -337,7 +339,14 @@ export function presentExecutionResult(
       ? {}
       : { extraction: presentedExtraction }),
     ...(result.graphql === undefined ? {} : { graphql: result.graphql }),
-    ...(result.websocket === undefined ? {} : { websocket: result.websocket }),
+    ...(result.websocket === undefined
+      ? {}
+      : {
+          websocket: presentWebsocketSession(
+            result.websocket,
+            result.response.body.text,
+          ),
+        }),
     ...(result.websocket === undefined
       ? { status: { code: response.statusCode, text: response.statusText } }
       : {}),

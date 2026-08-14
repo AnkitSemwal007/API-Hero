@@ -321,6 +321,7 @@ test('WebSocket connect is retryable; send/receive and success are not', () => {
             sent: true,
             received: true,
             closed: true,
+            events: [],
           },
         },
       }),

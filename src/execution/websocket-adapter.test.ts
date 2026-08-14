@@ -267,6 +267,7 @@ test('WebSocket echo send/receive closes the socket', async () => {
       assert.equal(result.websocket?.sent, true);
       assert.equal(result.websocket?.received, true);
       assert.equal(result.websocket?.closed, true);
+      assert.equal(result.websocket?.sentMessage, '{"type":"ping"}');
       assert.equal(result.response.body.text, '{"type":"ping"}');
       assert.deepEqual(result.response.body.json, { type: 'ping' });
       assert.equal(result.response.statusText, 'received');
@@ -524,6 +525,7 @@ test('omitted outgoing message still receives one text frame', async () => {
     if (result.success) {
       assert.equal(result.response.body.text, 'hello');
       assert.equal(result.websocket?.sent, false);
+      assert.equal(result.websocket?.sentMessage, undefined);
     }
     await new Promise((resolve) => setTimeout(resolve, 30));
     assert.equal(allSocketsClosed(server.sockets), true);

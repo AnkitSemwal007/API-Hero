@@ -205,6 +205,27 @@ test('GraphQL query 200 data envelope is orchestrator success', async () => {
   assert.equal(payload.variables.id, 'ada');
 });
 
+test('GraphQL mutation document goes through orchestrator and DefaultRequestExecutor', async () => {
+  const transport = new FakeTransport();
+  const { orchestrator } = createOrchestrator(transport);
+  const result = await orchestrator.runAtSourceLocation({
+    text: [
+      '@protocol graphql',
+      'POST https://example.test/graphql',
+      'Content-Type: application/json',
+      '',
+      '{ "query": "mutation UpdateUser($id: ID!) { updateUser(id: $id) { id } }" }',
+    ].join('\n'),
+    sourceId: 'gql-mutation.api',
+    offset: 0,
+  });
+  assert.equal(result.outcome, 'success');
+  const payload = JSON.parse(
+    new TextDecoder().decode(transport.requests[0]!.body!),
+  ) as { query: string };
+  assert.match(payload.query, /mutation UpdateUser/u);
+});
+
 test('GraphQL variables are substituted by DefaultVariableResolver', async () => {
   const transport = new FakeTransport();
   const { orchestrator } = createOrchestrator(transport);

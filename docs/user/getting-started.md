@@ -6,7 +6,7 @@ Install **API Hero** (`ankitsemwal.api-hero`) from the Marketplace or a VSIX, th
 
 1. Open the **API Hero** Activity Bar icon. You see **Collections**, **Execution**, and **History**.
 2. In Collections, choose **New Collection** (or **API Hero: New Collection**). Fill the **Create Collection** dialog (**Name** required, **Description** optional). The collection is created under `Collections/<name>/` only after you confirm **Create** — Cancel writes nothing.
-3. Choose **New Request**, set a name/method/URL in the dialog, then edit in the **Request Editor** (default for `*.api`).
+3. Choose **New Request**, set a name/method/URL in the dialog, then edit in the **Request Editor** (default for `*.api`). Choose HTTP, GraphQL, or WebSocket in the protocol selector when needed.
 4. Click **Run** in the Request Editor toolbar, or press `Ctrl+Alt+R` / `Cmd+Alt+R` while the Request Editor (or text editor) is focused.
 5. Inspect the **Response** panel; the run also appears under **History**.
 
@@ -27,6 +27,7 @@ Environments and authentication are optional for a first public GET — configur
 | Task | Command |
 | --- | --- |
 | Overview | **API Hero: Open Overview** |
+| Run collection | **API Hero: Run Collection** (opens Collection Run Setup) |
 | Environments | **API Hero: Manage Environments** |
 | Authentication | **API Hero: Manage Authentication** |
 | Reset workspace | **API Hero: Reset Workspace...** (destructive; Collections preserved) |

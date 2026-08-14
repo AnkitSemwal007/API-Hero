@@ -26,3 +26,11 @@ export {
   serializeRequestDocument,
   formatExtractionRule,
 } from './serialize';
+
+export {
+  GRAPHQL_STARTER_QUERY,
+  compileGraphqlEditorEnvelope,
+  isGraphqlProtocol,
+  parseGraphqlEditorEnvelope,
+} from './graphql-envelope';
+export type { GraphqlEditorEnvelope } from './graphql-envelope';

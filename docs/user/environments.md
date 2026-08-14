@@ -20,6 +20,8 @@ Environments are named sets of variables. Exactly one environment may be active 
 
 Switching updates the session active environment. Persistence of the environment list and optional `apiHero.activeEnvironment` ID is through VS Code settings.
 
+Collection Run Setup can select an environment (or **No Environment**) for that run and previews resolved variables with sensitive values masked. That selection applies to the run; it does not replace **Switch Environment** for the workspace session.
+
 ## Variable scopes
 
 Effective definitions (highest wins):

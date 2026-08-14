@@ -13,6 +13,7 @@ the [Custom Text Editor](./request-editor.md). Lives in `src/request-source/` �
 | `serializePlaceholderRequest(name)` | Minimal `GET https://httpbin.org/get` placeholder |
 | `parseSourceToRequestDocument(text)` | Source → single / multi / empty projection |
 | `documentToRequestSource(ast, text)` | Parsed AST → same projection |
+| `parseGraphqlEditorEnvelope` / `compileGraphqlEditorEnvelope` | Split/join GraphQL-over-HTTP JSON `{ query, variables, operationName }` for the Request Editor and New Request. Not a GraphQL language parser and not `prepareGraphqlHttpRequest`. |
 
 Query parameters are encoded into the URL (`?a=1&b=2`) so runtime
 `parseParameters(queryPart(url))` sees them. Layout is the single canonical

@@ -13,6 +13,7 @@ import {
 import {
   createRequestEditorAck,
   createRequestEditorResubmit,
+  createWebsocketSessionMessage,
   maskSensitiveVariablesForWebview,
   parseRequestEditorMessage,
   parseRequestSourceDocument,
@@ -45,8 +46,17 @@ describe('request editor webview helpers', () => {
     assert.match(html, /id="envShortcut"/u);
     assert.match(html, /id="authShortcut"/u);
     assert.match(html, />Authentication</u);
-    assert.match(html, /Authentication mode/u);
+    assert.match(html, /id="authKind"/u);
+    assert.match(html, />Type</u);
+    assert.match(html, /Bearer Token/u);
+    assert.match(html, /Basic Auth/u);
+    assert.match(html, /API Key/u);
+    assert.match(html, /No Auth/u);
+    assert.match(html, />Override</u);
+    assert.match(html, /Saved Authentication/u);
     assert.match(html, /function buildSavedAuthPreview/u);
+    assert.doesNotMatch(html, /OAuth/u);
+    assert.doesNotMatch(html, /Authentication mode/u);
     assert.match(html, /id="method"/u);
     assert.match(html, /id="url"/u);
     assert.match(html, /id="varSuggest"/u);
@@ -63,8 +73,12 @@ describe('request editor webview helpers', () => {
     assert.match(html, /class="identity-block"/u);
     assert.match(html, /id="name"/u);
     assert.match(html, /id="tab-request"/u);
-    assert.match(html, /id="authMode"/u);
+    assert.match(html, /id="authKind"/u);
     assert.match(html, /id="oneshotToken"/u);
+    assert.match(html, /id="oneshotUsername"/u);
+    assert.match(html, /id="oneshotPassword"/u);
+    assert.match(html, /id="oneshotApiKeyName"/u);
+    assert.match(html, /id="oneshotApiKeyValue"/u);
     assert.match(html, /id="manageAuthProfiles"/u);
     assert.match(html, /id="manageEnvironments"/u);
     assert.match(html, /Manage Authentication/u);
@@ -76,6 +90,11 @@ describe('request editor webview helpers', () => {
       /None and one-shot must never write @auth/u,
     );
     assert.match(html, /Paste a Bearer token for one-shot authentication before Send/u);
+    assert.match(html, /Enter a username and password for one-shot authentication before Send/u);
+    assert.match(html, /Enter an API key for one-shot authentication before Send/u);
+    assert.match(html, /providerId: 'basic'/u);
+    assert.match(html, /providerId: 'apiKey'/u);
+    assert.match(html, /model\.protocol/u);
     assert.match(html, /No Request variables/u);
     assert.match(html, /id="variablesPrecedenceLegend"/u);
     assert.match(
@@ -132,7 +151,7 @@ describe('request editor webview helpers', () => {
     assert.doesNotMatch(html, /AH_ICON_PIN/u);
     assert.doesNotMatch(html, /AH_ICON_X/u);
     assert.equal((html.match(/function ahIconSpan/gu) ?? []).length, 1);
-    assert.match(html, /id="run"[^>]*>[\s\S]*?<\/svg><\/span> Run</u);
+    assert.match(html, /id="run"[^>]*>[\s\S]*?<\/svg><\/span> <span id="runLabel">Run<\/span></u);
     assert.match(html, /id="dependenciesInfoBtn"[\s\S]*?aria-hidden="true"/u);
     assert.doesNotMatch(html, /ⓘ/u);
     assert.match(html, /pinAutoDependency/u);
@@ -249,6 +268,72 @@ describe('request editor webview helpers', () => {
     );
   });
 
+  test('parseRequestEditorMessage accepts oneshot ephemeralAuth for each live type', () => {
+    assert.deepEqual(
+      parseRequestEditorMessage({
+        type: 'run',
+        ephemeralAuth: {
+          providerId: 'bearer',
+          material: { token: 't' },
+        },
+      }),
+      {
+        type: 'run',
+        ephemeralAuth: {
+          providerId: 'bearer',
+          material: { token: 't' },
+        },
+      },
+    );
+    assert.deepEqual(
+      parseRequestEditorMessage({
+        type: 'run',
+        ephemeralAuth: {
+          providerId: 'basic',
+          material: { username: 'u', password: 'p' },
+        },
+      }),
+      {
+        type: 'run',
+        ephemeralAuth: {
+          providerId: 'basic',
+          material: { username: 'u', password: 'p' },
+        },
+      },
+    );
+    assert.deepEqual(
+      parseRequestEditorMessage({
+        type: 'run',
+        ephemeralAuth: {
+          providerId: 'apiKey',
+          material: { value: 'k' },
+          apiKeyName: 'X-API-Key',
+          apiKeyLocation: 'query',
+        },
+      }),
+      {
+        type: 'run',
+        ephemeralAuth: {
+          providerId: 'apiKey',
+          material: { value: 'k' },
+          apiKeyName: 'X-API-Key',
+          apiKeyLocation: 'query',
+        },
+      },
+    );
+    const oauthRun = parseRequestEditorMessage({
+      type: 'run',
+      ephemeralAuth: { providerId: 'oauth2', material: { token: 't' } },
+    });
+    assert.equal(oauthRun?.type, 'run');
+    assert.equal(
+      oauthRun !== undefined && oauthRun.type === 'run'
+        ? oauthRun.ephemeralAuth
+        : undefined,
+      undefined,
+    );
+  });
+
   test('parseRequestEditorMessage validates updateModel payloads', () => {
     const model = emptyRequestEditorModel();
     assert.deepEqual(model.extractionRules, []);
@@ -306,16 +391,19 @@ describe('request editor webview helpers', () => {
     const multiBranch = html.slice(multiIdx, emptyIdx);
     assert.match(multiBranch, /el\('url'\)\.disabled = true/u);
     assert.match(multiBranch, /el\('method'\)\.disabled = true/u);
+    assert.match(multiBranch, /el\('protocol'\)\.disabled = true/u);
 
     const emptyBranch = html.slice(emptyIdx, formIdx);
     assert.match(emptyBranch, /el\('url'\)\.disabled = true/u);
     assert.match(emptyBranch, /el\('method'\)\.disabled = true/u);
+    assert.match(emptyBranch, /el\('protocol'\)\.disabled = true/u);
 
     const nameFieldIdx = html.indexOf("setFieldValue('name'", formIdx);
     assert.ok(nameFieldIdx > formIdx);
     const formBranch = html.slice(formIdx, nameFieldIdx);
     assert.match(formBranch, /el\('url'\)\.disabled = false/u);
     assert.match(formBranch, /el\('method'\)\.disabled = false/u);
+    assert.match(formBranch, /el\('protocol'\)\.disabled = false/u);
   });
 
   test('scheduleUpdate gates on form mode only', () => {
@@ -596,5 +684,108 @@ describe('request editor webview helpers', () => {
       { name: 'public', value: 'ok' },
       { name: 'apiToken', value: 'sekrit', sensitive: true },
     ]);
+  });
+
+  test('GraphQL protocol UI projects query, variables, and operation name', () => {
+    const html = renderRequestEditorHtml('gql-nonce');
+    assert.match(html, /id="protocol"/u);
+    assert.match(html, /id="graphqlQuery"/u);
+    assert.match(html, /id="graphqlVariables"/u);
+    assert.match(html, /id="graphqlOperationName"/u);
+    assert.match(html, /id="bodyGraphql"/u);
+    assert.match(html, /id="protocolBadge"/u);
+    assert.match(html, /el\('protocol'\)/u);
+    assert.doesNotMatch(html, /no protocol dropdown in Phase 1/u);
+    assert.match(
+      html,
+      /id="graphqlQuery"[^>]*data-var-complete="true"/u,
+    );
+    assert.match(
+      html,
+      /id="graphqlVariables"[^>]*data-var-complete="true"/u,
+    );
+    assert.match(html, /textContent = 'Query'/u);
+    assert.match(html, /textContent = 'Message'/u);
+    assert.match(html, /isGraphqlProtocol\(el\('protocol'\)\.value\)/u);
+    assert.match(html, /refreshTabBadges/u);
+    assert.match(html, /application\/json/u);
+    assert.match(html, /Content-Type/u);
+    assert.match(html, /ensureJsonContentTypeHeader/u);
+    assert.match(html, /handleProtocolChange/u);
+    assert.match(html, /compileGraphqlEditorEnvelope/u);
+    assert.match(html, /delete model\.protocol/u);
+    assert.match(html, /protocol === 'http'/u);
+    assert.match(html, /data-unknown/u);
+    assert.match(html, /JSON\.stringify\(envelope, null, 2\)/u);
+    assert.match(html, /envelope\.variables = parsed/u);
+    assert.match(html, /envelope\.operationName = trimmedOperation/u);
+    assert.match(html, /restBodyIsNonGraphqlEnvelope/u);
+    assert.match(
+      html,
+      /variablesTextIsInvalid\(el\('graphqlVariables'\)\.value\)/u,
+    );
+    assert.match(html, /Variables must be a JSON object/u);
+    assert.match(html, /Prefer <code>\{\{variable\}\}<\/code> for secrets/u);
+  });
+
+  test('WebSocket protocol chrome is present in the request editor', () => {
+    const html = renderRequestEditorHtml('ws-nonce');
+    assert.match(html, /id="protocol"/u);
+    assert.match(html, /<option value="http" selected>HTTP<\/option>/u);
+    assert.match(html, /<option value="graphql">GraphQL<\/option>/u);
+    assert.match(html, /<option value="websocket">WebSocket<\/option>/u);
+    assert.match(html, /id="websocketConnection"/u);
+    assert.match(html, /id="websocketStatus"/u);
+    assert.match(html, /role="status"/u);
+    assert.match(html, /id="websocketMessages"/u);
+    assert.match(html, /function applyProtocolChrome/u);
+    assert.match(html, /Run Session/u);
+    assert.match(html, /id="runLabel">Run<\/span>/u);
+    assert.match(html, /message\.type === 'websocketSession'/u);
+    assert.match(html, /ws-event-sent/u);
+    assert.match(html, /ws-event-received/u);
+    assert.match(html, /ws-event-connection/u);
+    assert.match(html, /ws-event-error/u);
+    assert.match(html, /No request found in this file/u);
+    assert.doesNotMatch(html, /No HTTP request found/u);
+    assert.doesNotMatch(html, /no protocol dropdown in Phase 1/u);
+    assert.equal(
+      parseRequestSourceDocument({
+        name: 'Echo',
+        method: 'GET',
+        url: 'ws://example.test/socket',
+        protocol: 'websocket',
+      })?.protocol,
+      'websocket',
+    );
+    assert.deepEqual(parseRequestEditorMessage({ type: 'run' }), {
+      type: 'run',
+    });
+  });
+
+  test('createWebsocketSessionMessage builds secret-free host messages', () => {
+    assert.deepEqual(createWebsocketSessionMessage({ phase: 'connecting' }), {
+      type: 'websocketSession',
+      phase: 'connecting',
+    });
+    const closedView = {
+      statusLabel: 'Closed',
+      hint: 'Bounded session: connect → send → receive → close. The socket is not kept open.',
+      events: [
+        { kind: 'connection', text: 'Connected' },
+        { kind: 'sent', direction: 'sent', text: '{"type":"ping"}' },
+      ],
+    } as const;
+    assert.deepEqual(
+      createWebsocketSessionMessage({
+        phase: 'closed',
+        view: closedView,
+      }),
+      {
+        type: 'websocketSession',
+        phase: 'closed',
+        view: closedView,
+      },
+    );
   });
 });

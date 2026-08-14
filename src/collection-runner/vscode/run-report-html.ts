@@ -1472,6 +1472,30 @@ main { display: flex; flex-direction: column; min-height: 100vh; }
   background: var(--vscode-inputValidation-errorBackground, transparent);
 }
 .failure-block h3 { margin: 0 0 4px; font-size: 1em; }
+.graphql-errors-card {
+  padding: 8px; border-radius: 3px;
+  border: 1px solid var(--vscode-inputValidation-errorBorder, var(--vscode-errorForeground));
+  background: var(--vscode-inputValidation-errorBackground, transparent);
+}
+.graphql-errors-card h3 { margin: 0 0 4px; font-size: 1em; }
+.graphql-errors-card ul { margin: 0; padding-left: 1.2em; }
+.graphql-errors-card li { margin: 2px 0; overflow-wrap: anywhere; }
+.ws-messages { margin: 0; }
+.ws-message-list {
+  list-style: none; margin: 0; padding: 0;
+  display: grid; gap: 4px;
+  font-family: var(--vscode-editor-font-family, var(--vscode-font-family));
+  font-size: .92em;
+}
+.ws-event {
+  display: flex; flex-wrap: wrap; gap: 4px; align-items: baseline;
+  overflow-wrap: anywhere;
+}
+.ws-arrow { flex: 0 0 auto; font-weight: 600; }
+.ws-event-sent .ws-arrow { color: var(--vscode-charts-blue, var(--vscode-terminal-ansiBlue, #3794ff)); }
+.ws-event-received .ws-arrow { color: var(--vscode-charts-green, var(--vscode-terminal-ansiGreen, #89d185)); }
+.ws-event-connection { color: var(--vscode-descriptionForeground); }
+.ws-event-error { color: var(--vscode-errorForeground, var(--vscode-editorError-foreground)); }
 .muted-inline { color: var(--vscode-descriptionForeground); }
 .message {
   color: var(--vscode-descriptionForeground);
@@ -1763,6 +1787,54 @@ export function buildCollectionRunReportScript(
     return note + '<pre>' + escapeHtml(text) + '</pre>';
   }
 
+  function renderGraphqlErrorsSection(presentation) {
+    const graphql = presentation.graphql;
+    if (!graphql) return '';
+    if (graphql.validEnvelope !== false && !graphql.hasErrors) return '';
+    const heading = graphql.validEnvelope === false
+      ? 'Invalid GraphQL response'
+      : 'GraphQL Errors';
+    const messages = graphql.errorMessages || [];
+    const list = messages.length === 0
+      ? ''
+      : '<ul>' + messages.map(function (message) {
+          return '<li>' + escapeHtml(message) + '</li>';
+        }).join('') + '</ul>';
+    return '<div class="graphql-errors-card" data-testid="graphql-errors">' +
+      '<h3>' + escapeHtml(heading) + '</h3>' + list + '</div>';
+  }
+
+  function renderWebsocketSection(presentation) {
+    const session = presentation.websocket;
+    if (!session || !session.events || session.events.length === 0) {
+      return '<p class="muted-inline">No WebSocket session events</p>';
+    }
+    return '<ul class="ws-message-list">' +
+      session.events.map(function (event) {
+        const kindClass = event.kind === 'sent'
+          ? 'ws-event-sent'
+          : event.kind === 'received'
+            ? 'ws-event-received'
+            : event.kind === 'error'
+              ? 'ws-event-error'
+              : 'ws-event-connection';
+        const arrow = event.direction === 'sent'
+          ? '<span class="ws-arrow" aria-hidden="true">→</span>'
+          : event.direction === 'received'
+            ? '<span class="ws-arrow" aria-hidden="true">←</span>'
+            : '';
+        const hint = event.direction === 'sent'
+          ? ' <span class="muted-inline">(sent)</span>'
+          : event.direction === 'received'
+            ? ' <span class="muted-inline">(received)</span>'
+            : '';
+        return '<li class="ws-event ' + kindClass + '">' + arrow +
+          '<span class="ws-event-text">' + escapeHtml(event.text || '') +
+          '</span>' + hint + '</li>';
+      }).join('') +
+      '</ul>';
+  }
+
   function renderHeadersSection(presentation) {
     const headers = presentation.headers || [];
     if (headers.length === 0) {
@@ -2033,7 +2105,7 @@ export function buildCollectionRunReportScript(
   }
 
   function renderHttpNotSentSection() {
-    return '<p>API Hero did not send an HTTP request for this row.</p>';
+    return '<p>API Hero did not send this request.</p>';
   }
 
   function renderRequestInfoSection(info) {
@@ -2106,7 +2178,7 @@ export function buildCollectionRunReportScript(
     if (failure && !failure.httpRequestSent) {
       sections.push({
         id: 'http-not-sent',
-        label: 'HTTP Request — Not Sent',
+        label: 'Request — Not Sent',
         body: renderHttpNotSentSection(),
         open: false,
       });
@@ -2120,11 +2192,28 @@ export function buildCollectionRunReportScript(
       });
     }
     if (presentation) {
+      const graphqlErrors = renderGraphqlErrorsSection(presentation);
+      if (graphqlErrors) {
+        sections.push({
+          id: 'graphql-errors',
+          label: 'GraphQL Errors',
+          body: graphqlErrors,
+          open: true,
+        });
+      }
+      if (presentation.websocket) {
+        sections.push({
+          id: 'websocket',
+          label: 'Messages',
+          body: renderWebsocketSection(presentation),
+          open: true,
+        });
+      }
       sections.push({
         id: 'response',
         label: 'Response',
         body: renderBodySection(presentation),
-        open: openResponse,
+        open: openResponse && !presentation.websocket,
       });
       sections.push({
         id: 'headers',

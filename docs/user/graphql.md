@@ -27,6 +27,8 @@ expect body.data.user.name == "Ada"
 
 Mutations use the same shape with a mutation document in `query`.
 
+In the Request Editor, set **Protocol** to GraphQL in the toolbar. The Body tab becomes **Query** with Query, Variables, and optional Operation name fields — a projection of the same JSON envelope. Run still uses ExecutionOrchestrator (variables, auth, and HTTP transport are unchanged). HTTP 200 with `errors` shows a **GraphQL Errors** card in the Response Viewer (messages are already secret-masked). Subscriptions are not supported.
+
 Omit `@protocol` (or set `@protocol http`) for ordinary REST requests. Existing `.api` files are unchanged.
 
 Unknown `@protocol` values are a validation error. They are never treated as HTTP.

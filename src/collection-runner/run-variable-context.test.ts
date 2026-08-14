@@ -11,6 +11,8 @@ describe('CollectionRunVariableContext', () => {
     assert.equal(context.getRunStore(), undefined);
     assert.equal(context.getCollectionId(), undefined);
     assert.equal(context.getCollectionRootPath(), undefined);
+    assert.equal(context.getEnvironmentOverride(), undefined);
+    assert.equal(context.getAuthenticationPreference(), undefined);
   });
 
   test('begin activates the context with the given run store and identity', () => {
@@ -26,6 +28,97 @@ describe('CollectionRunVariableContext', () => {
     assert.equal(context.getRunStore(), runStore);
     assert.equal(context.getCollectionId(), 'collection:a');
     assert.equal(context.getCollectionRootPath(), 'file:///a');
+    assert.equal(context.getEnvironmentOverride(), undefined);
+    assert.equal(context.getAuthenticationPreference(), undefined);
+  });
+
+  test('environment override absent leaves getter undefined', () => {
+    const context = createCollectionRunVariableContext();
+    context.begin({
+      runId: 'run_1',
+      collectionId: 'collection:a',
+      collectionRootPath: 'file:///a',
+      runStore: new InMemoryRunVariableStore(),
+    });
+    assert.equal(context.getEnvironmentOverride(), undefined);
+  });
+
+  test('environment override with no id means explicit No Environment', () => {
+    const context = createCollectionRunVariableContext();
+    context.begin({
+      runId: 'run_1',
+      collectionId: 'collection:a',
+      collectionRootPath: 'file:///a',
+      runStore: new InMemoryRunVariableStore(),
+      environmentOverride: {},
+    });
+    const override = context.getEnvironmentOverride();
+    assert.ok(override !== undefined);
+    assert.equal(override.environmentId, undefined);
+  });
+
+  test('environment override with a specific id is returned', () => {
+    const context = createCollectionRunVariableContext();
+    context.begin({
+      runId: 'run_1',
+      collectionId: 'collection:a',
+      collectionRootPath: 'file:///a',
+      runStore: new InMemoryRunVariableStore(),
+      environmentOverride: { environmentId: 'env-staging' },
+    });
+    assert.deepEqual(context.getEnvironmentOverride(), {
+      environmentId: 'env-staging',
+    });
+  });
+
+  test('authenticationPreference is undefined unless begin supplies it', () => {
+    const context = createCollectionRunVariableContext();
+    context.begin({
+      runId: 'run_1',
+      collectionId: 'collection:a',
+      collectionRootPath: 'file:///a',
+      runStore: new InMemoryRunVariableStore(),
+    });
+    assert.equal(context.getAuthenticationPreference(), undefined);
+  });
+
+  test('authenticationPreference collection-default is stored', () => {
+    const context = createCollectionRunVariableContext();
+    context.begin({
+      runId: 'run_1',
+      collectionId: 'collection:a',
+      collectionRootPath: 'file:///a',
+      runStore: new InMemoryRunVariableStore(),
+      authenticationPreference: 'collection-default',
+    });
+    assert.equal(context.getAuthenticationPreference(), 'collection-default');
+  });
+
+  test('authenticationPreference resolved is stored', () => {
+    const context = createCollectionRunVariableContext();
+    context.begin({
+      runId: 'run_1',
+      collectionId: 'collection:a',
+      collectionRootPath: 'file:///a',
+      runStore: new InMemoryRunVariableStore(),
+      authenticationPreference: 'resolved',
+    });
+    assert.equal(context.getAuthenticationPreference(), 'resolved');
+  });
+
+  test('end clears override getters', () => {
+    const context = createCollectionRunVariableContext();
+    context.begin({
+      runId: 'run_1',
+      collectionId: 'collection:a',
+      collectionRootPath: 'file:///a',
+      runStore: new InMemoryRunVariableStore(),
+      environmentOverride: { environmentId: 'env-1' },
+      authenticationPreference: 'resolved',
+    });
+    context.end('run_1');
+    assert.equal(context.getEnvironmentOverride(), undefined);
+    assert.equal(context.getAuthenticationPreference(), undefined);
   });
 
   test('end deactivates a matching run id', () => {

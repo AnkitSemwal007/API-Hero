@@ -54,7 +54,7 @@ apihero run request Login --workspace . --environment local
 
 `<request>` may be a label, id, or path fragment (for example `hello.api` or `Hello`). Resolution matches MCP `runRequest` (workspace-wide when no collection is implied).
 
-HTTP, `@protocol graphql`, and `@protocol websocket` requests use this same command. There is no `--graphql`, `--websocket`, `--ws`, `--listen`, or `--stream` flag.
+HTTP, `@protocol graphql`, and `@protocol websocket` requests use this same command. There is no `--graphql`, `--websocket`, `--ws`, `--listen`, or `--stream` flag. Authentication and `{{variables}}` use the same runtime — there is no separate GraphQL, WebSocket, Authentication, or Variables CLI.
 
 GraphQL is queries and mutations over HTTP. WebSocket is a bounded connect → optional text send → first text frame receive → close session. Persistent connections, subscriptions, reconnect, streaming, binary frames, and gRPC are not included.
 

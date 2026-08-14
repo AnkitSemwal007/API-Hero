@@ -71,6 +71,14 @@ These actions post messages to the extension host. Body Pretty/Raw and the JSON 
 
 When a run fails or returns a non-success HTTP status, the Response panel can show **Possible causes** alongside recorded facts (status, URL, elapsed time, timeout, transport error). Guidance is deterministic for common statuses (401 / 403 / 404 / 422 / 429 / 5xx) and for network / timeout failures — never speculation stated as fact. Secrets stay redacted. The same explanations appear in Collection Run Report **Details** and in MCP / diagnostics fields.
 
+## GraphQL errors
+
+For `@protocol graphql`, HTTP 200 with GraphQL `errors` is not a successful GraphQL operation. The Response Viewer shows a **GraphQL Errors** card. Messages use the same secret masking as other display surfaces. Ordinary GraphQL errors are not rewritten.
+
+## WebSocket session
+
+For `@protocol websocket`, the Response Viewer presents the bounded session: connection outcome, optional sent message, received text frame, and close. Close reasons are redacted when they could contain secrets. The socket is closed on every path. Persistent connections are not supported.
+
 ## Compare with Previous Run
 
 After you run the same request more than once in this session, the Response panel offers **Compare with Previous Run** (also Command Palette: `API Hero: Compare with Previous Run`). The diff uses the in-session presentation ring only — not History — and compares already-redacted presentations:

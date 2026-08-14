@@ -45,6 +45,12 @@ export interface CollectionRunReportPanelActions {
     requestId: string,
     current: ResponsePresentation,
   ) => Promise<void>;
+  /**
+   * Reopen Collection Run Setup with the previous submitted config.
+   * Optional — omit when the host has no Setup panel; `runAgain` then opens
+   * Setup for the reported collection without restoring a prior draft.
+   */
+  readonly onRunAgain?: (collectionId: string) => Promise<void>;
 }
 
 export interface CollectionRunReportShowOptions {
@@ -57,13 +63,20 @@ export class CollectionRunReportPanel implements Disposable {
   private liveRunId: RunIdentifier | undefined;
   private lastLiveSnapshot: CollectionRunSessionSnapshot | undefined;
   private environmentName: string | undefined;
+  private actions: CollectionRunReportPanelActions;
 
   public constructor(
-    private readonly actions: CollectionRunReportPanelActions = {
+    actions: CollectionRunReportPanelActions = {
       openRequest: defaultOpenRequest,
       revealRequest: defaultRevealRequest,
     },
-  ) {}
+  ) {
+    this.actions = actions;
+  }
+
+  public setOnRunAgain(onRunAgain: (collectionId: string) => Promise<void>): void {
+    this.actions = { ...this.actions, onRunAgain };
+  }
 
   public show(
     summary: RunSummary,
@@ -374,8 +387,9 @@ export class CollectionRunReportPanel implements Disposable {
   }
 
   /**
-   * Re-runs the reported collection via {@link COMMAND_IDS.runCollection}.
+   * Re-opens Collection Run Setup for the reported collection.
    * Uses plan/session `collectionId` from the host — not a webview-supplied id.
+   * When `onRunAgain` is set, restores the previous submitted setup.
    */
   private async runAgain(): Promise<void> {
     const collectionId =
@@ -389,6 +403,10 @@ export class CollectionRunReportPanel implements Disposable {
           message: 'Unable to run that collection again.',
         });
       }
+      return;
+    }
+    if (this.actions.onRunAgain !== undefined) {
+      await this.actions.onRunAgain(collectionId);
       return;
     }
     await commands.executeCommand(COMMAND_IDS.runCollection, {

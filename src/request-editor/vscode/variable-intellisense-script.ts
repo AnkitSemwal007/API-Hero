@@ -426,6 +426,9 @@ export const VARIABLE_INTELLISENSE_SCRIPT = `
     bindVarComplete(el('url'));
     bindVarComplete(el('bodyText'));
     bindVarComplete(el('testValue'));
+    bindVarComplete(el('graphqlQuery'));
+    bindVarComplete(el('graphqlVariables'));
+    bindVarComplete(el('graphqlOperationName'));
     document.querySelectorAll(
       '#headersTable [data-v], #paramsTable [data-v], #formTable [data-v], #multipartTable [data-v], #variablesTable [data-v], #variablesTable [data-k]'
     ).forEach(bindVarComplete);

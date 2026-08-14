@@ -54,6 +54,17 @@ sniffing for already-decoded text. JSON retains the exact decoded source for
 Raw mode and uses a detached parsed value for Pretty mode. Malformed JSON falls
 back to source. HTML and XML are always displayed as source.
 
+WebSocket success attaches a **presented** session (`PresentedWebsocketSession`):
+completed-session events plus redacted `sentPreview` / `receivedPreview`.
+Presentation never copies execution `sentMessage`. Failures omit websocket
+(there is no partial runtime summary). The viewer Messages stream and Request
+Editor recap consume this presented model, not `RuntimeResponse`.
+
+GraphQL success attaches the additive `ExecutionResult.graphql` envelope summary
+(`validEnvelope`, `hasErrors`, scrubbed `errorMessages`). The viewer renders a
+dedicated GraphQL Errors card from that summary; it does not re-parse the body
+JSON. REST results omit `graphql`.
+
 ## Viewer and webview boundary
 
 `ResponseViewerService` is the stable public API:

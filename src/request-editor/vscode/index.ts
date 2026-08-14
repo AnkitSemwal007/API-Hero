@@ -14,6 +14,7 @@ export {
 export {
   createRequestEditorAck,
   createRequestEditorResubmit,
+  createWebsocketSessionMessage,
   maskSensitiveVariablesForWebview,
   parseRequestEditorMessage,
   parseRequestSourceDocument,
@@ -32,6 +33,7 @@ export type {
   RequestEditorOutboundMessage,
   RequestEditorState,
   RequestEditorVariableCompletion,
+  RequestEditorWebsocketSessionView,
 } from './request-editor-messages';
 export {
   buildRequestEditorDependencyCatalog,

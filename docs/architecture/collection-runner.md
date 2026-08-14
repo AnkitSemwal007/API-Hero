@@ -94,7 +94,7 @@ attaches status guidance on `ResponsePresentation.explanation`, which the
 report Details panel projects. The panel shows
 Execution Status / Failure Reason / Execution Stage, **Possible causes** when
 present, and an
-`HTTP Request — Not Sent` section instead of a misleading empty response; it
+`Request — Not Sent` section instead of a misleading empty response; it
 never fabricates a timestamped stage timeline.
 There is **no** run persistence, retention, or history DB for debugger state —
 data lives only in the finished `RunSummary` held by the report panel.
@@ -111,8 +111,10 @@ completes, and blocks the run before it starts (with a cycle-path error
 notification) when `enrichRunPlanWithDependencies` reports a cycle.
 
 Default failure policy is configurable via
-`apiHero.collectionRunner.failurePolicy` (`ask` prompts; otherwise
-stop / continue / skip-invalid without a QuickPick).
+`apiHero.collectionRunner.failurePolicy`. VS Code Collection Run Setup V1
+exposes Continue on Error and Stop on First Failure only; `skip-invalid-requests`
+and `ask` remain available to MCP/settings. Retry and skip-destructive stay
+workspace settings (not Setup fields).
 
 ## Run options (retry + skip destructive)
 
@@ -126,7 +128,7 @@ destructive skip).
 | Classifier | `retry-eligibility.ts` | Pure eligibility + delay/backoff helpers |
 | Retry loop | `collection-runner.ts` (`executeOne`) | Only place that retries; sequential |
 | Side-effect gate | `RunAtSourceLocationOptions.shouldCommitSideEffects` | Skip history/extraction on intermediate retries |
-| UI | `register-collection-runner.ts` | Compact QuickPicks after failure policy |
+| UI | `register-collection-runner.ts` | Collection Run Setup, then execute; retry settings from configuration |
 | Attempt UI | `progress-labels.ts`, Execution tree, Run Report | `Attempt n/m` / `Retrying…` + Attempts list |
 
 `shouldStopAfter` still applies to the **final** per-request result after

@@ -9,6 +9,7 @@ import type {
 import {
   DefaultRequestExecutor,
   graphqlEnvelopeFromJson,
+  prepareGraphqlHttpRequest,
   type HttpTransport,
   type HttpTransportRequest,
   type HttpTransportResponse,
@@ -251,6 +252,29 @@ test('Authorization header is preserved on the GraphQL HTTP request', async () =
     (header) => header.name.toLowerCase() === 'authorization',
   );
   assert.equal(auth?.value, 'Bearer test-token');
+});
+
+test('prepareGraphqlHttpRequest keeps Authorization and adds Content-Type', () => {
+  const prepared = prepareGraphqlHttpRequest(
+    graphqlRequest(
+      { query: 'query { user { name } }' },
+      {
+        headers: [{ name: 'Authorization', value: 'Bearer test-token' }],
+      },
+    ),
+  );
+  assert.equal(prepared.ok, true);
+  if (!prepared.ok) {
+    return;
+  }
+  const auth = prepared.headers.find(
+    (header) => header.name.toLowerCase() === 'authorization',
+  );
+  assert.equal(auth?.value, 'Bearer test-token');
+  const contentType = prepared.headers.find(
+    (header) => header.name.toLowerCase() === 'content-type',
+  );
+  assert.equal(contentType?.value, 'application/json');
 });
 
 test('invalid GraphQL body fails before transport', async () => {

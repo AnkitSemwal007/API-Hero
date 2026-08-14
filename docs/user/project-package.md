@@ -24,7 +24,7 @@ Import never writes outside the selected folder. Unsafe paths are rejected.
 
 ## Package format v1
 
-Application version (for example 2.12.0) is not the package format version.
+Application version (for example 2.12.1) is not the package format version.
 
 | Concept | v1 value |
 | --- | --- |

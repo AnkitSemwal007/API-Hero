@@ -91,10 +91,39 @@ export {
 } from './collection-runner';
 
 export type {
+  CollectionRunAuthenticationPreference,
+  CollectionRunEnvironmentOverride,
   CollectionRunVariableContext,
   CollectionRunVariableContextBeginOptions,
 } from './run-variable-context';
 export { createCollectionRunVariableContext } from './run-variable-context';
+
+export type {
+  CollectionRunExecuteConfig,
+  CollectionRunFailurePolicyChoice,
+  CollectionRunSetupAuthInfo,
+  CollectionRunSetupEnvironmentOption,
+  CollectionRunSetupFolderNode,
+  CollectionRunSetupLastSubmitted,
+  CollectionRunSetupModel,
+  CollectionRunSetupModelInput,
+  CollectionRunSetupRequestNode,
+  CollectionRunSetupTreeNode,
+  CollectionRunSetupValidationResult,
+  CollectionRunSetupVariableRow,
+  CollectionRunExecuteConfigResult,
+  ValidateCollectionRunSetupInput,
+} from './collection-run-setup-model';
+export {
+  NO_ENVIRONMENT_OPTION_ID,
+  buildCollectionRunSetupModel,
+  collectFolderTreeRequestIds,
+  collectTreeRequestIds,
+  listCollectionRunSetupRequestIds,
+  mapSelectionToRunPlanTarget,
+  toExecuteConfig,
+  validateCollectionRunSetup,
+} from './collection-run-setup-model';
 
 export type {
   BeginCollectionRunSessionOptions,

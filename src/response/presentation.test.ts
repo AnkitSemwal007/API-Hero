@@ -536,12 +536,32 @@ test('WebSocket success omits HTTP status and uses a session summary', () => {
           sent: true,
           received: true,
           closed: true,
+          sentMessage:
+            '{"type":"auth","accessToken":"super-secret-ws","authorization":"Bearer leaked-ws-token"}',
         },
       }
     : source;
   const model = presentExecutionResult(websocket);
   assert.equal(model.status, undefined);
   assert.equal(model.websocket?.received, true);
+  assert.equal(model.websocket?.sent, true);
+  assert.ok(model.websocket?.events.some((event) => event.kind === 'sent'));
+  assert.ok(model.websocket?.events.some((event) => event.kind === 'received'));
+  assert.ok(
+    model.websocket?.events.some(
+      (event) => event.kind === 'connection' && event.text === 'Connected',
+    ),
+  );
+  assert.ok(
+    model.websocket?.events.some(
+      (event) => event.kind === 'connection' && event.text.startsWith('Closed'),
+    ),
+  );
+  assert.equal(model.websocket?.sentPreview !== undefined, true);
+  assert.doesNotMatch(JSON.stringify(model.websocket), /sentMessage/u);
+  assert.doesNotMatch(JSON.stringify(model.websocket), /super-secret-ws/u);
+  assert.doesNotMatch(JSON.stringify(model.websocket), /leaked-ws-token/u);
+  assert.doesNotMatch(JSON.stringify(model.websocket), /Bearer leaked/u);
   assert.match(model.summary, /^WebSocket received · /u);
   assert.doesNotMatch(model.summary, /\b0\b/u);
 });

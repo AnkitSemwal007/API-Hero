@@ -113,3 +113,28 @@ export type {
 export { saveAsAuthenticationProfile } from './save-as-authentication';
 export type { ProbeRequestInput } from './probe-request';
 export { buildProbeAuthenticatedRequest } from './probe-request';
+export type {
+  AuthenticationUiAddToId,
+  AuthenticationUiAddToOption,
+  AuthenticationUiField,
+  AuthenticationUiFieldSourceKind,
+  AuthenticationUiKind,
+  AuthenticationUiProfileSummary,
+  AuthenticationUiState,
+  AuthenticationUiSurface,
+  BuildAuthenticationUiStateInput,
+} from './ui';
+export {
+  AUTHENTICATION_UI_CSS,
+  AUTHENTICATION_UI_KINDS,
+  AUTHENTICATION_UI_KIND_LABELS,
+  AUTHENTICATION_UI_PER_REQUEST_OVERRIDE_HINT,
+  authenticationUiKindFromProviderId,
+  authenticationUiKindLabel,
+  buildAuthenticationUiState,
+  displayAuthenticationValueSource,
+  isAuthenticationUiKind,
+  renderAuthenticationUiControlsHtml,
+  renderAuthenticationUiKindOptionsHtml,
+  summarizeAuthenticationProfileForUi,
+} from './ui';

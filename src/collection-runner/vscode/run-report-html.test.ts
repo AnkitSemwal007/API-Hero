@@ -553,7 +553,7 @@ describe('collection-run-report-html', () => {
     assert.equal(model.rows[0]?.message, undefined);
   });
 
-  test('renderCollectionRunReportHtml renders categorized chips and HTTP-not-sent section', () => {
+  test('renderCollectionRunReportHtml renders categorized chips and not-sent section', () => {
     const html = renderCollectionRunReportHtml('reportNonce');
     assert.match(html, /Validation Failures/u);
     assert.match(html, /HTTP\/Network Failures/u);
@@ -562,9 +562,15 @@ describe('collection-run-report-html', () => {
     assert.match(html, /Execution Status/u);
     assert.match(html, /Failure Reason/u);
     assert.match(html, /Execution Stage/u);
-    assert.match(html, /HTTP Request — Not Sent/u);
+    assert.match(html, /Request — Not Sent/u);
+    assert.match(html, /API Hero did not send this request/u);
     assert.match(html, /Request Information/u);
     assert.match(html, /failure-facts/u);
+    assert.match(html, /renderGraphqlErrorsSection/u);
+    assert.match(html, /renderWebsocketSection/u);
+    assert.match(html, /data-testid="graphql-errors"/u);
+    assert.match(html, /ws-event-sent/u);
+    assert.match(html, /ws-event-received/u);
     // Details must not fabricate a timestamped pipeline history.
     assert.doesNotMatch(html, /stage-timeline/u);
   });

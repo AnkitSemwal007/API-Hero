@@ -310,6 +310,9 @@ export class DefaultRequestExecutor implements RequestExecutor {
           ...(raw.closeReason === undefined
             ? {}
             : { closeReason: raw.closeReason }),
+          ...(raw.sent && prepared.message !== undefined
+            ? { sentMessage: prepared.message }
+            : {}),
         }),
       });
     } catch (error) {

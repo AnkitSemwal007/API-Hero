@@ -10,13 +10,13 @@
 
 ## Is GraphQL supported?
 
-Yes — **queries and mutations over HTTP**. Add `@protocol graphql` and a JSON body with `query`, optional `variables`, and optional `operationName`. See [GraphQL](./graphql.md).
+Yes — **queries and mutations over HTTP**. Add `@protocol graphql` (or choose GraphQL in the Request Editor protocol selector). The Body tab becomes Query / Variables / Operation name. See [GraphQL](./graphql.md).
 
 Subscriptions, GraphQL schema / Postman GraphQL import are not supported. Bounded WebSocket sessions are a separate protocol — see [WebSocket](./websocket.md).
 
 ## Is WebSocket supported?
 
-Yes — **bounded connect / send / receive / close sessions** (`ws://` and `wss://`). Add `@protocol websocket`. Persistent connections, subscriptions, reconnect, and binary frames are not supported. See [WebSocket](./websocket.md).
+Yes — **bounded connect / send / receive / close sessions** (`ws://` and `wss://`). Add `@protocol websocket` (or choose WebSocket in the Request Editor). **Run Session** is not a persistent connection. Persistent connections, subscriptions, reconnect, and binary frames are not supported. See [WebSocket](./websocket.md).
 
 ## Is OAuth2 supported?
 

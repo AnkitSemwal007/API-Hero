@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.12.1] - 2026-08-14
+
+First-class GraphQL and WebSocket Request Editor UX, Environment & Variables UI, centralized Authentication UI, and Collection Run Setup. Backward compatible with **2.12.0**.
+
+### Added
+
+- **GraphQL Request Editor** — Protocol selector GraphQL; the Body tab becomes **Query** with Query, Variables, and optional Operation name — a projection of the existing JSON envelope. HTTP 200 with GraphQL `errors` shows a **GraphQL Errors** card (messages are already secret-masked). Subscriptions are not included.
+- **WebSocket Request Editor** — Protocol selector WebSocket; **Run Session** is the same bounded connect → optional text send → first text frame receive → close session as CLI. Session and message presentation in the Response Viewer. Persistent connections are not included.
+- **HTTP / GraphQL / WebSocket protocol selection** — Request Editor toolbar writes `@protocol` (`http` omits the directive; unknown values are kept so save cannot coerce them to HTTP).
+- **Environment & Variables UI** — Environment Manager plus Request Editor Variables tab (document variables, masked resolution preview, `{{` IntelliSense). Collection Run Setup previews resolved variables for the selected environment.
+- **Centralized Authentication UI** — Shared secret-free Auth UI on Request Editor, Collection Auth, and Collection Run Setup. Types: **No Auth**, **Bearer Token**, **Basic Auth**, **API Key**. OAuth is not included.
+- **Collection Run Setup** — Dedicated setup screen before a collection, folder, or selected-requests run: environment selection, variable preview, authentication configuration, request selection, Continue on Error / Stop on First Failure. **Run Again** restores the previous submitted configuration.
+
+### Improved
+
+- GraphQL error presentation in the Response Viewer and Collection Run Report.
+- WebSocket session and message presentation (bounded session recap).
+
+### Security
+
+- Secret masking and redaction across GraphQL error messages, WebSocket close reasons, Authentication UI, variable preview, and reports.
+- WebSocket close-reason redaction.
+- Secrets are not added to History.
+
+### Notes
+
+- Collection Run Report JSON and standalone HTML export remain a redacted snapshot of the existing report model.
+- CLI and MCP reuse the same runtime and `@protocol` support. There is no separate GraphQL, WebSocket, Authentication, or Variables CLI.
+- Scenarios are not a current VS Code product capability.
+- OAuth is not included.
+- WebSocket remains a bounded session — not a persistent client.
+
 ## [2.12.0] - 2026-08-14
 
 Source-code integration, Collection Run Report export, and portable `.apihero` project packages. Backward compatible with **2.11.0**.

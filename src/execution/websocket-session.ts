@@ -93,6 +93,7 @@ export function websocketSessionSummary(input: {
   readonly sent: boolean;
   readonly closeCode?: number;
   readonly closeReason?: string;
+  readonly sentMessage?: string;
 }): WebsocketSessionSummary {
   return deepFreeze({
     connected: true,
@@ -103,6 +104,11 @@ export function websocketSessionSummary(input: {
     ...(input.closeReason === undefined || input.closeReason.length === 0
       ? {}
       : { closeReason: input.closeReason }),
+    ...(input.sent &&
+    input.sentMessage !== undefined &&
+    input.sentMessage.length > 0
+      ? { sentMessage: input.sentMessage }
+      : {}),
   });
 }
 

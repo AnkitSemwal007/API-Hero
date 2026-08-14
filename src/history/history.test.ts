@@ -213,6 +213,56 @@ test('buildHistoryEntry omits HTTP status for WebSocket success', () => {
   assert.equal(entry.summary.status, HistoryExecutionStatus.Success);
   assert.equal(entry.summary.statusCode, undefined);
   assert.equal(entry.summary.statusText, undefined);
+  assert.doesNotMatch(JSON.stringify(entry), /sentMessage/u);
+  assert.doesNotMatch(JSON.stringify(entry), /secret-ws-token/u);
+  assert.doesNotMatch(JSON.stringify(entry), /"type":"ping"/u);
+});
+
+test('buildHistoryEntry does not persist WebSocket sentMessage or bodies', () => {
+  const request = authenticatedRequest({
+    url: 'ws://example.test/socket',
+    protocol: 'websocket',
+    resolution: {
+      kind: 'resolved',
+      presentationUrl: 'ws://example.test/socket',
+      sensitiveVariableNames: [],
+      sensitiveHeaderNames: [],
+      sensitiveQueryParameterNames: [],
+    },
+  });
+  const result = successResult(request, 0);
+  const websocketResult: ExecutionResult = result.success
+    ? {
+        ...result,
+        response: {
+          ...result.response,
+          statusText: 'received',
+          body: {
+            bytes: freezeDetachedBytes(
+              new TextEncoder().encode('{"secret-ws-token":"leak"}'),
+            ),
+            text: '{"secret-ws-token":"leak"}',
+          },
+        },
+        websocket: {
+          connected: true,
+          sent: true,
+          received: true,
+          closed: true,
+          sentMessage: '{"type":"auth","token":"secret-ws-token"}',
+        },
+      }
+    : result;
+  const serialized = JSON.stringify(
+    buildHistoryEntry({
+      runId: 9,
+      request,
+      result: websocketResult,
+    }),
+  );
+  assert.doesNotMatch(serialized, /sentMessage/u);
+  assert.doesNotMatch(serialized, /secret-ws-token/u);
+  assert.doesNotMatch(serialized, /"type":"auth"/u);
 });
 
 test('buildHistoryEntry records cancelled and failed outcomes safely', () => {

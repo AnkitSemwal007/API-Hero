@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import type { ExecutionResult } from '../execution';
+import type { ExecutionResult, GraphqlEnvelopeSummary } from '../execution';
 import type { RuntimeJsonValue } from '../models/request';
 import { freezeDetachedBytes } from '../shared';
 import { presentExecutionResult } from './presentation';
@@ -117,6 +117,8 @@ test('WebSocket success renders a session badge instead of HTTP 0', () => {
       sent: true,
       received: true,
       closed: true,
+      closeCode: 1000,
+      sentMessage: '{"type":"ping"}',
     },
   };
   const html = renderResponseViewerHtml(
@@ -125,6 +127,55 @@ test('WebSocket success renders a session badge instead of HTTP 0', () => {
   );
   assert.match(html, /WebSocket received/u);
   assert.doesNotMatch(html, />0 received</u);
+  assert.match(html, /aria-label="WebSocket messages"/u);
+  assert.match(html, /ws-event-sent/u);
+  assert.match(html, /ws-event-received/u);
+  assert.match(html, /→/u);
+  assert.match(html, /←/u);
+  assert.match(html, /\(sent\)/u);
+  assert.match(html, /\(received\)/u);
+  assert.match(html, /Connected/u);
+  assert.match(html, /Closed \(1000\)/u);
+  assert.match(html, /\.ws-messages, \.ws-event/u);
+});
+
+test('WebSocket messages redact Bearer tokens and accessToken values', () => {
+  const base = result('{"type":"pong"}');
+  assert.equal(base.success, true);
+  if (!base.success) {
+    return;
+  }
+  const websocket: ExecutionResult = {
+    ...base,
+    request: Object.freeze({
+      method: 'GET',
+      url: 'ws://example.test/socket',
+    }),
+    response: {
+      ...base.response,
+      statusCode: 0,
+      statusText: 'received',
+      url: 'ws://example.test/socket',
+    },
+    websocket: {
+      connected: true,
+      sent: true,
+      received: true,
+      closed: true,
+      sentMessage:
+        '{"authorization":"Bearer leaked-ws-token","accessToken":"sent-secret-token"}',
+    },
+  };
+  const html = renderResponseViewerHtml(
+    presentExecutionResult(websocket),
+    'nonce',
+  );
+  assert.match(html, /ws-event-sent/u);
+  assert.match(html, /ws-event-received/u);
+  assert.match(html, /Connected/u);
+  assert.doesNotMatch(html, /leaked-ws-token/u);
+  assert.doesNotMatch(html, /sent-secret-token/u);
+  assert.doesNotMatch(html, /Bearer leaked/u);
 });
 
 test('renders Possible causes for successful 401 responses', () => {
@@ -996,4 +1047,96 @@ test('getKnownVariableNames throw does not block opening the response panel', ()
   assert.equal(factory.panels.length, 1);
   assert.match(factory.panels[0]!.html, /data-json-path="body\.id"/u);
   assert.match(factory.panels[0]!.html, /data-enable-create-variable="true"/u);
+});
+
+function withGraphql(
+  body: string,
+  graphql: GraphqlEnvelopeSummary,
+): ExecutionResult {
+  const base = result(body);
+  assert.equal(base.success, true);
+  return { ...base, graphql };
+}
+
+test('GraphQL 200 with errors renders a dedicated errors card', () => {
+  const html = renderResponseViewerHtml(
+    presentExecutionResult(
+      withGraphql('{"errors":[{"message":"Cannot query field \\"foo\\""}]}', {
+        validEnvelope: true,
+        hasData: false,
+        hasErrors: true,
+        errorCount: 1,
+        errorMessages: ['Cannot query field "foo"'],
+      }),
+    ),
+    'nonce',
+  );
+  assert.match(html, /data-testid="graphql-errors"/u);
+  assert.match(html, /Cannot query field &quot;foo&quot;/u);
+  assert.match(html, /GraphQL Errors \(1\)/u);
+  assert.match(html, /class="graphql-errors-card"/u);
+});
+
+test('GraphQL errors card does not echo raw secrets from pre-scrubbed messages', () => {
+  const html = renderResponseViewerHtml(
+    presentExecutionResult(
+      withGraphql('{"errors":[{"message":"Unauthorized"}]}', {
+        validEnvelope: true,
+        hasData: false,
+        hasErrors: true,
+        errorCount: 1,
+        errorMessages: ['Unauthorized Bearer ••••••••'],
+      }),
+    ),
+    'nonce',
+  );
+  assert.match(html, /data-testid="graphql-errors"/u);
+  assert.match(html, /Unauthorized Bearer ••••••••/u);
+  assert.doesNotMatch(html, /sekrit-token-value/u);
+  assert.doesNotMatch(html, /live-secret/u);
+});
+
+test('GraphQL success without errors does not show the errors card', () => {
+  const html = renderResponseViewerHtml(
+    presentExecutionResult(
+      withGraphql('{"data":{"user":{"name":"Ada"}}}', {
+        validEnvelope: true,
+        hasData: true,
+        hasErrors: false,
+        errorCount: 0,
+        errorMessages: [],
+      }),
+    ),
+    'nonce',
+  );
+  assert.doesNotMatch(html, /data-testid="graphql-errors"/u);
+  assert.doesNotMatch(html, /GraphQL Errors/u);
+  assert.doesNotMatch(html, /Invalid GraphQL response/u);
+});
+
+test('invalid GraphQL envelope shows Invalid GraphQL response', () => {
+  const html = renderResponseViewerHtml(
+    presentExecutionResult(
+      withGraphql('{"errors":"nope"}', {
+        validEnvelope: false,
+        hasData: false,
+        hasErrors: false,
+        errorCount: 0,
+        errorMessages: [],
+      }),
+    ),
+    'nonce',
+  );
+  assert.match(html, /data-testid="graphql-errors"/u);
+  assert.match(html, /Invalid GraphQL response/u);
+});
+
+test('REST responses do not render GraphQL error chrome', () => {
+  const html = renderResponseViewerHtml(
+    presentExecutionResult(result('{"value":1}')),
+    'nonce',
+  );
+  assert.doesNotMatch(html, /data-testid="graphql-errors"/u);
+  assert.doesNotMatch(html, /GraphQL Errors \(/u);
+  assert.doesNotMatch(html, /Invalid GraphQL response/u);
 });

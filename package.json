@@ -2,7 +2,7 @@
   "name": "api-hero",
   "displayName": "API Hero",
   "description": "Git-first REST/HTTP, GraphQL-over-HTTP (queries/mutations), and bounded WebSocket client for VS Code plus headless apihero CLI and MCP. Edit .api requests in a UI Request Editor, run with assertions, manage Authentication (profiles, Login API sessions, Secret Storage), collections, and environments, map source to .api with CodeLens, export Collection Run Reports, import/export portable .apihero project packages, import OpenAPI / Postman / Insomnia / cURL, inspect Execution, History, and Run Reports, and run the same collections from CI or AI agents.",
-  "version": "2.12.0",
+  "version": "2.12.1",
   "publisher": "ankitsemwal",
   "license": "MIT",
   "homepage": "https://github.com/AnkitSemwal007/API-Hero",

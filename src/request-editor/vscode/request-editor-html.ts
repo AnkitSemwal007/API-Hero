@@ -3,6 +3,11 @@
  * No vscode import — unit-testable generation and CSP helpers.
  */
 
+import {
+  AUTHENTICATION_PRESENTATION_MASK,
+  AUTHENTICATION_UI_CSS,
+  renderAuthenticationUiControlsHtml,
+} from '../../auth';
 import { HTTP_METHODS } from '../../types';
 import {
   VARIABLE_PRECEDENCE_LEGEND,
@@ -41,10 +46,19 @@ export function renderRequestEditorHtml(nonce: string): string {
 <div id="banner" class="banner" hidden></div>
 <header class="toolbar sticky-toolbar">
   <div class="run-row" role="group" aria-label="Request execution">
+    <label class="field protocol">
+      <span class="sr-only">Protocol</span>
+      <select id="protocol" aria-label="Protocol">
+        <option value="http" selected>HTTP</option>
+        <option value="graphql">GraphQL</option>
+        <option value="websocket">WebSocket</option>
+      </select>
+    </label>
     <label class="field method">
       <span class="sr-only">Method</span>
       <select id="method" class="method-select method-get" aria-label="HTTP method">${methodOptions}</select>
     </label>
+    <span id="protocolBadge" class="method-badge method-other protocol-badge" hidden>WS</span>
     <label class="field grow url-field">
       <span class="sr-only">URL</span>
       <input id="url" type="text" placeholder="https://api.example.com/resource" autocomplete="off" aria-label="URL" data-var-complete="true" data-var-preview="urlResolved" data-var-hint="urlVarHint" />
@@ -53,7 +67,7 @@ export function renderRequestEditorHtml(nonce: string): string {
     </label>
     <button type="button" id="envShortcut" class="chip" title="Switch workspace environment" aria-label="Switch workspace environment">Workspace Env: None</button>
     <button type="button" id="authShortcut" class="chip" title="Session default Authentication" aria-label="Session default Authentication">Authentication</button>
-    <button type="button" id="run" class="primary run-btn">${iconHtml('play', { decorative: true })} Run</button>
+    <button type="button" id="run" class="primary run-btn">${iconHtml('play', { decorative: true })} <span id="runLabel">Run</span></button>
   </div>
 </header>
 <nav class="tabs" role="tablist" aria-label="Request sections">
@@ -72,6 +86,20 @@ export function renderRequestEditorHtml(nonce: string): string {
       </label>
       <div class="identity-actions">
         <button type="button" id="openText" class="ghost" title="Open With Text Editor">Open Text Editor</button>
+      </div>
+    </div>
+    <div id="websocketConnection" class="ws-connection" hidden>
+      <h3 class="ah-section-title">Connection</h3>
+      <div class="ws-connection-status">
+        <span>Status:</span>
+        <span id="websocketStatus" role="status">Disconnected</span>
+      </div>
+      <p id="websocketHint" class="hint">Bounded session: connect → send → receive → close. The socket is not kept open.</p>
+    </div>
+    <div id="websocketMessagesPanel" class="ws-messages-panel" hidden>
+      <h3 class="ah-section-title">Messages</h3>
+      <div id="websocketMessages" class="ws-messages" aria-live="polite">
+        <p class="hint ws-messages-empty">No session yet — Run Session to connect, send the message, receive one text frame, and close.</p>
       </div>
     </div>
     <div class="execution-block dependencies-block">
@@ -142,7 +170,7 @@ export function renderRequestEditorHtml(nonce: string): string {
   </section>
   <section id="tab-body" class="panel" role="tabpanel" hidden>
     <div class="form-compact">
-      <label class="field inline-field">
+      <label class="field inline-field" id="bodyTypeField">
         <span>Body type</span>
         <select id="bodyType">
           <option value="none">none</option>
@@ -195,37 +223,33 @@ export function renderRequestEditorHtml(nonce: string): string {
         </label>
         <p class="hint">Binary bodies are emitted as a stub comment in the .api file.</p>
       </div>
+      <div id="bodyGraphql" class="body-block graphql-request" hidden>
+        <h3 class="ah-section-title">GraphQL Request</h3>
+        <p class="hint">Runs through the same execution pipeline as REST. Query and mutation documents go in Query; <code>{{variable}}</code> works in URL, headers, query, and variables JSON. Prefer <code>{{variable}}</code> for secrets — do not paste secret values into Variables.</p>
+        <label class="field">
+          <span>Query</span>
+          <textarea id="graphqlQuery" rows="12" spellcheck="false" data-var-complete="true" placeholder="query GetUsers { users { id name } }"></textarea>
+        </label>
+        <label class="field">
+          <span>Variables</span>
+          <textarea id="graphqlVariables" rows="8" spellcheck="false" data-var-complete="true" placeholder="{ }">{ }</textarea>
+        </label>
+        <p id="graphqlVariablesHint" class="hint" hidden></p>
+        <label class="field">
+          <span>Operation name <em class="optional-hint">optional</em></span>
+          <input id="graphqlOperationName" type="text" placeholder="GetUsers" autocomplete="off" data-var-complete="true" />
+        </label>
+      </div>
     </div>
   </section>
   <section id="tab-auth" class="panel" role="tabpanel" hidden>
     <div class="form-compact">
+      <h3 class="ah-section-title">Authentication</h3>
       <p id="authEmptyGuidance" class="empty-state compact" hidden>
-        <strong>No Authentication selected</strong> — choose Saved Authentication, paste a one-shot Bearer token, or open Manage Authentication.
+        <strong>No Authentication selected</strong> — choose Saved Authentication, paste one-shot credentials, or open Manage Authentication.
       </p>
-      <label class="field">
-        <span>Authentication mode</span>
-        <select id="authMode">
-          <option value="none">None</option>
-          <option value="oneshot">One-shot</option>
-          <option value="saved">Saved Authentication</option>
-        </select>
-      </label>
-      <div id="authSavedBlock">
-        <label class="field">
-          <span>Authentication</span>
-          <select id="authProfile">
-            <option value="">none</option>
-          </select>
-        </label>
-        <p class="hint">Writes <code>@auth &lt;id&gt;</code>. Secrets stay in Secret Storage — never in the webview.</p>
-      </div>
-      <div id="authOneshotBlock" hidden>
-        <label class="field">
-          <span>Bearer token (one-shot)</span>
-          <input id="oneshotToken" type="password" autocomplete="off" placeholder="Paste token — not saved to .api" />
-        </label>
-        <p class="hint">Token stays in editor memory until Send, then is cleared unless you Save as Authentication.</p>
-      </div>
+      ${renderAuthenticationUiControlsHtml('request')}
+      <p id="authOneshotHint" class="hint" hidden>Credentials stay in editor memory until Send, then are cleared unless you Save as Authentication.</p>
       <h3 class="ah-section-title">Preview</h3>
       <pre id="authPreview" class="preview-box" aria-live="polite">No authentication headers will be added.</pre>
       <button type="button" id="copyAuthHeaderName" class="ghost" hidden>Copy header name</button>
@@ -300,7 +324,7 @@ export function renderRequestEditorHtml(nonce: string): string {
         <span>Timeout (ms) — <code>@timeout</code></span>
         <input id="timeoutMs" type="number" min="0" step="1" placeholder="(use extension default)" />
       </label>
-      <p class="hint">Only directives already in the .api format are editable here. Redirect following is always on at runtime (no directive).</p>
+      <p class="hint">Only directives already in the .api format are editable here. Redirect following is always on at runtime (no directive). Protocol is chosen in the toolbar. GraphQL sends a JSON query/variables envelope over HTTP. HTTP is the default when omitted.</p>
     </div>
   </section>
   <section id="tab-preview" class="panel" role="tabpanel" hidden>
@@ -357,6 +381,7 @@ export function emptyRequestEditorModel(): RequestSourceDocument {
 
 const EDITOR_CSS = `
 ${WEBVIEW_SHARED_CSS}
+${AUTHENTICATION_UI_CSS}
 :root { color-scheme: light dark; }
 * { box-sizing: border-box; }
 body {
@@ -391,6 +416,8 @@ body {
 }
 .run-row .field { margin: 0; }
 .run-row .field.method { width: 92px; flex: 0 0 92px; }
+.run-row .field.protocol { width: 118px; flex: 0 0 118px; }
+.protocol-badge { flex: 0 0 auto; align-self: center; }
 .run-row .field.grow.url-field { flex: 1 1 auto; min-width: 0; }
 .run-row .chip,
 .run-row .run-btn {
@@ -399,6 +426,20 @@ body {
   min-height: var(--ah-control-height);
   box-sizing: border-box;
 }
+span.chip, .protocol-badge {
+  display: inline-flex;
+  align-items: center;
+  color: var(--vscode-descriptionForeground);
+  background: var(--vscode-input-background);
+  border: 1px solid var(--vscode-panel-border, var(--vscode-contrastBorder));
+  border-radius: var(--ah-radius);
+  padding: 2px 8px;
+  min-height: 22px;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+span.chip[hidden], .protocol-badge[hidden] { display: none; }
 .run-btn {
   min-width: 64px;
   padding: 0 14px;
@@ -658,6 +699,47 @@ body {
 .field { display: grid; gap: var(--ah-space-1); }
 .field.grow { flex: 1; min-width: 0; }
 .field.method { width: 92px; flex: 0 0 92px; }
+.ws-connection,
+.ws-messages-panel {
+  max-width: 36rem;
+  margin-bottom: var(--ah-space-2);
+  display: grid;
+  gap: var(--ah-space-1);
+}
+.ws-connection-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ah-space-1);
+  align-items: baseline;
+  font-size: 12px;
+}
+.ws-messages {
+  margin: 0;
+  padding: var(--ah-space-2);
+  border: 1px solid var(--vscode-panel-border, var(--vscode-contrastBorder));
+  border-radius: var(--ah-radius);
+  background: var(--vscode-input-background);
+}
+.ws-message-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--ah-space-1);
+  font-family: var(--vscode-editor-font-family, var(--vscode-font-family));
+  font-size: 12px;
+}
+.ws-event {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ah-space-1);
+  align-items: baseline;
+  overflow-wrap: anywhere;
+}
+.ws-event-sent { color: var(--vscode-charts-blue, var(--vscode-terminal-ansiBlue, #3794ff)); }
+.ws-event-received { color: var(--vscode-charts-green, var(--vscode-terminal-ansiGreen, #89d185)); }
+.ws-event-connection { color: var(--vscode-descriptionForeground); }
+.ws-event-error { color: var(--vscode-errorForeground, var(--vscode-editorError-foreground)); }
 .field span, .field em {
   color: var(--vscode-descriptionForeground);
   font-size: 11px;
@@ -683,6 +765,16 @@ textarea, pre.source, .preview-box {
   line-height: 1.5;
 }
 textarea { resize: vertical; min-height: 120px; }
+#graphqlQuery { min-height: 180px; }
+#graphqlVariables { min-height: 96px; }
+#graphqlVariablesHint {
+  color: var(--vscode-errorForeground, var(--vscode-editorError-foreground));
+}
+.graphql-request .optional-hint {
+  font-style: normal;
+  opacity: .8;
+  font-weight: 400;
+}
 .hint {
   color: var(--vscode-descriptionForeground);
   font-size: 11px;
@@ -890,7 +982,8 @@ h3, .ah-section-title {
     flex-wrap: wrap;
     align-items: stretch;
   }
-  .run-row .field.method { width: 100%; flex: 1; }
+  .run-row .field.method,
+  .run-row .field.protocol { width: 100%; flex: 1; }
   .run-row .chip,
   .run-row .run-btn { width: 100%; }
   .row { flex-direction: column; align-items: stretch; }
@@ -919,6 +1012,13 @@ const EDITOR_SCRIPT = `
   let dependencyProjectionError = null;
   /** Host Authentication list for Saved mode preview (metadata only; no secrets). */
   let authProfileOptions = [];
+  const AUTH_MASK = ${JSON.stringify(AUTHENTICATION_PRESENTATION_MASK)};
+  /** Last request authProfileId from the model — oneshot must not strip it. */
+  let modelAuthProfileId = '';
+  /** Last applied protocol select value — used to detect GraphQL switch-in/out. */
+  let lastProtocol = '';
+  /** Last presented WebSocket events — kept until a new connecting session starts. */
+  let lastWebsocketEvents = [];
 
   const el = (id) => document.getElementById(id);
 
@@ -967,7 +1067,15 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
     };
     document.querySelectorAll('.tab[data-tab]').forEach((button) => {
       const id = button.getAttribute('data-tab');
-      if (id === 'variables') {
+      if (id === 'body') {
+        if (isWebsocketProtocol(el('protocol').value)) {
+          button.textContent = 'Message';
+        } else if (isGraphqlProtocol(el('protocol').value)) {
+          button.textContent = 'Query';
+        } else {
+          button.textContent = 'Body';
+        }
+      } else if (id === 'variables') {
         button.textContent = tabLabelWithCount('Variables', counts.variables);
       } else if (id === 'extract') {
         button.textContent = tabLabelWithCount('Extract', counts.extract);
@@ -1011,24 +1119,22 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
     } else {
       delete model.timeoutMs;
     }
-    const authMode = el('authMode').value;
+    const authMode = currentAuthMode();
     if (authMode === 'saved') {
       const auth = el('authProfile').value.trim();
       if (auth) model.authProfileId = auth;
       else delete model.authProfileId;
     } else if (authMode === 'none') {
-      // Explicit None clears @auth from the document.
+      // Inherit / No Auth (no profile): delete authProfileId so collection/session apply.
       delete model.authProfileId;
     }
     // oneshot: leave authProfileId unchanged — never strip @auth or write token.
     model.body = readBody();
-    // Preserve @protocol from the in-memory model (no protocol dropdown in Phase 1).
-    // Unknown values are kept so save cannot silently convert them to HTTP.
-    const protocol = state && state.model ? state.model.protocol : model.protocol;
-    if (typeof protocol === 'string' && protocol.trim().length > 0) {
-      model.protocol = protocol.trim().toLowerCase();
-    } else {
+    const protocol = el('protocol').value.trim().toLowerCase();
+    if (protocol.length === 0 || protocol === 'http') {
       delete model.protocol;
+    } else {
+      model.protocol = protocol;
     }
     const source = state && state.model ? state.model.source : model.source;
     if (typeof source === 'string' && source.trim().length > 0) {
@@ -1509,7 +1615,295 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
     ).filter(Boolean);
   }
 
+  function isGraphqlProtocol(protocol) {
+    return String(protocol || '').trim().toLowerCase() === 'graphql';
+  }
+
+  function isWebsocketProtocol(protocol) {
+    return String(protocol || '').trim().toLowerCase() === 'websocket';
+  }
+
+  function isJsonObject(value) {
+    return value !== null && typeof value === 'object' && !Array.isArray(value);
+  }
+
+  function parseGraphqlEditorEnvelope(body) {
+    const empty = { query: '', variablesText: '{}', operationName: '' };
+    if (!body || (body.type !== 'json' && body.type !== 'text' && body.type !== 'raw')) {
+      return empty;
+    }
+    const text = body.text;
+    if (typeof text !== 'string' || text.trim().length === 0) {
+      return empty;
+    }
+    let parsed;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      return empty;
+    }
+    if (!isJsonObject(parsed) || typeof parsed.query !== 'string') {
+      return empty;
+    }
+    let variablesText = '{}';
+    if (isJsonObject(parsed.variables)) {
+      variablesText = JSON.stringify(parsed.variables, null, 2);
+    }
+    const operationName =
+      typeof parsed.operationName === 'string' && parsed.operationName.trim().length > 0
+        ? parsed.operationName
+        : '';
+    return { query: parsed.query, variablesText, operationName };
+  }
+
+  function compileGraphqlEditorEnvelope(query, variablesText, operationName) {
+    const envelope = { query: query };
+    const trimmedVariables = String(variablesText || '').trim();
+    if (trimmedVariables.length === 0) {
+      envelope.variables = {};
+    } else {
+      try {
+        const parsed = JSON.parse(variablesText);
+        if (isJsonObject(parsed)) {
+          envelope.variables = parsed;
+        }
+      } catch {
+        // Omit invalid variables so query/operationName still save.
+      }
+    }
+    const trimmedOperation = String(operationName || '').trim();
+    if (trimmedOperation.length > 0) {
+      envelope.operationName = trimmedOperation;
+    }
+    return { type: 'json', text: JSON.stringify(envelope, null, 2) };
+  }
+
+  function setGraphqlVariablesHint(invalid) {
+    const hint = el('graphqlVariablesHint');
+    if (!hint) return;
+    hint.hidden = !invalid;
+    hint.textContent = invalid ? 'Variables must be a JSON object' : '';
+  }
+
+  function variablesTextIsInvalid(variablesText) {
+    const trimmed = String(variablesText || '').trim();
+    if (trimmed.length === 0) return false;
+    try {
+      return !isJsonObject(JSON.parse(variablesText));
+    } catch {
+      return true;
+    }
+  }
+
+  function ensureProtocolOption(protocol) {
+    const select = el('protocol');
+    if (!select) return 'http';
+    const raw = String(protocol || '').trim();
+    const lower = raw.toLowerCase();
+    const selectValue = !lower || lower === 'http' ? 'http' : lower;
+    Array.from(select.querySelectorAll('option[data-unknown]')).forEach((opt) => {
+      if (opt.value !== selectValue) opt.remove();
+    });
+    if (selectValue && !Array.from(select.options).some((opt) => opt.value === selectValue)) {
+      const option = document.createElement('option');
+      option.value = selectValue;
+      option.textContent = selectValue;
+      option.setAttribute('data-unknown', 'true');
+      select.appendChild(option);
+    }
+    return selectValue;
+  }
+
+  function ensureJsonContentTypeHeader() {
+    const rows = readKvTable('headersTable', true);
+    const hasContentType = rows.some((row) =>
+      String(row.name || '').trim().toLowerCase() === 'content-type'
+    );
+    if (hasContentType) return;
+    rows.push({ name: 'Content-Type', value: 'application/json', enabled: true });
+    renderKvRows('headersTable', rows, true);
+  }
+
+  function graphqlEditorFieldsAreEmpty() {
+    return String(el('graphqlQuery').value || '').trim().length === 0
+      && String(el('graphqlOperationName').value || '').trim().length === 0;
+  }
+
+  function restBodyIsNonGraphqlEnvelope() {
+    const type = el('bodyType').value;
+    if (type === 'form' || type === 'multipart' || type === 'binary') {
+      return true;
+    }
+    const text = String(el('bodyText').value || '').trim();
+    if (text.length === 0 || type === 'none') {
+      return false;
+    }
+    const envelope = parseGraphqlEditorEnvelope({ type: type, text: el('bodyText').value });
+    return envelope.query.length === 0;
+  }
+
+  function applyGraphqlSwitchIn() {
+    const method = String(el('method').value || '').trim().toUpperCase();
+    if (method === 'GET' || method.length === 0) {
+      el('method').value = 'POST';
+      syncMethodSelect();
+    }
+    const type = el('bodyType').value;
+    const text = String(el('bodyText').value || '').trim();
+    const restEmpty =
+      type === 'none' ||
+      ((type === 'json' || type === 'text' || type === 'raw') && text.length === 0);
+    if (restEmpty) {
+      const compiled = compileGraphqlEditorEnvelope('query {\\n\\n}', '{}', '');
+      el('bodyType').value = 'json';
+      el('bodyText').value = compiled.text;
+      el('graphqlQuery').value = 'query {\\n\\n}';
+      el('graphqlVariables').value = '{}';
+      el('graphqlOperationName').value = '';
+      setGraphqlVariablesHint(false);
+    } else {
+      const envelope = parseGraphqlEditorEnvelope({ type: type, text: el('bodyText').value });
+      el('graphqlQuery').value = envelope.query;
+      el('graphqlVariables').value = envelope.variablesText;
+      el('graphqlOperationName').value = envelope.operationName;
+      setGraphqlVariablesHint(variablesTextIsInvalid(envelope.variablesText));
+      // Non-envelope bodies stay in bodyText until Query is edited — do not
+      // compile an empty { query, variables } over the previous payload.
+    }
+    ensureJsonContentTypeHeader();
+  }
+
+  function applyGraphqlSwitchOut() {
+    if (graphqlEditorFieldsAreEmpty() && restBodyIsNonGraphqlEnvelope()) {
+      return;
+    }
+    const compiled = compileGraphqlEditorEnvelope(
+      el('graphqlQuery').value,
+      el('graphqlVariables').value,
+      el('graphqlOperationName').value
+    );
+    el('bodyType').value = 'json';
+    el('bodyText').value = compiled.text;
+  }
+
+  function handleProtocolChange() {
+    const next = String(el('protocol').value || '');
+    const prev = lastProtocol;
+    if (isGraphqlProtocol(next) && !isGraphqlProtocol(prev)) {
+      applyGraphqlSwitchIn();
+    } else if (!isGraphqlProtocol(next) && isGraphqlProtocol(prev)) {
+      applyGraphqlSwitchOut();
+    }
+    lastProtocol = next;
+    applyProtocolChrome();
+    scheduleUpdate();
+  }
+
+  function applyProtocolChrome() {
+    const protocol = el('protocol') ? el('protocol').value : '';
+    const websocket = isWebsocketProtocol(protocol);
+    const graphql = isGraphqlProtocol(protocol);
+    const methodField = el('method') ? el('method').closest('.field') : null;
+    if (methodField) methodField.hidden = websocket;
+    const badge = el('protocolBadge');
+    if (badge) {
+      if (websocket) {
+        badge.hidden = false;
+        badge.textContent = 'WS';
+      } else if (graphql) {
+        badge.hidden = false;
+        badge.textContent = 'GraphQL';
+      } else {
+        badge.hidden = true;
+      }
+    }
+    const url = el('url');
+    if (url) {
+      url.placeholder = websocket ? 'ws://localhost:8080/socket' : 'https://api.example.com/resource';
+      url.setAttribute('aria-label', 'URL');
+    }
+    const connection = el('websocketConnection');
+    const messagesPanel = el('websocketMessagesPanel');
+    if (connection) connection.hidden = !websocket;
+    if (messagesPanel) messagesPanel.hidden = !websocket;
+    const runLabel = el('runLabel');
+    if (runLabel) runLabel.textContent = websocket ? 'Run Session' : 'Run';
+    const bodyType = el('bodyType');
+    if (bodyType) {
+      Array.from(bodyType.options).forEach((opt) => {
+        const allowed = opt.value === 'none' || opt.value === 'json' || opt.value === 'text';
+        opt.hidden = websocket && !allowed;
+      });
+    }
+    updateBodyVisibility();
+    refreshTabBadges();
+  }
+
+  function syncProtocolUi() {
+    applyProtocolChrome();
+  }
+
+  function websocketEventClass(kind) {
+    if (kind === 'sent') return 'ws-event ws-event-sent';
+    if (kind === 'received') return 'ws-event ws-event-received';
+    if (kind === 'error') return 'ws-event ws-event-error';
+    return 'ws-event ws-event-connection';
+  }
+
+  function renderWebsocketEvents(events) {
+    const root = el('websocketMessages');
+    if (!root) return;
+    root.textContent = '';
+    if (!events || events.length === 0) {
+      const empty = document.createElement('p');
+      empty.className = 'hint ws-messages-empty';
+      empty.textContent = 'No session yet — Run Session to connect, send the message, receive one text frame, and close.';
+      root.appendChild(empty);
+      return;
+    }
+    const list = document.createElement('ul');
+    list.className = 'ws-message-list';
+    events.forEach((event) => {
+      const li = document.createElement('li');
+      li.className = websocketEventClass(event.kind);
+      const arrow = event.direction === 'sent' ? '→ ' : event.direction === 'received' ? '← ' : '';
+      li.textContent = arrow + String(event.text || '');
+      list.appendChild(li);
+    });
+    root.appendChild(list);
+  }
+
+  function applyWebsocketSessionMessage(message) {
+    const status = el('websocketStatus');
+    const hint = el('websocketHint');
+    if (message.phase === 'connecting') {
+      if (status) status.textContent = 'Connecting';
+      lastWebsocketEvents = [];
+      renderWebsocketEvents([]);
+      return;
+    }
+    const view = message.view || {};
+    if (status) status.textContent = view.statusLabel || (message.phase === 'error' ? 'Error' : 'Closed');
+    if (hint && typeof view.hint === 'string' && view.hint.length > 0) {
+      hint.textContent = view.hint;
+    }
+    lastWebsocketEvents = Array.isArray(view.events) ? view.events.slice() : [];
+    renderWebsocketEvents(lastWebsocketEvents);
+  }
+
   function readBody() {
+    if (
+      isGraphqlProtocol(el('protocol').value) &&
+      !(graphqlEditorFieldsAreEmpty() && restBodyIsNonGraphqlEnvelope())
+    ) {
+      const variablesText = el('graphqlVariables').value;
+      setGraphqlVariablesHint(variablesTextIsInvalid(variablesText));
+      return compileGraphqlEditorEnvelope(
+        el('graphqlQuery').value,
+        variablesText,
+        el('graphqlOperationName').value
+      );
+    }
     const type = el('bodyType').value;
     if (type === 'none') return { type: 'none' };
     if (type === 'json') return { type: 'json', text: el('bodyText').value };
@@ -1707,6 +2101,19 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
   }
 
   function updateBodyVisibility() {
+    const graphql = isGraphqlProtocol(el('protocol').value);
+    const bodyGraphql = el('bodyGraphql');
+    const bodyTypeField = el('bodyTypeField');
+    if (bodyGraphql) bodyGraphql.hidden = !graphql;
+    if (bodyTypeField) bodyTypeField.hidden = graphql;
+    if (graphql) {
+      el('bodyJsonText').hidden = true;
+      el('rawContentTypeField').hidden = true;
+      el('bodyForm').hidden = true;
+      el('bodyMultipart').hidden = true;
+      el('bodyBinary').hidden = true;
+      return;
+    }
     const type = el('bodyType').value;
     el('bodyJsonText').hidden = !(type === 'json' || type === 'text' || type === 'raw');
     el('rawContentTypeField').hidden = type !== 'raw';
@@ -1774,6 +2181,19 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
   }
 
   function applyBody(body) {
+    if (isGraphqlProtocol(el('protocol').value)) {
+      const envelope = parseGraphqlEditorEnvelope(body);
+      setFieldValue('graphqlQuery', envelope.query);
+      setFieldValue('graphqlVariables', envelope.variablesText);
+      setFieldValue('graphqlOperationName', envelope.operationName);
+      setGraphqlVariablesHint(variablesTextIsInvalid(envelope.variablesText));
+      setFieldValue('bodyType', 'json');
+      if (body && (body.type === 'json' || body.type === 'text' || body.type === 'raw')) {
+        setFieldValue('bodyText', body.text || '');
+      }
+      updateBodyVisibility();
+      return;
+    }
     const type = body && body.type ? body.type : 'none';
     setFieldValue('bodyType', type);
     if (type === 'json' || type === 'text' || type === 'raw') {
@@ -1819,72 +2239,256 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
     updateBodyVisibility();
   }
 
+  function currentAuthMode() {
+    if (isAuthInheriting()) return 'none';
+    const kind = el('authKind').value;
+    if (kind === 'none') return 'none';
+    const profile = el('authProfile').value.trim();
+    if (profile) {
+      const entry = authProfileOptions.find((item) => item.id === profile);
+      if (entry && entry.providerId === 'none') return 'none';
+      return 'saved';
+    }
+    // Type selected without a saved profile: oneshot path (leave authProfileId unchanged).
+    return 'oneshot';
+  }
+
+  function isAuthInheriting() {
+    const row = el('authOverrideRow');
+    const box = el('authOverride');
+    return row && !row.hidden && box && !box.checked;
+  }
+
   function applyAuthProfiles(profiles, selected) {
     authProfileOptions = profiles || [];
-    const select = el('authProfile');
-    const focused = isFocused(select);
-    const nextSelected = selected || '';
-    const profileKey = JSON.stringify(
-      (profiles || []).map((profile) => [
-        profile.id,
-        profile.label || profile.id,
-        profile.providerId || '',
-        profile.name || '',
-        profile.location || '',
-      ])
-    );
-    const currentKey = JSON.stringify(
-      Array.from(select.options)
-        .filter((option) => option.value)
-        .map((option) => [
-          option.value,
-          option.textContent || option.value,
-          option.getAttribute('data-provider-id') || '',
-          option.getAttribute('data-api-key-name') || '',
-          option.getAttribute('data-api-key-location') || '',
-        ])
-    );
-    if (profileKey !== currentKey) {
-      const keepValue = focused ? select.value : nextSelected;
-      select.innerHTML = '<option value="">none</option>';
-      (profiles || []).forEach((profile) => {
-        const option = document.createElement('option');
-        option.value = profile.id;
-        option.textContent = profile.label || profile.id;
-        if (profile.providerId) option.setAttribute('data-provider-id', profile.providerId);
-        if (profile.name) option.setAttribute('data-api-key-name', profile.name);
-        if (profile.location) option.setAttribute('data-api-key-location', profile.location);
-        select.appendChild(option);
-      });
-      if (!focused) select.value = nextSelected;
-      else if ([...select.options].some((option) => option.value === keepValue)) {
-        select.value = keepValue;
+    modelAuthProfileId = selected || '';
+    const collectionId = state && state.collectionDefaultAuthenticationId
+      ? String(state.collectionDefaultAuthenticationId).trim()
+      : '';
+    const workspaceId = state && state.workspaceDefaultAuthenticationId
+      ? String(state.workspaceDefaultAuthenticationId).trim()
+      : '';
+    const canInherit = collectionId.length > 0 || workspaceId.length > 0;
+    const hasRequestAuth = modelAuthProfileId.length > 0;
+    const inheriting = !hasRequestAuth && canInherit;
+    const banner = el('authInheritBanner');
+    const overrideRow = el('authOverrideRow');
+    const overrideBox = el('authOverride');
+    overrideRow.hidden = !canInherit;
+    if (!isFocused(overrideBox)) {
+      overrideBox.checked = hasRequestAuth;
+    }
+    if (inheriting && !overrideBox.checked) {
+      banner.hidden = false;
+      banner.textContent = collectionId.length > 0
+        ? 'Inherited from Collection'
+        : 'Inherited from Session';
+    } else {
+      banner.hidden = true;
+      banner.textContent = '';
+    }
+    const displayId = inheriting && !overrideBox.checked
+      ? (collectionId || workspaceId)
+      : modelAuthProfileId;
+    const displayProfile = authProfileOptions.find((entry) => entry.id === displayId);
+    const kindSelect = el('authKind');
+    if (!isFocused(kindSelect)) {
+      if (displayProfile && displayProfile.providerId && displayProfile.providerId !== 'none') {
+        kindSelect.value = displayProfile.providerId;
+      } else if (!displayId) {
+        kindSelect.value = 'none';
+      } else if (displayProfile && displayProfile.providerId === 'none') {
+        kindSelect.value = 'none';
       }
-    } else if (!focused) {
-      select.value = nextSelected;
     }
-    const mode = el('authMode');
-    if (!isFocused(mode)) {
-      if (nextSelected) mode.value = 'saved';
-      else if (mode.value !== 'oneshot') mode.value = 'none';
-    }
+    rebuildAuthProfileOptions(displayId);
+    setAuthControlsReadOnly(inheriting && !overrideBox.checked);
+    updateAuthFields();
     updateAuthModeVisibility();
     updateAuthPreview();
   }
 
+  function rebuildAuthProfileOptions(selected) {
+    const select = el('authProfile');
+    const focused = isFocused(select);
+    const kind = el('authKind').value;
+    const filtered = (authProfileOptions || []).filter((profile) => {
+      const provider = profile.providerId || 'none';
+      if (kind === 'none') return provider === 'none';
+      return provider === kind;
+    });
+    const keepValue = focused ? select.value : (selected || '');
+    select.innerHTML = '<option value="">none</option>';
+    filtered.forEach((profile) => {
+      const option = document.createElement('option');
+      option.value = profile.id;
+      option.textContent = profile.label || profile.id;
+      if (profile.providerId) option.setAttribute('data-provider-id', profile.providerId);
+      const apiKeyName = profileApiKeyName(profile);
+      const apiKeyLocation = profile.apiKeyLocation || profile.location;
+      if (apiKeyName) option.setAttribute('data-api-key-name', apiKeyName);
+      if (apiKeyLocation) option.setAttribute('data-api-key-location', apiKeyLocation);
+      select.appendChild(option);
+    });
+    if (keepValue && [...select.options].some((option) => option.value === keepValue)) {
+      select.value = keepValue;
+    } else if (!focused && selected && [...select.options].some((option) => option.value === selected)) {
+      select.value = selected;
+    } else if (!focused) {
+      select.value = '';
+    }
+  }
+
+  function setAuthControlsReadOnly(readOnly) {
+    el('authKind').disabled = readOnly;
+    el('authProfile').disabled = readOnly;
+    el('authAddTo').disabled = true;
+  }
+
+  function fieldDisplay(profile, name) {
+    if (!profile || !Array.isArray(profile.fields)) return '';
+    const field = profile.fields.find((entry) => entry.name === name);
+    if (!field) return '';
+    if (field.sourceKind === 'secret' || field.sourceKind === 'literal') {
+      return field.display || AUTH_MASK;
+    }
+    return field.display || '';
+  }
+
+  function profileApiKeyName(profile) {
+    if (!profile) return '';
+    return profile.apiKeyName || profile.name || '';
+  }
+
+  function profileApiKeyLocation(profile) {
+    const location = profile && (profile.apiKeyLocation || profile.location);
+    return location === 'query' ? 'query' : 'header';
+  }
+
+  function updateAuthFields() {
+    const kind = el('authKind').value;
+    const inheriting = isAuthInheriting();
+    const profileId = el('authProfile').value.trim();
+    const profile = authProfileOptions.find((entry) => entry.id === profileId);
+    const saved = !!(profile && profile.providerId !== 'none');
+    const showOneshot = !inheriting && !saved && kind !== 'none';
+    const showFields = kind !== 'none';
+    el('authTokenField').hidden = !(showFields && kind === 'bearer');
+    el('authUsernameField').hidden = !(showFields && kind === 'basic');
+    el('authPasswordField').hidden = !(showFields && kind === 'basic');
+    el('authApiKeyNameField').hidden = !(showFields && kind === 'apiKey');
+    el('authApiKeyValueField').hidden = !(showFields && kind === 'apiKey');
+    el('authAddToField').hidden = !showFields;
+    el('authOneshotHint').hidden = !showOneshot;
+    el('authSavedBlock').hidden = kind === 'none';
+
+    function togglePair(displayId, oneshotId, visible, oneshotVisible, displayValue) {
+      const display = el(displayId);
+      const oneshot = oneshotId ? el(oneshotId) : null;
+      if (!visible) {
+        display.hidden = true;
+        if (oneshot) oneshot.hidden = true;
+        return;
+      }
+      if (oneshotVisible && oneshot) {
+        display.hidden = true;
+        oneshot.hidden = false;
+      } else {
+        display.hidden = false;
+        display.value = displayValue;
+        if (oneshot) oneshot.hidden = true;
+      }
+    }
+
+    togglePair(
+      'authTokenDisplay',
+      'oneshotToken',
+      kind === 'bearer',
+      showOneshot,
+      saved || inheriting ? fieldDisplay(profile, 'token') : AUTH_MASK
+    );
+    togglePair(
+      'authUsernameDisplay',
+      'oneshotUsername',
+      kind === 'basic',
+      showOneshot,
+      saved || inheriting ? fieldDisplay(profile, 'username') : ''
+    );
+    togglePair(
+      'authPasswordDisplay',
+      'oneshotPassword',
+      kind === 'basic',
+      showOneshot,
+      saved || inheriting ? fieldDisplay(profile, 'password') : AUTH_MASK
+    );
+    const keyName = profileApiKeyName(profile) || fieldDisplay(profile, 'name');
+    togglePair(
+      'authApiKeyNameDisplay',
+      'oneshotApiKeyName',
+      kind === 'apiKey',
+      showOneshot,
+      saved || inheriting ? (keyName || '') : ''
+    );
+    togglePair(
+      'authApiKeyValueDisplay',
+      'oneshotApiKeyValue',
+      kind === 'apiKey',
+      showOneshot,
+      saved || inheriting ? fieldDisplay(profile, 'value') : AUTH_MASK
+    );
+
+    const addTo = el('authAddTo');
+    addTo.innerHTML = '';
+    if (kind === 'apiKey') {
+      const header = document.createElement('option');
+      header.value = 'header';
+      header.textContent = 'Header';
+      const query = document.createElement('option');
+      query.value = 'query';
+      query.textContent = 'Query';
+      addTo.appendChild(header);
+      addTo.appendChild(query);
+      const location = profileApiKeyLocation(profile);
+      addTo.value = location;
+      addTo.disabled = inheriting || saved;
+    } else if (kind === 'bearer' || kind === 'basic') {
+      const option = document.createElement('option');
+      option.value = 'authorization-header';
+      option.textContent = 'Authorization Header';
+      addTo.appendChild(option);
+      addTo.value = 'authorization-header';
+      addTo.disabled = true;
+    }
+  }
+
   function updateAuthModeVisibility() {
-    const mode = el('authMode').value;
-    el('authSavedBlock').hidden = mode !== 'saved';
-    el('authOneshotBlock').hidden = mode !== 'oneshot';
+    const mode = currentAuthMode();
+    const kind = el('authKind').value;
     const guidance = el('authEmptyGuidance');
     const selected = el('authProfile').value.trim();
-    const oneshot = el('oneshotToken').value.length > 0;
-    guidance.hidden = !(mode === 'none' || (mode === 'saved' && !selected) || (mode === 'oneshot' && !oneshot));
+    const oneshotReady = hasOneshotInput();
+    guidance.hidden = !(
+      (mode === 'none' && kind === 'none' && !isAuthInheriting()) ||
+      (mode === 'saved' && !selected) ||
+      (mode === 'oneshot' && !oneshotReady)
+    );
+  }
+
+  function hasOneshotInput() {
+    const kind = el('authKind').value;
+    if (kind === 'bearer') return el('oneshotToken').value.length > 0;
+    if (kind === 'basic') {
+      return el('oneshotUsername').value.length > 0 && el('oneshotPassword').value.length > 0;
+    }
+    if (kind === 'apiKey') {
+      return el('oneshotApiKeyName').value.trim().length > 0 && el('oneshotApiKeyValue').value.length > 0;
+    }
+    return false;
   }
 
   /** Scheme-aware masked preview matching Auth Manager (never shows secrets). */
   function buildSavedAuthPreview(profile) {
-    const mask = '••••••••';
+    const mask = AUTH_MASK;
     if (!profile || !profile.providerId || profile.providerId === 'none') {
       return {
         preview: 'No authentication headers will be added.',
@@ -1904,8 +2508,8 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
       };
     }
     if (profile.providerId === 'apiKey') {
-      const name = ((profile.name || 'X-API-Key') + '').trim() || 'X-API-Key';
-      const location = profile.location === 'query' ? 'query' : 'header';
+      const name = (profileApiKeyName(profile) || 'X-API-Key').trim() || 'X-API-Key';
+      const location = profileApiKeyLocation(profile);
       return {
         preview: location === 'query'
           ? ('Query: ' + name + '=' + mask)
@@ -1917,25 +2521,29 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
   }
 
   function updateAuthPreview() {
-    const mode = el('authMode').value;
-    const mask = '••••••••';
+    const mode = currentAuthMode();
+    const kind = el('authKind').value;
+    const mask = AUTH_MASK;
     const preview = el('authPreview');
     const copyBtn = el('copyAuthHeaderName');
-    if (mode === 'none') {
+    if (kind === 'none' && !isAuthInheriting()) {
       preview.textContent = 'No authentication headers will be added.';
       copyBtn.hidden = true;
       return;
     }
     if (mode === 'oneshot') {
-      const hasToken = el('oneshotToken').value.length > 0;
-      preview.textContent = 'Authorization: Bearer ' + mask;
-      preview.title = hasToken
-        ? 'One-shot Bearer ready for this Send.'
-        : 'Paste a Bearer token for one-shot authentication.';
-      copyBtn.hidden = false;
-      copyBtn.onclick = async () => {
-        try { await navigator.clipboard.writeText('Authorization'); } catch (err) {}
-      };
+      const built = buildOneshotPreview(kind);
+      preview.textContent = built.preview;
+      preview.title = hasOneshotInput()
+        ? 'One-shot credentials ready for this Send.'
+        : 'Paste credentials for one-shot authentication.';
+      copyBtn.hidden = !built.headerNames[0];
+      if (built.headerNames[0]) {
+        const headerName = built.headerNames[0];
+        copyBtn.onclick = async () => {
+          try { await navigator.clipboard.writeText(headerName); } catch (err) {}
+        };
+      }
       return;
     }
     const selected = el('authProfile').value.trim();
@@ -1956,6 +2564,22 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
         try { await navigator.clipboard.writeText(headerName); } catch (err) {}
       };
     }
+  }
+
+  function buildOneshotPreview(kind) {
+    const mask = AUTH_MASK;
+    if (kind === 'basic') {
+      return { preview: 'Authorization: Basic ' + mask, headerNames: ['Authorization'] };
+    }
+    if (kind === 'apiKey') {
+      const name = (el('oneshotApiKeyName').value.trim() || 'X-API-Key');
+      const location = el('authAddTo').value === 'query' ? 'query' : 'header';
+      return {
+        preview: location === 'query' ? ('Query: ' + name + '=' + mask) : (name + ': ' + mask),
+        headerNames: location === 'header' ? [name] : [],
+      };
+    }
+    return { preview: 'Authorization: Bearer ' + mask, headerNames: ['Authorization'] };
   }
 
   function renderAuthResolution() {
@@ -2043,6 +2667,7 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
       // Toolbar url/method sit outside formRoot; disable so edits are not lost.
       el('url').disabled = true;
       el('method').disabled = true;
+      el('protocol').disabled = true;
       applying = false;
       refreshPreview();
       return;
@@ -2051,7 +2676,7 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
     if (next.mode === 'empty') {
       banner.hidden = false;
       banner.textContent =
-        'No HTTP request found in this file. Add a METHOD URL line, or open the text editor.';
+        'No request found in this file. Add a METHOD URL line, or open the text editor.';
       formRoot.hidden = true;
       run.disabled = true;
       envShortcut.disabled = true;
@@ -2062,6 +2687,7 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
       // Toolbar url/method sit outside formRoot; disable so edits are not lost.
       el('url').disabled = true;
       el('method').disabled = true;
+      el('protocol').disabled = true;
       applying = false;
       refreshPreview();
       return;
@@ -2077,6 +2703,7 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
     manageEnvironments.disabled = false;
     el('url').disabled = false;
     el('method').disabled = false;
+    el('protocol').disabled = false;
 
     const model = next.model || defaultModel();
     setFieldValue('name', model.name || '');
@@ -2106,6 +2733,10 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
     setFieldValue('method', model.method || 'GET');
     syncMethodSelect();
     setFieldValue('url', model.url || '');
+    const protocolValue = ensureProtocolOption(model.protocol || '');
+    setFieldValue('protocol', protocolValue);
+    lastProtocol = protocolValue;
+    syncProtocolUi();
     setFieldValue(
       'timeoutMs',
       model.timeoutMs === undefined || model.timeoutMs === null
@@ -2178,8 +2809,9 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
     button.addEventListener('click', () => setTab(button.getAttribute('data-tab')));
   });
 
-  ['name', 'description', 'method', 'url', 'timeoutMs', 'authProfile', 'bodyType',
-    'bodyText', 'rawContentType', 'multipartBoundary', 'binaryNote'].forEach((id) => {
+  ['name', 'description', 'method', 'url', 'timeoutMs', 'authProfile', 'protocol', 'bodyType',
+    'bodyText', 'rawContentType', 'multipartBoundary', 'binaryNote',
+    'graphqlQuery', 'graphqlVariables', 'graphqlOperationName'].forEach((id) => {
     bindChange(el(id));
   });
 
@@ -2224,6 +2856,7 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
   }
 
   el('method').addEventListener('change', syncMethodSelect);
+  el('protocol').addEventListener('change', handleProtocolChange);
   el('bodyType').addEventListener('change', () => {
     updateBodyVisibility();
     scheduleUpdate();
@@ -2271,25 +2904,77 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
     scheduleUpdate();
   });
 
-  function runRequest() {
-    const mode = el('authMode').value;
-    if (mode === 'oneshot') {
+  function buildOneshotEphemeralAuth() {
+    const kind = el('authKind').value;
+    if (kind === 'bearer') {
       const token = el('oneshotToken').value;
-      if (!token || token.length === 0) {
+      if (!token) {
         window.alert('Paste a Bearer token for one-shot authentication before Send.');
-        return;
+        return undefined;
       }
+      return { providerId: 'bearer', material: { token } };
+    }
+    if (kind === 'basic') {
+      const username = el('oneshotUsername').value;
+      const password = el('oneshotPassword').value;
+      if (!username || !password) {
+        window.alert('Enter a username and password for one-shot authentication before Send.');
+        return undefined;
+      }
+      return { providerId: 'basic', material: { username, password } };
+    }
+    if (kind === 'apiKey') {
+      const apiKeyName = el('oneshotApiKeyName').value.trim() || 'X-API-Key';
+      const value = el('oneshotApiKeyValue').value;
+      if (!value) {
+        window.alert('Enter an API key for one-shot authentication before Send.');
+        return undefined;
+      }
+      const apiKeyLocation = el('authAddTo').value === 'query' ? 'query' : 'header';
+      return {
+        providerId: 'apiKey',
+        material: { value },
+        apiKeyName,
+        apiKeyLocation,
+      };
+    }
+    window.alert('Paste credentials for one-shot authentication before Send.');
+    return undefined;
+  }
+
+  function clearOneshotInputs() {
+    el('oneshotToken').value = '';
+    el('oneshotUsername').value = '';
+    el('oneshotPassword').value = '';
+    el('oneshotApiKeyName').value = '';
+    el('oneshotApiKeyValue').value = '';
+  }
+
+  function runRequest() {
+    if (
+      isGraphqlProtocol(el('protocol').value) &&
+      variablesTextIsInvalid(el('graphqlVariables').value)
+    ) {
+      setGraphqlVariablesHint(true);
+      setTab('body');
+      showError('Variables must be a JSON object');
+      const variablesField = el('graphqlVariables');
+      if (variablesField) variablesField.focus();
+      return;
+    }
+    const mode = currentAuthMode();
+    if (mode === 'oneshot') {
+      const ephemeralAuth = buildOneshotEphemeralAuth();
+      if (!ephemeralAuth) return;
       // Flush other form fields; oneshot path preserves authProfileId (see currentModel).
       flushPendingUpdate();
       post({
         type: 'run',
-        ephemeralAuth: {
-          providerId: 'bearer',
-          material: { token },
-        },
+        ephemeralAuth,
       });
-      // Clear one-shot token from UI memory after Send (save prompt uses host copy).
-      el('oneshotToken').value = '';
+      // Clear one-shot credentials from UI memory after Send (save prompt uses host copy).
+      clearOneshotInputs();
+      updateAuthFields();
       updateAuthPreview();
       return;
     }
@@ -2321,18 +3006,52 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
     el('saveAsAuthBanner').hidden = true;
     post({ type: 'dismissSaveAsAuthentication' });
   });
-  el('authMode').addEventListener('change', () => {
+  el('authOverride').addEventListener('change', () => {
+    const inheriting = isAuthInheriting();
+    el('authInheritBanner').hidden = !inheriting;
+    setAuthControlsReadOnly(inheriting);
+    if (inheriting) {
+      const collectionId = state && state.collectionDefaultAuthenticationId
+        ? String(state.collectionDefaultAuthenticationId).trim()
+        : '';
+      const workspaceId = state && state.workspaceDefaultAuthenticationId
+        ? String(state.workspaceDefaultAuthenticationId).trim()
+        : '';
+      el('authInheritBanner').textContent = collectionId.length > 0
+        ? 'Inherited from Collection'
+        : 'Inherited from Session';
+      const inheritedId = collectionId || workspaceId;
+      const inherited = authProfileOptions.find((entry) => entry.id === inheritedId);
+      if (inherited && inherited.providerId && inherited.providerId !== 'none') {
+        el('authKind').value = inherited.providerId;
+      }
+      rebuildAuthProfileOptions(inheritedId);
+    }
+    updateAuthFields();
+    updateAuthModeVisibility();
+    updateAuthPreview();
+    scheduleUpdate();
+  });
+  el('authKind').addEventListener('change', () => {
+    rebuildAuthProfileOptions(el('authProfile').value.trim());
+    updateAuthFields();
     updateAuthModeVisibility();
     updateAuthPreview();
     scheduleUpdate();
   });
   el('authProfile').addEventListener('change', () => {
+    updateAuthFields();
     updateAuthPreview();
     scheduleUpdate();
   });
-  el('oneshotToken').addEventListener('input', () => {
-    updateAuthModeVisibility();
+  el('authAddTo').addEventListener('change', () => {
     updateAuthPreview();
+  });
+  ['oneshotToken', 'oneshotUsername', 'oneshotPassword', 'oneshotApiKeyName', 'oneshotApiKeyValue'].forEach((id) => {
+    el(id).addEventListener('input', () => {
+      updateAuthModeVisibility();
+      updateAuthPreview();
+    });
   });
   el('manageEnvironments').addEventListener('click', () => post({ type: 'manageEnvironments' }));
 
@@ -2377,11 +3096,15 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
       el('saveAsAuthBanner').hidden = false;
       return;
     }
+    if (message.type === 'websocketSession') {
+      applyWebsocketSessionMessage(message);
+      return;
+    }
   });
 
   syncMethodSelect();
   updateTestHint();
-  updateBodyVisibility();
+  applyProtocolChrome();
   bindAllVarFields();
   post({ type: 'ready' });
 })();

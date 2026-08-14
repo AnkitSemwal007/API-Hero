@@ -20,6 +20,8 @@ export type {
 } from './auth-manager-html';
 export { AuthManagerPanel } from './auth-manager-panel';
 export type { AuthManagerPanelOptions } from './auth-manager-panel';
+export { CollectionAuthPanel } from './collection-auth-panel';
+export type { CollectionAuthPanelOptions } from './collection-auth-panel';
 export {
   confirmAndClearAuthSecret,
   promptAndStoreAuthSecret,

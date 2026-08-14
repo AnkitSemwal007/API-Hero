@@ -23,15 +23,15 @@ VS Code adapters live in `src/request-editor/vscode/`.
 | Request | Name, description, method, URL |
 | Params | Query table ↔ URL query (`parseParameters` / serializer) |
 | Headers | Key / Value / Enabled (disabled → `# Name: value`) |
-| Body | none / json / text / form / raw / multipart / binary |
-| Auth | Authentication dropdown / modes (None, One-shot, Saved) → `@auth <id>` (no secrets in webview) |
+| Body | REST: none / json / text / form / raw / multipart / binary. GraphQL (`@protocol graphql`): Query / Variables / Operation name — a projection of the JSON envelope `{ query, variables, operationName }`, not a second body format. |
+| Auth | Centralized Authentication UI: No Auth, Bearer Token, Basic Auth, API Key; one-shot Bearer; Saved → `@auth <id>` (no secrets in webview) |
 | Variables | `@variable` rows, `{{name}}` insert, read-only resolution preview, IntelliSense |
 | Tests | Structured UI → `expect …` lines; assertion value field supports `{{vars}}` |
 | Settings | `@timeout` only (no invented directives) |
 | Preview | Read-only current document text |
 
-Variable IntelliSense is available in URL, headers, params, body, variables,
-and test value fields. Typing `{{` opens suggestions from the host catalog
+Variable IntelliSense is available in URL, headers, params, body, GraphQL Query
+and Variables, variables, and test value fields. Typing `{{` opens suggestions from the host catalog
 (`variableCompletions`); selecting a name inserts `{{name}}` without
 duplicating braces. Sensitive values never appear in the popup or inline
 resolved preview.
@@ -65,9 +65,20 @@ does **not** rewrite the file from the form. Users can **Open With Text Editor**
 
 ## Run
 
-The Run button calls `ExecutionOrchestrator.runAtPosition` for the document
+The Run button calls `ExecutionOrchestrator.runAtSourceLocation` for the document
 (same pipeline as `apiHero.runRequest`). Custom editors do not rely on
 `window.activeTextEditor`.
+
+The toolbar protocol selector writes `@protocol` (`http` omits it; `graphql` /
+`websocket` persist; unknown values are kept so save cannot coerce them to HTTP).
+GraphQL Query/Variables compile to the existing JSON body; Run still uses
+`ExecutionOrchestrator` (no second GraphQL executor). Editor envelope helpers in
+the webview are a clone of `src/request-source/graphql-envelope.ts` (lenient
+authoring). Runtime canonicalization stays in `prepareGraphqlHttpRequest`.
+WebSocket chrome (Connection status, Messages recap, **Run Session**) is
+presentation-only. One Run action still executes the bounded session through
+`ExecutionOrchestrator`. The in-editor session recap consumes
+`presentExecutionResult` / `PresentedWebsocketSession`, never `RuntimeResponse`.
 
 ## Tree Open
 

@@ -6,7 +6,7 @@ Command IDs remain under the `apiHero.*` namespace for compatibility. See [relea
 
 | Area | Description |
 | --- | --- |
-| [User guide](./user/getting-started.md) | Install, author requests, GraphQL-over-HTTP, bounded WebSocket sessions, collections, source-code integration, env, auth, history, OpenAPI, project package |
+| [User guide](./user/getting-started.md) | Install, author requests, GraphQL and WebSocket Request Editors, Collection Run Setup, source-code integration, env, auth, history, OpenAPI, project package |
 | [CLI (`apihero`)](./user/cli.md) | Headless npm CLI for requests and collections |
 | [MCP server](./user/mcp.md) | Headless MCP tools for Cursor, Claude Code, Codex, and other agents |
 | [Architecture](./architecture/README.md) | Extension composition and domain design |
@@ -28,7 +28,9 @@ Command IDs remain under the `apiHero.*` namespace for compatibility. See [relea
 - [Source-code integration](./user/source-integration.md)
 - [GraphQL](./user/graphql.md)
 - [WebSocket](./user/websocket.md)
+- [Collection Runner](./user/collection-runner.md)
 - [Commands](./reference/commands.md)
 - [Configuration](./reference/configuration.md)
 - [Roadmap](./product/roadmap.md)
 - [Changelog](../CHANGELOG.md)
+- [Release notes 2.12.1](./release/v2.12.1-release-notes.md)

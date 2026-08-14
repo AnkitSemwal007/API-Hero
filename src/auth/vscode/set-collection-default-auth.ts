@@ -1,5 +1,6 @@
 /**
  * Sets `defaultAuthenticationId` on a collection marker (shallow inheritance).
+ * Profile selection uses the Collection Authentication webview.
  */
 
 import { Uri, window, workspace } from 'vscode';
@@ -13,6 +14,7 @@ import {
   type CollectionTreeNode,
 } from '../../collections';
 import type { AuthenticationProfileManager } from '../authentication-profile-manager';
+import type { CollectionAuthPanel } from './collection-auth-panel';
 
 function isVsCodeUri(value: unknown): value is Uri {
   return (
@@ -24,10 +26,11 @@ function isVsCodeUri(value: unknown): value is Uri {
   );
 }
 
-/** Interactive command: pick collection + Authentication profile for the marker default. */
+/** Interactive command: pick collection, then open Collection Authentication UI. */
 export async function runSetCollectionDefaultAuthenticationCommand(options: {
   readonly discovery: CollectionDiscoveryService;
   readonly profileManager: AuthenticationProfileManager;
+  readonly panel: CollectionAuthPanel;
   /** Tree item / URI / collection id when invoked from Collections context. */
   readonly collectionArg?: unknown;
 }): Promise<void> {
@@ -74,6 +77,74 @@ export async function runSetCollectionDefaultAuthenticationCommand(options: {
     collection = collectionPick.collection;
   }
 
+  try {
+    options.panel.show(collection);
+  } catch {
+    await pickCollectionDefaultViaQuickPick({
+      collection,
+      discovery: options.discovery,
+      profileManager: options.profileManager,
+    });
+  }
+}
+
+/**
+ * Writes `defaultAuthenticationId` on the collection marker.
+ * Omits the key when `profileId` is undefined (None).
+ * Does not store secrets on the marker.
+ */
+export async function writeCollectionDefaultAuthenticationId(options: {
+  readonly collection: Collection;
+  readonly profileId: string | undefined;
+  readonly discovery: CollectionDiscoveryService;
+}): Promise<void> {
+  const root = options.collection.rootPath;
+  const markerUri = Uri.joinPath(Uri.parse(root), COLLECTION_MARKER_FILENAME);
+  let existing = {};
+  try {
+    const bytes = await workspace.fs.readFile(markerUri);
+    const parsed = parseCollectionMarker(Buffer.from(bytes).toString('utf8'));
+    if (parsed !== undefined) {
+      existing = parsed;
+    }
+  } catch {
+    // Create a fresh marker when missing.
+  }
+  const next = {
+    ...existing,
+    name:
+      (existing as { name?: string }).name ?? options.collection.metadata.name,
+    ...(options.profileId === undefined
+      ? { defaultAuthenticationId: undefined }
+      : { defaultAuthenticationId: options.profileId }),
+  };
+  const document =
+    options.profileId === undefined
+      ? (() => {
+          const { defaultAuthenticationId, ...rest } = next as {
+            defaultAuthenticationId?: string;
+          } & Record<string, unknown>;
+          void defaultAuthenticationId;
+          return rest;
+        })()
+      : next;
+  await workspace.fs.writeFile(
+    markerUri,
+    Buffer.from(serializeCollectionMarker(document as never), 'utf8'),
+  );
+  await options.discovery.refresh();
+  void window.showInformationMessage(
+    options.profileId === undefined
+      ? `Cleared default Authentication for "${options.collection.display.label}".`
+      : `Set default Authentication "${options.profileId}" for "${options.collection.display.label}".`,
+  );
+}
+
+async function pickCollectionDefaultViaQuickPick(options: {
+  readonly collection: Collection;
+  readonly discovery: CollectionDiscoveryService;
+  readonly profileManager: AuthenticationProfileManager;
+}): Promise<void> {
   const profiles = options.profileManager.list();
   const noneItem = {
     label: '$(circle-slash) None',
@@ -105,48 +176,11 @@ export async function runSetCollectionDefaultAuthenticationCommand(options: {
   if (profilePick === undefined) {
     return;
   }
-
-  const root = collection.rootPath;
-  const markerUri = Uri.joinPath(Uri.parse(root), COLLECTION_MARKER_FILENAME);
-  let existing = {};
-  try {
-    const bytes = await workspace.fs.readFile(markerUri);
-    const parsed = parseCollectionMarker(Buffer.from(bytes).toString('utf8'));
-    if (parsed !== undefined) {
-      existing = parsed;
-    }
-  } catch {
-    // Create a fresh marker when missing.
-  }
-  const next = {
-    ...existing,
-    name:
-      (existing as { name?: string }).name ?? collection.metadata.name,
-    ...(profilePick.id === undefined
-      ? { defaultAuthenticationId: undefined }
-      : { defaultAuthenticationId: profilePick.id }),
-  };
-  // Omit cleared default from serialized payload.
-  const document =
-    profilePick.id === undefined
-      ? (() => {
-          const { defaultAuthenticationId, ...rest } = next as {
-            defaultAuthenticationId?: string;
-          } & Record<string, unknown>;
-          void defaultAuthenticationId;
-          return rest;
-        })()
-      : next;
-  await workspace.fs.writeFile(
-    markerUri,
-    Buffer.from(serializeCollectionMarker(document as never), 'utf8'),
-  );
-  await options.discovery.refresh();
-  void window.showInformationMessage(
-    profilePick.id === undefined
-      ? `Cleared default Authentication for "${collection.display.label}".`
-      : `Set default Authentication "${profilePick.id}" for "${collection.display.label}".`,
-  );
+  await writeCollectionDefaultAuthenticationId({
+    collection: options.collection,
+    profileId: profilePick.id,
+    discovery: options.discovery,
+  });
 }
 
 /**

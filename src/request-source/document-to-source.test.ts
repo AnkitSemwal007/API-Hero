@@ -353,6 +353,36 @@ describe('documentToRequestSource / parseSourceToRequestDocument', () => {
     }
   });
 
+  test('round-trips @protocol graphql together with @source', () => {
+    const parsed = parseSourceToRequestDocument(
+      [
+        '@name GetUser',
+        '@protocol graphql',
+        '@source path.ts',
+        '',
+        'POST https://example.test/graphql',
+        '',
+        '{ "query": "{ ping }" }',
+        '',
+      ].join('\n'),
+    );
+    assert.equal(parsed.kind, 'single');
+    if (parsed.kind !== 'single') {
+      return;
+    }
+    assert.equal(parsed.document.protocol, 'graphql');
+    assert.equal(parsed.document.source, 'path.ts');
+    const serialized = serializeRequestDocument(parsed.document);
+    assert.match(serialized, /@protocol graphql\n/u);
+    assert.match(serialized, /@source path.ts\n/u);
+    const roundTrip = parseSourceToRequestDocument(serialized);
+    assert.equal(roundTrip.kind, 'single');
+    if (roundTrip.kind === 'single') {
+      assert.equal(roundTrip.document.protocol, 'graphql');
+      assert.equal(roundTrip.document.source, 'path.ts');
+    }
+  });
+
   test('projects @protocol websocket', () => {
     const parsed = parseSourceToRequestDocument(
       [

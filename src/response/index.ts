@@ -23,6 +23,16 @@ export type {
   ResponseStatistics,
 } from './presentation';
 export {
+  buildWebsocketSessionView,
+  presentWebsocketSession,
+} from './websocket-session-view';
+export type {
+  PresentedWebsocketEvent,
+  PresentedWebsocketEventKind,
+  PresentedWebsocketSession,
+  WebsocketUiPhase,
+} from './websocket-session-view';
+export {
   buildFailureExplanation,
   formatFailureExplanationText,
 } from './failure-explanations';

@@ -2,7 +2,11 @@
  * Pure HTML/CSS/JS for the New Request dialog webview (no vscode import).
  */
 
-import type { RequestSourceDocument } from '../../request-source';
+import {
+  compileGraphqlEditorEnvelope,
+  GRAPHQL_STARTER_QUERY,
+  type RequestSourceDocument,
+} from '../../request-source';
 import { HTTP_METHODS, type HttpMethod } from '../../types';
 import {
   buildNonceOnlyCsp,
@@ -39,6 +43,7 @@ export type NewRequestDialogInboundMessage =
       readonly description: string;
       readonly collectionId: string;
       readonly folderRelativePath: string;
+      readonly protocol?: string;
     }
   | { readonly type: 'cancel' };
 
@@ -70,6 +75,8 @@ export function parseNewRequestDialogMessage(
   ) {
     return undefined;
   }
+  const protocol =
+    typeof record.protocol === 'string' ? record.protocol : undefined;
   return {
     type: 'create',
     name: record.name,
@@ -78,6 +85,7 @@ export function parseNewRequestDialogMessage(
     description: record.description,
     collectionId: record.collectionId,
     folderRelativePath: record.folderRelativePath,
+    ...(protocol === undefined ? {} : { protocol }),
   };
 }
 
@@ -93,6 +101,7 @@ export function validateCreateMessage(
     readonly description: string;
     readonly collectionId: string;
     readonly folderRelativePath: string;
+    readonly protocol?: string;
   },
   destinations: readonly NewRequestDialogDestination[],
 ): { readonly model?: RequestSourceDocument; readonly error?: string } {
@@ -122,12 +131,43 @@ export function validateCreateMessage(
     return { error: 'Select a valid collection folder.' };
   }
 
+  const protocolRaw = (message.protocol ?? '').trim().toLowerCase();
+  if (
+    protocolRaw.length > 0 &&
+    protocolRaw !== 'http' &&
+    protocolRaw !== 'graphql' &&
+    protocolRaw !== 'websocket'
+  ) {
+    return { error: `Unsupported protocol "${message.protocol}".` };
+  }
+
   const description = message.description.trim();
+  const isGraphql = protocolRaw === 'graphql';
+  const isWebsocket = protocolRaw === 'websocket';
+  const method: HttpMethod =
+    isGraphql && (methodUpper === 'GET' || methodUpper.length === 0)
+      ? 'POST'
+      : (methodUpper as HttpMethod);
+
   const model: RequestSourceDocument = {
     name,
-    method: methodUpper as HttpMethod,
+    method,
     url,
     ...(description.length > 0 ? { description } : {}),
+    ...(isGraphql
+      ? {
+          protocol: 'graphql' as const,
+          body: compileGraphqlEditorEnvelope(GRAPHQL_STARTER_QUERY, '{}', ''),
+          headers: [
+            {
+              name: 'Content-Type',
+              value: 'application/json',
+              enabled: true,
+            },
+          ],
+        }
+      : {}),
+    ...(isWebsocket ? { protocol: 'websocket' as const } : {}),
   };
   return { model };
 }
@@ -159,6 +199,14 @@ export function renderNewRequestDialogHtml(nonce: string): string {
     <label class="field name-field">
       <span>Name</span>
       <input id="name" type="text" autocomplete="off" required placeholder="Get users" />
+    </label>
+    <label class="field">
+      <span>Protocol</span>
+      <select id="protocol">
+        <option value="">HTTP</option>
+        <option value="graphql">GraphQL</option>
+        <option value="websocket">WebSocket</option>
+      </select>
     </label>
     <div class="row request-line" role="group" aria-label="Method and URL">
       <label class="field method">
@@ -311,6 +359,7 @@ const DIALOG_SCRIPT = `
   const form = document.getElementById('form');
   const nameInput = document.getElementById('name');
   const methodSelect = document.getElementById('method');
+  const protocolSelect = document.getElementById('protocol');
   const urlInput = document.getElementById('url');
   const descriptionInput = document.getElementById('description');
   const collectionSelect = document.getElementById('collection');
@@ -318,6 +367,8 @@ const DIALOG_SCRIPT = `
   const errorEl = document.getElementById('error');
   const createBtn = document.getElementById('create');
   const cancelBtn = document.getElementById('cancel');
+
+  let initDefaultUrl = '';
 
   function syncMethodSelect() {
     const map = { GET: 'get', POST: 'post', PUT: 'put', PATCH: 'patch', DELETE: 'delete', HEAD: 'head', OPTIONS: 'options' };
@@ -396,6 +447,7 @@ const DIALOG_SCRIPT = `
     state = next;
     nameInput.value = next.defaultName ?? 'New Request';
     urlInput.value = next.defaultUrl ?? 'https://httpbin.org/get';
+    initDefaultUrl = urlInput.value;
     if (next.defaultMethod) {
       methodSelect.value = next.defaultMethod;
     }
@@ -408,6 +460,17 @@ const DIALOG_SCRIPT = `
   }
 
   methodSelect.addEventListener('change', syncMethodSelect);
+  protocolSelect.addEventListener('change', () => {
+    if (protocolSelect.value !== 'graphql') return;
+    if (methodSelect.value === 'GET') {
+      methodSelect.value = 'POST';
+      syncMethodSelect();
+    }
+    const url = urlInput.value.trim();
+    if (url.length === 0 || url === initDefaultUrl) {
+      urlInput.value = 'https://api.example.com/graphql';
+    }
+  });
   collectionSelect.addEventListener('change', () => {
     fillFolders();
   });
@@ -452,6 +515,7 @@ const DIALOG_SCRIPT = `
       description: descriptionInput.value.trim(),
       collectionId,
       folderRelativePath: folderSelect.value ?? '',
+      protocol: protocolSelect.value,
     });
   });
 

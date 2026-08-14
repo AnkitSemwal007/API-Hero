@@ -153,6 +153,7 @@ export function renderResponseViewerHtml(
 <body data-enable-create-variable="${options.enableCreateVariable === true ? 'true' : 'false'}" data-known-variables="${escapeAttribute(JSON.stringify(options.knownVariableNames ?? []))}">
 <main>
   ${renderStatusCard(model, options)}
+  ${renderGraphqlErrorsCard(model)}
   ${model.failure === undefined ? renderSuccess(model, options) : renderFailure(model)}
   ${renderExplanation(model.explanation)}
   ${renderDiffSection(options.diff)}
@@ -208,9 +209,11 @@ function renderStatusCard(
     : `<div class="stats-summary secondary-stats muted" aria-label="Failure details">
         ${statChip('Retryable', model.failure.retryable ? 'Yes' : 'No')}
       </div>`;
+  const graphqlBadge = renderGraphqlStatusBadge(model);
   return `<header class="status-card sticky-summary">
     <div class="status-row">
       ${status}
+      ${graphqlBadge}
       <span class="summary">${escapeHtml(model.summary)}</span>
       ${primaryStats}
       ${compareButton}
@@ -221,6 +224,47 @@ function renderStatusCard(
       ? `<aside class="notice">Redirected ${model.statistics.redirectCount} time(s) to <span>${escapeHtml(model.statistics.finalUrl ?? '')}</span></aside>`
       : ''}
   </header>`;
+}
+
+function renderGraphqlStatusBadge(model: ResponsePresentation): string {
+  const graphql = model.graphql;
+  if (graphql === undefined) {
+    return '';
+  }
+  const badges: string[] = [];
+  if (graphql.hasErrors) {
+    badges.push(
+      `<span class="status-badge status-error">GraphQL Errors (${graphql.errorCount})</span>`,
+    );
+  }
+  if (graphql.validEnvelope === false) {
+    badges.push(
+      '<span class="status-badge status-error">Invalid GraphQL response</span>',
+    );
+  }
+  return badges.join('');
+}
+
+function renderGraphqlErrorsCard(model: ResponsePresentation): string {
+  const graphql = model.graphql;
+  if (graphql === undefined) {
+    return '';
+  }
+  if (graphql.validEnvelope !== false && !graphql.hasErrors) {
+    return '';
+  }
+  const heading =
+    graphql.validEnvelope === false
+      ? 'Invalid GraphQL response'
+      : 'GraphQL Errors';
+  const items = graphql.errorMessages
+    .map((message) => `<li>${escapeHtml(message)}</li>`)
+    .join('');
+  const list = items.length === 0 ? '' : `<ul>${items}</ul>`;
+  return `<section class="graphql-errors-card" data-testid="graphql-errors" aria-labelledby="graphql-errors-title">
+    <h2 id="graphql-errors-title">${escapeHtml(heading)}</h2>
+    ${list}
+  </section>`;
 }
 
 function renderSuccess(
@@ -259,6 +303,7 @@ function renderSuccess(
     ${tabs.map((tab) => `<button type="button" role="tab" id="tab-${tab.id}" data-tab="${tab.id}" aria-controls="panel-${tab.id}" aria-selected="${tab.selected}" tabindex="${tab.selected ? '0' : '-1'}"${tab.selected ? ' class="active"' : ''}>${escapeHtml(tab.label)}</button>`).join('')}
   </nav>
   <section id="panel-body" class="tab-panel" role="tabpanel" aria-labelledby="tab-body"${tabs[0]?.id === 'body' ? '' : ' hidden'}>
+    ${model.websocket === undefined ? '' : renderWebsocketMessages(model.websocket)}
     ${renderBody(model.body, options)}
   </section>
   <section id="panel-headers" class="tab-panel" role="tabpanel" aria-labelledby="tab-headers" hidden>
@@ -378,6 +423,40 @@ export function renderDiffSection(
       .join('')}</ul>
     ${truncated}
     ${body}
+  </section>`;
+}
+
+function renderWebsocketMessages(
+  session: NonNullable<ResponsePresentation['websocket']>,
+): string {
+  const items = session.events
+    .map((event) => {
+      const kindClass =
+        event.kind === 'sent'
+          ? 'ws-event-sent'
+          : event.kind === 'received'
+            ? 'ws-event-received'
+            : event.kind === 'error'
+              ? 'ws-event-error'
+              : 'ws-event-connection';
+      const arrow =
+        event.direction === 'sent'
+          ? '<span class="ws-arrow" aria-hidden="true">→</span>'
+          : event.direction === 'received'
+            ? '<span class="ws-arrow" aria-hidden="true">←</span>'
+            : '';
+      const directionHint =
+        event.direction === 'sent'
+          ? ' <span class="hint">(sent)</span>'
+          : event.direction === 'received'
+            ? ' <span class="hint">(received)</span>'
+            : '';
+      return `<li class="ws-event ${kindClass}">${arrow}<span class="ws-event-text">${escapeHtml(event.text)}</span>${directionHint}</li>`;
+    })
+    .join('');
+  return `<section class="ws-messages" aria-label="WebSocket messages">
+    <h3 class="ah-section-title">Messages</h3>
+    <ul class="ws-message-list">${items}</ul>
   </section>`;
 }
 
@@ -950,6 +1029,16 @@ tbody tr:hover { background: var(--vscode-list-hoverBackground); }
   margin: 0; padding-left: 1.2rem;
 }
 .explanation-facts li, .explanation-causes li { margin: 2px 0; }
+.graphql-errors-card {
+  margin: var(--ah-space-3) var(--ah-space-4); padding: var(--ah-space-3) var(--ah-space-4);
+  border: 1px solid var(--vscode-inputValidation-errorBorder, var(--vscode-errorForeground, var(--vscode-editorError-foreground)));
+  background: var(--vscode-inputValidation-errorBackground, var(--vscode-sideBar-background));
+  border-radius: var(--ah-radius);
+  color: var(--vscode-errorForeground, var(--vscode-editorError-foreground));
+}
+.graphql-errors-card h2 { margin: 0 0 var(--ah-space-2); font-size: 1.05rem; }
+.graphql-errors-card ul { margin: 0; padding-left: 1.2rem; }
+.graphql-errors-card li { margin: 2px 0; overflow-wrap: anywhere; }
 .diff-card {
   margin: var(--ah-space-3) var(--ah-space-4); padding: var(--ah-space-3) var(--ah-space-4);
   border: 1px solid var(--vscode-panel-border);
@@ -994,6 +1083,36 @@ dd { margin: 0; overflow-wrap: anywhere; }
   color: var(--vscode-menu-selectionForeground, var(--vscode-list-activeSelectionForeground));
 }
 .json-context-menu button:disabled { opacity: .45; }
+.ws-messages {
+  margin: 0 0 var(--ah-space-3);
+  padding: var(--ah-space-2) var(--ah-space-3);
+  border: 1px solid var(--vscode-panel-border, var(--vscode-contrastBorder));
+  border-radius: var(--ah-radius);
+  background: var(--vscode-editorWidget-background, var(--vscode-sideBar-background));
+}
+.ws-messages .ah-section-title { margin-top: 0; }
+.ws-message-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--ah-space-1);
+  font-family: var(--vscode-editor-font-family, var(--vscode-font-family));
+  font-size: .92em;
+}
+.ws-event {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ah-space-1);
+  align-items: baseline;
+  overflow-wrap: anywhere;
+}
+.ws-arrow { flex: 0 0 auto; font-weight: 600; }
+.ws-event-sent .ws-arrow { color: var(--vscode-charts-blue, var(--vscode-terminal-ansiBlue, #3794ff)); }
+.ws-event-received .ws-arrow { color: var(--vscode-charts-green, var(--vscode-terminal-ansiGreen, #89d185)); }
+.ws-event-connection { color: var(--vscode-descriptionForeground); }
+.ws-event-error { color: var(--vscode-errorForeground, var(--vscode-editorError-foreground)); }
+.ws-event-text { min-width: 0; }
 .create-var-sheet {
   position: fixed; inset: 0; z-index: 50; display: grid; place-items: center;
   background: rgba(0,0,0,.45); padding: var(--ah-space-4);
@@ -1035,7 +1154,7 @@ mark.search-hit.current {
   dl div { grid-template-columns: 1fr; }
 }
 @media (forced-colors: active) {
-  .status-badge, button, .stat, .stat-chip, .notice, .table-wrap, pre, .json-tree, .failure-card, .explanation-card, .diff-card, .empty-state {
+    .status-badge, button, .stat, .stat-chip, .notice, .table-wrap, pre, .json-tree, .failure-card, .explanation-card, .graphql-errors-card, .ws-messages, .ws-event, .diff-card, .empty-state {
     border: 1px solid CanvasText;
   }
   button:focus-visible, summary:focus-visible, .tabs [role="tab"]:focus-visible { outline-color: Highlight; }

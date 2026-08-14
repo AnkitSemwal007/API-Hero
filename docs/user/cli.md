@@ -58,7 +58,7 @@ apihero run collection <collection>
 | `--quiet` | Failures / final result only |
 | `--verbose` | Runtime logs on stderr |
 
-Unknown options exit with code **2**. HTTP, `@protocol graphql`, and `@protocol websocket` use the same `apihero run request` / `collection` commands. There is no `--graphql`, `--websocket`, `--ws`, `--listen`, or `--stream` flag — protocol is chosen on the request.
+Unknown options exit with code **2**. HTTP, `@protocol graphql`, and `@protocol websocket` use the same `apihero run request` / `collection` commands. There is no `--graphql`, `--websocket`, `--ws`, `--listen`, or `--stream` flag — protocol is chosen on the request. Authentication profiles and `{{variables}}` use the same runtime as VS Code. There is no separate GraphQL, WebSocket, Authentication, or Variables CLI.
 
 ### Targets
 

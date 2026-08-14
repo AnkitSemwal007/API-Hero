@@ -3,7 +3,9 @@
  * Framework-free so parsers and HTML helpers stay unit-testable.
  */
 
+import type { AuthenticationUiField } from '../../auth';
 import type { VariableScope } from '../../models';
+import type { PresentedWebsocketEvent } from '../../response/websocket-session-view';
 import { HTTP_METHODS, type HttpMethod } from '../../types';
 import type { AhIconName } from '../../ui/webview';
 import type {
@@ -39,6 +41,12 @@ export interface RequestEditorAuthProfileOption {
   readonly name?: string;
   /** API key location when `providerId` is `apiKey`. */
   readonly location?: 'header' | 'query';
+  /** Canonical API key name from the shared Auth UI summary. */
+  readonly apiKeyName?: string;
+  /** Canonical API key location from the shared Auth UI summary. */
+  readonly apiKeyLocation?: 'header' | 'query';
+  /** Secret-free field displays (variables as `{{name}}`, secrets/literals masked). */
+  readonly fields?: readonly AuthenticationUiField[];
 }
 
 /** Secret-free resolution step for the Auth tab inspector. */
@@ -170,7 +178,39 @@ export type RequestEditorOutboundMessage =
     }
   | { readonly type: 'resubmit'; readonly documentVersion: number }
   | { readonly type: 'error'; readonly message: string }
-  | { readonly type: 'offerSaveAsAuthentication' };
+  | { readonly type: 'offerSaveAsAuthentication' }
+  | { readonly type: 'websocketSession'; readonly phase: 'connecting' }
+  | {
+      readonly type: 'websocketSession';
+      readonly phase: 'closed' | 'error' | 'disconnected';
+      readonly view: RequestEditorWebsocketSessionView;
+    };
+
+/** Secret-free WebSocket session recap posted host → webview. */
+export interface RequestEditorWebsocketSessionView {
+  readonly statusLabel: string;
+  readonly hint: string;
+  readonly events: readonly PresentedWebsocketEvent[];
+}
+
+/** Host → webview: bounded WebSocket session recap (never RuntimeResponse). */
+export function createWebsocketSessionMessage(
+  input:
+    | { readonly phase: 'connecting' }
+    | {
+        readonly phase: 'closed' | 'error' | 'disconnected';
+        readonly view: RequestEditorWebsocketSessionView;
+      },
+): Extract<RequestEditorOutboundMessage, { type: 'websocketSession' }> {
+  if (input.phase === 'connecting') {
+    return { type: 'websocketSession', phase: 'connecting' };
+  }
+  return {
+    type: 'websocketSession',
+    phase: input.phase,
+    view: input.view,
+  };
+}
 
 /** Host → webview: version bump after a successful form→text apply (no DOM wipe). */
 export function createRequestEditorAck(

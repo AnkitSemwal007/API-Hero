@@ -22,6 +22,7 @@ import {
   DefaultAuthenticationSecretRepository,
   EphemeralAuthenticationSlot,
   NoneAuthenticationProvider,
+  summarizeAuthenticationProfileForUi,
 } from './auth';
 import { registerAssertions } from './assertions/vscode';
 import {
@@ -295,10 +296,28 @@ export async function activate(context: ExtensionContext): Promise<void> {
   };
 
   /**
+   * Environment variables for an in-flight collection run. Uses the Run Setup
+   * override when present; otherwise the session active environment.
+   */
+  const environmentDefinitionsForRun = (): readonly VariableDefinition[] => {
+    const override = collectionRunVariableContext.getEnvironmentOverride();
+    if (override === undefined) {
+      return environmentManager.capture().active?.variables ?? [];
+    }
+    if (override.environmentId === undefined) {
+      return [];
+    }
+    return (
+      environmentManager.list().find((environment) => environment.id === override.environmentId)
+        ?.variables ?? []
+    );
+  };
+
+  /**
    * Names of variables statically defined outside the run store — env
-   * (global/workspace/active) + active collection variables (§6.7). Evaluated
-   * fresh per pre-flight check so mid-run collection variable refreshes are
-   * visible to `CollectionRunnerService`'s dependency skip logic.
+   * (global/workspace/active-or-override) + active collection variables (§6.7).
+   * Evaluated fresh per pre-flight check so mid-run collection variable refreshes
+   * are visible to `CollectionRunnerService`'s dependency skip logic.
    */
   const staticVariableNamesForRun = (): ReadonlySet<string> => {
     const capture = environmentManager.capture();
@@ -309,7 +328,7 @@ export async function activate(context: ExtensionContext): Promise<void> {
     for (const variable of capture.workspaceVariables) {
       names.add(variable.name);
     }
-    for (const variable of capture.active?.variables ?? []) {
+    for (const variable of environmentDefinitionsForRun()) {
       names.add(variable.name);
     }
     for (const variable of activeCollectionRunVariables) {
@@ -472,7 +491,7 @@ export async function activate(context: ExtensionContext): Promise<void> {
           ...snapshot.globalVariables,
           ...snapshot.workspaceVariables,
           ...collectionDefinitionsForSource(document.sourceId),
-          ...(snapshot.active?.variables ?? []),
+          ...environmentDefinitionsForRun(),
           ...extractDocumentVariables(document).definitions,
           ...runtimeOverlay.getDefinitions({ requestKey: key }),
           ...activeRunDefinitions(),
@@ -482,8 +501,10 @@ export async function activate(context: ExtensionContext): Promise<void> {
     authenticationResolver,
     (_variables, meta) => {
       const ephemeral = ephemeralAuthentication.take();
+      const skipCollectionDefault =
+        collectionRunVariableContext.getAuthenticationPreference() === 'resolved';
       const collectionDefault =
-        meta?.sourceId === undefined
+        skipCollectionDefault || meta?.sourceId === undefined
           ? undefined
           : resolveCollectionDefaultAuthenticationId(meta.sourceId);
       return {
@@ -648,7 +669,6 @@ export async function activate(context: ExtensionContext): Promise<void> {
     collectionsTreeView: collectionsRegistration.treeView,
     collectionRunManager,
     reportPanel: collectionRunReportPanel,
-    getHistoryCaptureContext: () => getHistoryCaptureContext(),
     setRequestStatusSuppressed: (suppressed) => {
       executionStatusPresenter.setSuppressed(suppressed);
     },
@@ -658,6 +678,18 @@ export async function activate(context: ExtensionContext): Promise<void> {
       activeCollectionRunVariables = variables;
     },
     getStaticVariableNames: staticVariableNamesForRun,
+    environmentManager,
+    getAuthenticationSnapshot: () => {
+      const snapshot = authenticationProfiles.capture();
+      return {
+        profiles: snapshot.profiles.map(summarizeAuthenticationProfileForUi),
+        ...(snapshot.defaultProfileId === undefined
+          ? {}
+          : { defaultProfileId: snapshot.defaultProfileId }),
+      };
+    },
+    onAuthenticationChanged: (listener) =>
+      authenticationProfiles.onDidChange(listener),
     responseViewer,
   });
   registerScenarios({
@@ -714,28 +746,29 @@ export async function activate(context: ExtensionContext): Promise<void> {
     mutation: collectionsRegistration.mutation,
     getAuthProfiles: () =>
       authenticationProfiles.list().map((profile) => {
+        const summary = summarizeAuthenticationProfileForUi(profile);
         const option: {
           id: string;
           label: string;
           providerId: string;
           name?: string;
           location?: 'header' | 'query';
+          apiKeyName?: string;
+          apiKeyLocation?: 'header' | 'query';
+          fields: typeof summary.fields;
         } = {
-          id: profile.id,
-          label: profile.label?.trim() || profile.id,
-          providerId: profile.providerId,
+          id: summary.id,
+          label: summary.label,
+          providerId: summary.providerId,
+          fields: summary.fields,
         };
-        if (profile.providerId === 'apiKey') {
-          const data = profile as {
-            readonly name?: unknown;
-            readonly location?: unknown;
-          };
-          if (typeof data.name === 'string' && data.name.length > 0) {
-            option.name = data.name;
-          }
-          if (data.location === 'header' || data.location === 'query') {
-            option.location = data.location;
-          }
+        if (summary.apiKeyName !== undefined) {
+          option.name = summary.apiKeyName;
+          option.apiKeyName = summary.apiKeyName;
+        }
+        if (summary.apiKeyLocation !== undefined) {
+          option.location = summary.apiKeyLocation;
+          option.apiKeyLocation = summary.apiKeyLocation;
         }
         return option;
       }),
@@ -757,10 +790,16 @@ export async function activate(context: ExtensionContext): Promise<void> {
     onExternalVariablesChanged: (listener) => {
       const environmentRegistration = environmentManager.onDidChange(listener);
       const catalogRegistration = onVariableCatalogChanged(listener);
+      const authenticationRegistration =
+        authenticationProfiles.onDidChange(listener);
+      const discoveryRegistration =
+        collectionsRegistration.discovery.onDidChange(listener);
       return {
         dispose: () => {
           environmentRegistration.dispose();
           catalogRegistration.dispose();
+          authenticationRegistration.dispose();
+          discoveryRegistration.dispose();
         },
       };
     },

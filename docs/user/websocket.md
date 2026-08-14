@@ -31,6 +31,14 @@ A WebSocket execution succeeds when the socket connects, the optional message is
 
 Failures are connection, send, receive timeout, cancellation, or assertion/extraction failures — not HTTP status codes. The socket is closed on every path, including timeout, cancellation, and assertion failure (the message is buffered before assertions run).
 
+## Request Editor
+
+The Request Editor protocol dropdown can set HTTP, GraphQL, or WebSocket (`@protocol`). **Run Session** is the same bounded session as CLI: connect → optional send of the Message body → receive one text frame → close. The socket is **not** kept open after the run.
+
+Params, Headers, Auth, Variables, Tests, Extract, and Settings stay available (handshake headers and auth already apply). Persistent connections are not supported.
+
+Collection Runner executes each WebSocket request as one bounded session (same as CLI). It does not keep a socket open across requests.
+
 ## Related
 
 - [Creating requests](./creating-requests.md)

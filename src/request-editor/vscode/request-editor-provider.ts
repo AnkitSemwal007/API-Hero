@@ -18,6 +18,11 @@ import { COMMAND_IDS, REQUEST_EDITOR_VIEW_TYPE } from '../../constants';
 import { explainAuthenticationResolution } from '../../auth/explain-authentication-resolution';
 import { describeFilesystemFailure, fireAndForget } from '../../shared';
 import { createWebviewNonce } from '../../ui/webview';
+import type { RunAtSourceLocationResult } from '../../orchestration';
+import {
+  buildWebsocketSessionView,
+  presentExecutionResult,
+} from '../../response';
 import {
   parseSourceToRequestDocument,
   serializeRequestDocument,
@@ -34,6 +39,7 @@ import { renderRequestEditorHtml } from './request-editor-html';
 import {
   createRequestEditorAck,
   createRequestEditorResubmit,
+  createWebsocketSessionMessage,
   maskSensitiveVariablesForWebview,
   parseRequestEditorMessage,
   redactSensitiveVariablesInSource,
@@ -63,8 +69,9 @@ export interface RequestEditorProviderOptions {
   /** Active environment display name, or undefined when none is selected. */
   readonly getActiveEnvironmentLabel?: () => string | undefined;
   /**
-   * Fires when external variable definitions change so the webview catalog
-   * can refresh without waiting for a document edit.
+   * Fires when external variable definitions, Authentication profiles, or
+   * collection discovery change so the webview catalog and inherited
+   * Authentication can refresh without waiting for a document edit.
    */
   readonly onExternalVariablesChanged?: (
     listener: () => void,
@@ -125,7 +132,10 @@ export interface RequestEditorProviderOptions {
       readonly apiKeyName?: string;
       readonly apiKeyLocation?: 'header' | 'query';
     },
-  ) => Promise<{ readonly offerSaveAsAuthentication?: boolean } | void>;
+  ) => Promise<{
+    readonly offerSaveAsAuthentication?: boolean;
+    readonly result?: RunAtSourceLocationResult;
+  } | void>;
   /** Optional: persist one-shot credentials after banner Save. */
   readonly saveAsAuthentication?: (
     ephemeralAuth: {
@@ -280,10 +290,12 @@ class RequestEditorDocumentSync implements Disposable {
     }
     if (message.type === 'selectAuthentication') {
       await commands.executeCommand(COMMAND_IDS.selectAuthentication);
+      await this.postState();
       return;
     }
     if (message.type === 'manageAuthProfiles') {
       await commands.executeCommand(COMMAND_IDS.manageAuthProfiles);
+      await this.postState();
       return;
     }
     if (message.type === 'manageEnvironments') {
@@ -297,6 +309,7 @@ class RequestEditorDocumentSync implements Disposable {
       ) {
         await this.options.saveAsAuthentication(this.lastEphemeralAuth);
         this.lastEphemeralAuth = undefined;
+        await this.postState();
       }
       return;
     }
@@ -310,11 +323,21 @@ class RequestEditorDocumentSync implements Disposable {
       return;
     }
     if (message.type === 'run') {
+      let websocket = false;
       try {
         // Wait for any in-flight / pending form→text apply before executing.
         await this.waitUntilFormAppliesIdle();
+        websocket = documentProtocolIsWebsocket(
+          this.document.getText(),
+          this.document.uri.toString(),
+        );
         if (message.ephemeralAuth !== undefined) {
           this.lastEphemeralAuth = message.ephemeralAuth;
+        }
+        if (websocket) {
+          await this.panel.webview.postMessage(
+            createWebsocketSessionMessage({ phase: 'connecting' }),
+          );
         }
         const outcome = await this.options.runDocument(
           this.document,
@@ -325,9 +348,23 @@ class RequestEditorDocumentSync implements Disposable {
             type: 'offerSaveAsAuthentication',
           });
         }
+        if (websocket) {
+          await this.postWebsocketSessionResult(outcome);
+        }
       } catch (error) {
         const text = error instanceof Error ? error.message : String(error);
         await this.panel.webview.postMessage({ type: 'error', message: text });
+        if (websocket) {
+          await this.panel.webview.postMessage(
+            createWebsocketSessionMessage({
+              phase: 'error',
+              view: buildWebsocketSessionView({
+                phase: 'error',
+                failureMessage: text,
+              }),
+            }),
+          );
+        }
       }
       return;
     }
@@ -741,6 +778,42 @@ class RequestEditorDocumentSync implements Disposable {
 
     await this.panel.webview.postMessage({ type: 'state', state });
   }
+
+  private async postWebsocketSessionResult(
+    outcome:
+      | {
+          readonly offerSaveAsAuthentication?: boolean;
+          readonly result?: RunAtSourceLocationResult;
+        }
+      | void,
+  ): Promise<void> {
+    const result = outcome?.result;
+    const execution = result?.execution;
+    const presentation =
+      result === undefined || execution === undefined
+        ? undefined
+        : presentExecutionResult(
+            execution,
+            result.assertions,
+            result.extraction,
+          );
+    const phase: 'closed' | 'error' =
+      presentation?.success === true ? 'closed' : 'error';
+    const failureMessage =
+      presentation?.failure?.message ?? result?.message;
+    await this.panel.webview.postMessage(
+      createWebsocketSessionMessage({
+        phase,
+        view: buildWebsocketSessionView({
+          phase,
+          ...(presentation?.websocket === undefined
+            ? {}
+            : { websocket: presentation.websocket }),
+          ...(failureMessage === undefined ? {} : { failureMessage }),
+        }),
+      }),
+    );
+  }
 }
 
 /** Opens a URI with the request editor custom view type. */
@@ -750,6 +823,14 @@ export async function openRequestEditor(uri: Uri): Promise<void> {
     uri,
     REQUEST_EDITOR_VIEW_TYPE,
   );
+}
+
+function documentProtocolIsWebsocket(
+  sourceText: string,
+  sourceId: string,
+): boolean {
+  const parsed = parseSourceToRequestDocument(sourceText, sourceId);
+  return parsed.kind === 'single' && parsed.document.protocol === 'websocket';
 }
 
 function hasAddedDependRefs(

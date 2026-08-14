@@ -36,6 +36,7 @@ import {
   type AuthCommandServices,
 } from './auth-commands';
 import { AuthManagerPanel } from './auth-manager-panel';
+import { CollectionAuthPanel } from './collection-auth-panel';
 import { runSetCollectionDefaultAuthenticationCommand } from './set-collection-default-auth';
 
 /** Matches language-support `authentication.missing-secret` diagnostics. */
@@ -58,6 +59,7 @@ export interface RegisterAuthOptions {
 export interface AuthRegistration {
   readonly disposables: readonly Disposable[];
   readonly panel: AuthManagerPanel;
+  readonly collectionAuthPanel?: CollectionAuthPanel;
   readonly sessions: AuthenticationSessionStore;
   readonly services: AuthCommandServices;
 }
@@ -79,6 +81,14 @@ export function registerAuth(options: RegisterAuthOptions): AuthRegistration {
     sessions,
     authServices: () => services,
   });
+
+  const collectionAuthPanel =
+    options.discovery === undefined
+      ? undefined
+      : new CollectionAuthPanel({
+          profileManager,
+          discovery: options.discovery,
+        });
 
   const persistSessions = sessions.onDidChange(() => {
     void context.workspaceState.update(
@@ -150,13 +160,14 @@ export function registerAuth(options: RegisterAuthOptions): AuthRegistration {
   const collectionDefaultCommand = registerCommandWithLegacyAlias(
     COMMAND_IDS.setCollectionDefaultAuthentication,
     async (collectionArg?: unknown) => {
-      if (options.discovery === undefined) {
+      if (options.discovery === undefined || collectionAuthPanel === undefined) {
         void window.showWarningMessage('Collections discovery is not available.');
         return;
       }
       await runSetCollectionDefaultAuthenticationCommand({
         discovery: options.discovery,
         profileManager,
+        panel: collectionAuthPanel,
         collectionArg,
       });
     },
@@ -169,6 +180,7 @@ export function registerAuth(options: RegisterAuthOptions): AuthRegistration {
 
   const disposables: Disposable[] = [
     panel,
+    ...(collectionAuthPanel === undefined ? [] : [collectionAuthPanel]),
     manageCommand,
     setSecretCommand,
     testCommand,
@@ -180,7 +192,13 @@ export function registerAuth(options: RegisterAuthOptions): AuthRegistration {
     persistSessions,
   ];
   context.subscriptions.push(...disposables);
-  return { disposables, panel, sessions, services };
+  return {
+    disposables,
+    panel,
+    ...(collectionAuthPanel === undefined ? {} : { collectionAuthPanel }),
+    sessions,
+    services,
+  };
 }
 
 function loadSessionStore(context: ExtensionContext): AuthenticationSessionStore {

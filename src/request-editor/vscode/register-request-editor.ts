@@ -25,7 +25,10 @@ import {
   type RequestReference,
   type WorkspaceCollections,
 } from '../../collections';
-import type { ExecutionOrchestrator } from '../../orchestration';
+import type {
+  ExecutionOrchestrator,
+  RunAtSourceLocationResult,
+} from '../../orchestration';
 import type { RequestSourceDocument } from '../../request-source';
 import type { VariableDefinition } from '../../models';
 import {
@@ -72,8 +75,9 @@ export interface RegisterRequestEditorOptions {
   /** Active environment display name for Variables-tab discoverability. */
   readonly getActiveEnvironmentLabel?: () => string | undefined;
   /**
-   * Notifies when external variable catalogs change (env switch, collection
-   * load/persist, …) so open editors can refresh completions.
+   * Notifies when external variable catalogs, Authentication profiles, or
+   * collection discovery change so open editors can refresh completions and
+   * inherited Authentication without waiting for a document edit.
    */
   readonly onExternalVariablesChanged?: (
     listener: () => void,
@@ -406,7 +410,10 @@ async function runRequestDocument(
   authServices:
     | (() => import('../../auth/vscode/auth-commands').AuthCommandServices)
     | undefined,
-): Promise<{ readonly offerSaveAsAuthentication?: boolean } | void> {
+): Promise<{
+  readonly offerSaveAsAuthentication?: boolean;
+  readonly result?: RunAtSourceLocationResult;
+} | void> {
   if (ephemeralAuth !== undefined && ephemeralAuthentication !== undefined) {
     ephemeralAuthentication.set(ephemeralAuth);
   }
@@ -426,8 +433,9 @@ async function runRequestDocument(
         'API Hero: Reuse this Authentication? Open the Auth tab to Save.',
         8_000,
       );
-      return { offerSaveAsAuthentication: true };
+      return { offerSaveAsAuthentication: true, result };
     }
+    return { result };
   } finally {
     ephemeralAuthentication?.clear();
   }

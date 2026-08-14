@@ -30,19 +30,19 @@ import {
 import type { VariableDefinition } from '../../models';
 import type { ExecutionOrchestrator } from '../../orchestration';
 import { sanitizeHoverLabel, type Logger } from '../../shared';
-import { InMemoryRunVariableStore, type CollectionVariableStore } from '../../variables';
+import { InMemoryRunVariableStore, type CollectionVariableStore, type EnvironmentManager } from '../../variables';
 import {
   CollectionRunnerService,
   CollectionRunAlreadyActiveError,
+  FailurePolicyKinds,
+  type CollectionRunExecuteConfig,
+  type CollectionRunFailurePolicyChoice,
   type CollectionRunManager,
   buildRunPlan,
-  listFailurePolicies,
   normalizeCollectionRunOptions,
-  type CollectionRunOptions,
   type CollectionRunVariableContext,
   type CollectionRetryBackoff,
   type DependenciesExtension,
-  type FailurePolicyKind,
   type RunPlanTarget,
   type RunSummary,
   COLLECTION_RETRY_DEFAULT_BACKOFF,
@@ -51,6 +51,10 @@ import {
   COLLECTION_RETRY_MAX_DELAY_MS_CAP,
   COLLECTION_RETRY_MAX_RETRIES_CAP,
 } from '../index';
+import {
+  CollectionRunSetupPanel,
+  type CollectionRunSetupAuthSnapshot,
+} from './collection-run-setup-panel';
 import {
   CollectionRunStatusBar,
   MultiplexCollectionRunProgress,
@@ -61,10 +65,7 @@ import {
   formatUnexpectedFailMessage,
   withCollectionRunProgress,
 } from './progress-ui';
-import {
-  normalizeFailurePolicySetting,
-  resolveFailurePolicyForRun,
-} from './run-report-html';
+import { normalizeFailurePolicySetting } from './run-report-html';
 import type { CollectionRunReportPanel } from './run-report-panel';
 
 export interface RegisterCollectionRunnerOptions {
@@ -75,10 +76,6 @@ export interface RegisterCollectionRunnerOptions {
   readonly collectionsTreeView: TreeView<CollectionTreeNode>;
   readonly collectionRunManager: CollectionRunManager;
   readonly reportPanel: CollectionRunReportPanel;
-  readonly getHistoryCaptureContext: () => {
-    readonly environmentName?: string;
-    readonly collectionName?: string;
-  };
   readonly setRequestStatusSuppressed?: (suppressed: boolean) => void;
   readonly collectionRunContext: CollectionRunVariableContext;
   readonly collectionVariableStore: CollectionVariableStore;
@@ -86,6 +83,9 @@ export interface RegisterCollectionRunnerOptions {
     variables: readonly VariableDefinition[],
   ) => void;
   readonly getStaticVariableNames: () => ReadonlySet<string>;
+  readonly environmentManager: EnvironmentManager;
+  readonly getAuthenticationSnapshot?: () => CollectionRunSetupAuthSnapshot;
+  readonly onAuthenticationChanged?: (listener: () => void) => Disposable;
   /** Optional response viewer for Compare / Generate TypeScript. */
   readonly responseViewer?: {
     compareWithPrevious(): unknown;
@@ -121,13 +121,15 @@ export function registerCollectionRunner(
     context,
     collectionRunManager: manager,
     reportPanel,
-    getHistoryCaptureContext,
     setRequestStatusSuppressed,
     collectionRunContext,
     collectionVariableStore,
     setActiveCollectionVariables,
     getStaticVariableNames,
     responseViewer,
+    environmentManager,
+    getAuthenticationSnapshot,
+    onAuthenticationChanged,
   } = options;
 
   const statusBar = new CollectionRunStatusBar(manager, setRequestStatusSuppressed);
@@ -158,44 +160,55 @@ export function registerCollectionRunner(
     return true;
   };
 
-  const runWithTarget = async (
-    target: RunPlanTarget,
-    progressTitle = 'API Hero: Collection Run',
-  ): Promise<void> => {
+  const executeConfiguredCollectionRun = async (
+    config: CollectionRunExecuteConfig,
+  ): Promise<{ readonly ok: true } | { readonly ok: false; readonly message: string }> => {
     if (await rejectIfRunActive()) {
-      return;
+      return {
+        ok: false,
+        message:
+          'A collection run is already in progress. Cancel it from the Execution view or the progress notification first.',
+      };
     }
 
-    const policy = await resolveFailurePolicy();
-    if (policy === undefined) return;
-
-    const runOptions = await resolveCollectionRunOptions();
-    if (runOptions === undefined) return;
+    const defaults = readCollectionRunOptionDefaults();
+    const runOptions = normalizeCollectionRunOptions({
+      retry: {
+        enabled: defaults.retryEnabled,
+        maxRetries: defaults.maxRetries,
+        delayMs: defaults.delayMs,
+        backoff: defaults.backoff,
+      },
+      skipDestructiveRequests: defaults.skipDestructiveRequests,
+    });
 
     const aggregate = await discovery.refresh();
     let plan;
     try {
       plan = buildRunPlan({
         aggregate,
-        target,
-        failurePolicy: policy,
+        target: config.target,
+        failurePolicy: config.failurePolicy,
         runOptions,
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to build a collection run plan.';
-      await window.showErrorMessage(message);
-      return;
+      return {
+        ok: false,
+        message:
+          error instanceof Error ? error.message : 'Unable to build a collection run plan.',
+      };
     }
 
     if (plan.requests.length === 0) {
-      await window.showInformationMessage('No requests found for this collection run.');
-      return;
+      return { ok: false, message: 'No requests found for this collection run.' };
     }
 
     const collectionRootPath = aggregate.collections[plan.collectionId]?.rootPath;
     if (collectionRootPath === undefined) {
-      await window.showErrorMessage('API Hero: The collection for this run is no longer available.');
-      return;
+      return {
+        ok: false,
+        message: 'API Hero: The collection for this run is no longer available.',
+      };
     }
 
     const analyses = await analyzeRunPlanDependencies(plan, {
@@ -203,13 +216,15 @@ export function registerCollectionRunner(
     });
     const enrichment = enrichRunPlanWithDependencies({ membershipPlan: plan, analyses });
     if (!enrichment.ok) {
-      await window.showErrorMessage(`API Hero: ${enrichment.message}`);
-      return;
+      return { ok: false, message: `API Hero: ${enrichment.message}` };
     }
     const enrichedPlan = enrichment.plan;
-    // Re-check immediately before begin — async work above can race with another start.
     if (await rejectIfRunActive()) {
-      return;
+      return {
+        ok: false,
+        message:
+          'A collection run is already in progress. Cancel it from the Execution view or the progress notification first.',
+      };
     }
     let session;
     try {
@@ -217,19 +232,52 @@ export function registerCollectionRunner(
     } catch (error) {
       if (error instanceof CollectionRunAlreadyActiveError) {
         await window.showWarningMessage(activeRunWarning);
-        return;
+        return { ok: false, message: activeRunWarning };
       }
       throw error;
     }
+
+    const configuredEnvironmentName = environmentNameForOverride(
+      environmentManager,
+      config.environmentOverride,
+    );
     reportPanel.showLive(session.snapshot, {
-      ...((): { environmentName?: string } => {
-        const environmentName = getHistoryCaptureContext().environmentName;
-        return environmentName === undefined
-          ? {}
-          : { environmentName };
-      })(),
+      ...(configuredEnvironmentName === undefined
+        ? {}
+        : { environmentName: configuredEnvironmentName }),
     });
 
+    const progressTitle =
+      config.target.mode === 'selected-requests'
+        ? 'API Hero: Run Selected Requests'
+        : 'API Hero: Collection Run';
+    void continueConfiguredCollectionRun({
+      enrichedPlan,
+      session,
+      collectionRootPath,
+      progressTitle,
+      config,
+      configuredEnvironmentName,
+    });
+    return { ok: true };
+  };
+
+  const continueConfiguredCollectionRun = async (args: {
+    readonly enrichedPlan: ReturnType<typeof buildRunPlan>;
+    readonly session: ReturnType<CollectionRunManager['begin']>;
+    readonly collectionRootPath: string;
+    readonly progressTitle: string;
+    readonly config: CollectionRunExecuteConfig;
+    readonly configuredEnvironmentName: string | undefined;
+  }): Promise<void> => {
+    const {
+      enrichedPlan,
+      session,
+      collectionRootPath,
+      progressTitle,
+      config,
+      configuredEnvironmentName,
+    } = args;
     const progressUi = new VsCodeCollectionRunProgress();
     const scoped = new RunScopedCollectionRunProgress(enrichedPlan.runId, progressUi);
     multiplex.add(scoped);
@@ -253,6 +301,8 @@ export function registerCollectionRunner(
       collectionId: enrichedPlan.collectionId,
       collectionRootPath,
       runStore: runVariableStore,
+      environmentOverride: config.environmentOverride,
+      authenticationPreference: config.authenticationPreference,
     });
     try {
       const summary = await withCollectionRunProgress(
@@ -263,7 +313,7 @@ export function registerCollectionRunner(
             plan: enrichedPlan,
             signal: session.signal,
             historyCaptureContext: {
-              ...getHistoryCaptureContext(),
+              environmentName: configuredEnvironmentName,
               collectionName: enrichedPlan.collectionName,
             },
             runVariableStore,
@@ -272,11 +322,7 @@ export function registerCollectionRunner(
         session.abortController,
       );
       manager.complete(summary);
-      await presentSummary(
-        summary,
-        reportPanel,
-        getHistoryCaptureContext().environmentName,
-      );
+      await presentSummary(summary, reportPanel, configuredEnvironmentName);
       const reorderedCount = countReorderedRequests(enrichedPlan.extensions?.dependencies);
       if (reorderedCount > 0) {
         void window.showInformationMessage(`Reordered ${reorderedCount} requests for dependencies`);
@@ -303,19 +349,57 @@ export function registerCollectionRunner(
     }
   };
 
+  const setupPanel = new CollectionRunSetupPanel({
+    discovery,
+    environmentManager,
+    collectionVariableStore,
+    ...(getAuthenticationSnapshot === undefined
+      ? {}
+      : { getAuthenticationSnapshot }),
+    ...(onAuthenticationChanged === undefined
+      ? {}
+      : { onAuthenticationChanged }),
+    getDefaultFailurePolicy: defaultFailurePolicyFromSettings,
+    executeRun: executeConfiguredCollectionRun,
+  });
+  reportPanel.setOnRunAgain(async (collectionId) => {
+    setupPanel.show({
+      target: { mode: 'collection', collectionId },
+      restorePrevious: true,
+    });
+  });
+
+  const openSetup = (target: RunPlanTarget, restorePrevious = false): void => {
+    setupPanel.show({
+      target,
+      ...(restorePrevious ? { restorePrevious: true } : {}),
+    });
+  };
+
   const disposables: Disposable[] = [
     statusBar,
     reportPanel,
+    setupPanel,
     liveReportSubscription,
-    registerCommandWithLegacyAlias(COMMAND_IDS.runCollection, async (node?: CollectionTreeNode) => {
-      const collectionId = node?.kind === 'collection' ? node.id : await pickCollectionId(discovery);
-      if (collectionId === undefined) return;
-      await runWithTarget({ mode: 'collection', collectionId });
-    }),
+    registerCommandWithLegacyAlias(
+      COMMAND_IDS.runCollection,
+      async (
+        node?: CollectionTreeNode,
+        extra?: { readonly restorePreviousSetup?: boolean },
+      ) => {
+        const collectionId =
+          node?.kind === 'collection' ? node.id : await pickCollectionId(discovery);
+        if (collectionId === undefined) return;
+        openSetup(
+          { mode: 'collection', collectionId },
+          extra?.restorePreviousSetup === true,
+        );
+      },
+    ),
     registerCommandWithLegacyAlias(COMMAND_IDS.runCollectionTests, async (node?: CollectionTreeNode) => {
       const collectionId = node?.kind === 'collection' ? node.id : await pickCollectionId(discovery);
       if (collectionId === undefined) return;
-      await runWithTarget({ mode: 'collection', collectionId });
+      openSetup({ mode: 'collection', collectionId });
     }),
     registerCommandWithLegacyAlias(COMMAND_IDS.runFolder, async (node?: CollectionTreeNode) => {
       const folderNode =
@@ -326,7 +410,7 @@ export function registerCollectionRunner(
         await window.showErrorMessage('Select a folder in the Collections view to run.');
         return;
       }
-      await runWithTarget({
+      openSetup({
         mode: 'folder',
         collectionId: folderNode.collectionId,
         folderId: folderNode.folderId,
@@ -338,14 +422,11 @@ export function registerCollectionRunner(
         await window.showErrorMessage('Select one or more requests in the Collections view to run.');
         return;
       }
-      await runWithTarget(
-        {
-          mode: 'selected-requests',
-          collectionId: selected.collectionId,
-          requestIds: selected.requestIds,
-        },
-        'API Hero: Run Selected Requests',
-      );
+      openSetup({
+        mode: 'selected-requests',
+        collectionId: selected.collectionId,
+        requestIds: selected.requestIds,
+      });
     }),
     registerCommandWithLegacyAlias(COMMAND_IDS.compareWithPreviousRun, async () => {
       if (responseViewer === undefined) {
@@ -476,7 +557,7 @@ async function presentSummary(
   }
 }
 
-async function resolveFailurePolicy(): Promise<FailurePolicyKind | undefined> {
+function defaultFailurePolicyFromSettings(): CollectionRunFailurePolicyChoice {
   const configuration = workspace.getConfiguration(CONFIGURATION_SECTION);
   const setting = normalizeFailurePolicySetting(
     configuration.get(
@@ -484,27 +565,20 @@ async function resolveFailurePolicy(): Promise<FailurePolicyKind | undefined> {
       DEFAULT_CONFIGURATION.collectionRunnerFailurePolicy,
     ),
   );
-  return resolveFailurePolicyForRun(setting, pickFailurePolicy);
+  return setting === FailurePolicyKinds.StopOnFirstError
+    ? FailurePolicyKinds.StopOnFirstError
+    : FailurePolicyKinds.ContinueOnError;
 }
 
-async function resolveCollectionRunOptions(): Promise<
-  CollectionRunOptions | undefined
-> {
-  const defaults = readCollectionRunOptionDefaults();
-  const retry = await pickRetryOptions(defaults);
-  if (retry === undefined) {
+function environmentNameForOverride(
+  environmentManager: EnvironmentManager,
+  override: { readonly environmentId?: string },
+): string | undefined {
+  if (override.environmentId === undefined || override.environmentId.length === 0) {
     return undefined;
   }
-  const skipDestructive = await pickSkipDestructive(
-    defaults.skipDestructiveRequests,
-  );
-  if (skipDestructive === undefined) {
-    return undefined;
-  }
-  return normalizeCollectionRunOptions({
-    retry,
-    skipDestructiveRequests: skipDestructive,
-  });
+  return environmentManager.list().find((environment) => environment.id === override.environmentId)
+    ?.name;
 }
 
 interface CollectionRunOptionDefaults {
@@ -555,181 +629,6 @@ function readCollectionRunOptionDefaults(): CollectionRunOptionDefaults {
       DEFAULT_CONFIGURATION.collectionRunnerSkipDestructiveRequests,
     ),
   };
-}
-
-async function pickRetryOptions(
-  defaults: CollectionRunOptionDefaults,
-): Promise<CollectionRunOptions['retry'] | undefined> {
-  type RetryPick =
-    | { readonly id: 'off' }
-    | { readonly id: 'preset' }
-    | { readonly id: 'custom' };
-
-  const presetLabel = `Retries: ${defaults.maxRetries} ${defaults.backoff} ${defaults.delayMs}ms`;
-  const items: Array<{
-    label: string;
-    description?: string;
-    pick: RetryPick;
-  }> = [
-    {
-      label: 'Retries: Off',
-      description: 'No automatic retries',
-      pick: { id: 'off' },
-    },
-    {
-      label: presetLabel,
-      description: 'Use settings defaults',
-      pick: { id: 'preset' },
-    },
-    {
-      label: 'Retries: Custom…',
-      description: 'Choose max retries, delay, and backoff',
-      pick: { id: 'custom' },
-    },
-  ];
-
-  const active =
-    defaults.retryEnabled === false
-      ? items[0]
-      : items[1];
-  const picked = await window.showQuickPick(items, {
-    title: 'Collection run retries',
-    placeHolder: 'Choose retry behavior for this run',
-    ...(active === undefined ? {} : { activeItems: [active] }),
-  });
-  if (picked === undefined) {
-    return undefined;
-  }
-
-  if (picked.pick.id === 'off') {
-    return {
-      enabled: false,
-      maxRetries: defaults.maxRetries,
-      delayMs: defaults.delayMs,
-      backoff: defaults.backoff,
-    };
-  }
-
-  if (picked.pick.id === 'preset') {
-    return {
-      enabled: true,
-      maxRetries: defaults.maxRetries,
-      delayMs: defaults.delayMs,
-      backoff: defaults.backoff,
-    };
-  }
-
-  const maxRetriesInput = await window.showInputBox({
-    title: 'Max retries',
-    prompt: `Retries after the first attempt (0–${COLLECTION_RETRY_MAX_RETRIES_CAP})`,
-    value: String(defaults.maxRetries),
-    validateInput: (value) => {
-      const parsed = Number(value);
-      if (
-        !Number.isSafeInteger(parsed) ||
-        parsed < 0 ||
-        parsed > COLLECTION_RETRY_MAX_RETRIES_CAP
-      ) {
-        return `Enter an integer from 0 to ${COLLECTION_RETRY_MAX_RETRIES_CAP}.`;
-      }
-      return undefined;
-    },
-  });
-  if (maxRetriesInput === undefined) {
-    return undefined;
-  }
-
-  const delayInput = await window.showInputBox({
-    title: 'Retry delay (ms)',
-    prompt: `Base delay between attempts (0–${COLLECTION_RETRY_MAX_DELAY_MS_CAP})`,
-    value: String(defaults.delayMs),
-    validateInput: (value) => {
-      const parsed = Number(value);
-      if (
-        !Number.isSafeInteger(parsed) ||
-        parsed < 0 ||
-        parsed > COLLECTION_RETRY_MAX_DELAY_MS_CAP
-      ) {
-        return `Enter an integer from 0 to ${COLLECTION_RETRY_MAX_DELAY_MS_CAP}.`;
-      }
-      return undefined;
-    },
-  });
-  if (delayInput === undefined) {
-    return undefined;
-  }
-
-  const backoffItems: Array<{
-    label: string;
-    description: string;
-    backoff: CollectionRetryBackoff;
-  }> = [
-    {
-      label: 'Exponential',
-      description: 'delayMs × 2^(retryIndex−1)',
-      backoff: 'exponential',
-    },
-    {
-      label: 'Fixed',
-      description: 'Same delayMs between every retry',
-      backoff: 'fixed',
-    },
-  ];
-  const activeBackoff =
-    backoffItems.find((item) => item.backoff === defaults.backoff) ??
-    backoffItems[0];
-  const backoffPicked = await window.showQuickPick(backoffItems, {
-    title: 'Retry backoff',
-    placeHolder: 'Choose backoff strategy',
-    ...(activeBackoff === undefined ? {} : { activeItems: [activeBackoff] }),
-  });
-  if (backoffPicked === undefined) {
-    return undefined;
-  }
-
-  return {
-    enabled: true,
-    maxRetries: Number(maxRetriesInput),
-    delayMs: Number(delayInput),
-    backoff: backoffPicked.backoff,
-  };
-}
-
-async function pickSkipDestructive(
-  defaultSkip: boolean,
-): Promise<boolean | undefined> {
-  const items = [
-    {
-      label: 'Skip destructive DELETE requests',
-      description: 'DELETE methods are skipped for this run',
-      skip: true,
-    },
-    {
-      label: 'Allow DELETE requests',
-      description: 'Run DELETE methods normally',
-      skip: false,
-    },
-  ];
-  const active = items.find((item) => item.skip === defaultSkip) ?? items[1];
-  const picked = await window.showQuickPick(items, {
-    title: 'Destructive requests',
-    placeHolder: 'Skip DELETE requests for this run?',
-    ...(active === undefined ? {} : { activeItems: [active] }),
-  });
-  return picked?.skip;
-}
-
-async function pickFailurePolicy(): Promise<FailurePolicyKind | undefined> {
-  const items = listFailurePolicies().map((policy) => ({
-    label: policy.label,
-    description: policy.kind,
-    policyKind: policy.kind,
-  }));
-  const picked = await window.showQuickPick(items, {
-    title: 'Collection run failure policy',
-    placeHolder: 'Choose how failures are handled',
-  });
-  return picked?.policyKind;
 }
 
 async function pickCollectionId(discovery: CollectionDiscoveryService): Promise<string | undefined> {

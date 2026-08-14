@@ -13,7 +13,26 @@ From the Collections tree:
 | Selected request nodes | **API Hero: Run Selected Requests** |
 | Collection with tests | **API Hero: Run Collection Tests** |
 
-Progress appears in the **Execution** Activity Bar view and the status bar (`API Hero Running`). When finished, a toast summarizes outcomes and the **Collection Run Report** panel opens.
+These commands open **Collection Run Setup** (not a QuickPick-first flow). Configure the run, then start. Progress appears in the **Execution** Activity Bar view and the status bar (`API Hero Running`). When finished, a toast summarizes outcomes and the **Collection Run Report** panel opens.
+
+## Collection Run Setup
+
+**Collection Run Setup** is the dedicated VS Code screen for collection, folder, and selected-request runs:
+
+| Area | Behavior |
+| --- | --- |
+| Environment | Choose a named environment or **No Environment**. Switching refreshes the variable preview. |
+| Variables | Masked preview of resolved names, display values, and scope labels for the selected environment. Sensitive values stay masked. |
+| Authentication | Centralized Authentication UI: collection default or resolved workspace default. Types: No Auth, Bearer Token, Basic Auth, API Key. Request `@auth` still wins per request. |
+| Requests | Tree of folders and requests. Toggle folders, individual requests, or all. The run plan uses the selected membership. |
+| Continue / Stop | **Continue on Error** or **Stop on First Failure**. Setup V1 does not expose `ask` or `skip-invalid-requests` (those remain available to MCP/settings). |
+| Run / Cancel | **Run** starts the collection run. **Cancel** closes Setup without executing. |
+
+Retry and skip-destructive stay workspace settings — they are not Setup fields.
+
+**Run Again** on the Collection Run Report reopens Setup with the previous submitted configuration (environment, authentication preference, selected requests, and Continue/Stop).
+
+OAuth is not offered. Secrets never appear in Setup — only masked variable values and auth metadata.
 
 ## Execution view
 
@@ -46,13 +65,8 @@ User cancel stops the run; in-flight request is aborted when possible; remaining
 
 ## Run Options (retry + destructive skip)
 
-After the failure policy is resolved, API Hero prompts for **Run Options**
-(QuickPick — no separate settings page):
-
-1. **Retries** — Off, settings preset (e.g. `2 exponential 500ms`), or Custom…
-2. **Destructive requests** — Skip DELETE for this run, or allow DELETE
-
-Defaults come from settings (pre-selected in the QuickPick):
+Retry and skip-destructive stay **workspace settings** (not Collection Run Setup fields).
+Defaults:
 
 | Setting | Default | Meaning |
 | --- | --- | --- |

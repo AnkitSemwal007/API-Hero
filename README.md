@@ -4,7 +4,7 @@
 
 Author `.api` requests beside your code, organize them in Git-friendly collections, run with assertions, and reuse the same workflows from MCP or the `apihero` CLI.
 
-> Extension ID: **`ankitsemwal.api-hero`** · Version: **2.12.0** · License: [MIT](LICENSE)
+> Extension ID: **`ankitsemwal.api-hero`** · Version: **2.12.1** · License: [MIT](LICENSE)
 
 [Website](https://apihero.in/) · [Marketplace](https://marketplace.visualstudio.com/items?itemName=ankitsemwal.api-hero) · [npm CLI](https://www.npmjs.com/package/@ankitsemwal007/api-hero) · [Documentation](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/README.md) · [Changelog](CHANGELOG.md) · [Support](SUPPORT.md)
 
@@ -12,7 +12,7 @@ Author `.api` requests beside your code, organize them in Git-friendly collectio
 
 Install from the Marketplace, open a folder workspace, create a `.api` request, and run it with `Ctrl+Alt+R` / `Cmd+Alt+R`.
 
-**2.12.0** includes HTTP / REST, GraphQL-over-HTTP, bounded WebSocket sessions, Collections, Variables, Environments, Assertions, Extraction, OpenAPI / Postman / Insomnia / cURL import, TypeScript generation, source-code integration (CodeLens), Collection Run Report export, portable `.apihero` project packages, MCP, and the `apihero` CLI.
+**2.12.1** includes HTTP / REST, GraphQL-over-HTTP, bounded WebSocket sessions, first-class GraphQL and WebSocket Request Editors, Environment & Variables UI, centralized Authentication UI (No Auth, Bearer Token, Basic Auth, API Key), Collection Run Setup, Collections, Variables, Environments, Assertions, Extraction, OpenAPI / Postman / Insomnia / cURL import, TypeScript generation, source-code integration (CodeLens), Collection Run Report export, portable `.apihero` project packages, MCP, and the `apihero` CLI.
 
 ---
 
@@ -95,16 +95,17 @@ Custom editor view type: **`apiHero.requestEditor`** (default for `*.api`).
 
 | Area | What you can do |
 | --- | --- |
+| Protocol | HTTP, GraphQL, or WebSocket (`@protocol`; HTTP omits the directive) |
 | Method / URL | Edit method and URL (including `{{variables}}`) |
 | Params | Query parameters |
 | Headers | Request headers |
-| Body | JSON / form / raw body |
-| Variables | Document / request variables; `{{` autocomplete |
-| Auth | Profile binding, collection default, **one-shot Bearer** (Send only — never written to `.api`) |
+| Body | REST: JSON / form / raw. GraphQL: Query / Variables / Operation name. WebSocket: Message body |
+| Variables | Document / request variables; `{{` autocomplete; masked resolution preview |
+| Auth | Centralized Authentication UI: No Auth, Bearer Token, Basic Auth, API Key; collection default; **one-shot Bearer** (Send only — never written to `.api`) |
 | Extract | `@extract` / `@sensitive-extract` rules |
 | Tests | `expect` assertions |
 | Dependencies | `@depends-on` picker (human-readable refs) |
-| Run | Send / Run with assertions; response panel |
+| Run | Send / Run with assertions / **Run Session** (WebSocket bounded session); response panel |
 
 Open via **API Hero: Open Request Editor** when the text editor is active.
 
@@ -133,10 +134,11 @@ Collections/<Name>/
 - **Import / Export** — **API Hero: Import Collection** / **Export Collection**
 - Loose `.api` files outside Collections may appear under **Legacy** until moved
 
-**Collection Runner** executes many requests in a collection, folder, or selection. Live progress appears in the **Execution** view.
+**Collection Runner** executes many requests in a collection, folder, or selection. **Collection Run Setup** opens first: environment selection, variable preview, authentication, request selection, and Continue on Error / Stop on First Failure. Live progress appears in the **Execution** view.
 
-- **Failure policies** (`apiHero.collectionRunner.failurePolicy`): `ask` (default), `stop-on-first-error`, `continue-on-error`, `skip-invalid-requests`
-- **Run Options** — optional retries for eligible transport failures and skip DELETE for the run
+- **Collection Run Setup** — configure the run, then start; **Run Again** restores the previous setup
+- **Failure policies** (`apiHero.collectionRunner.failurePolicy`): `ask` (default), `stop-on-first-error`, `continue-on-error`, `skip-invalid-requests`. Setup V1 exposes Continue / Stop; `ask` and `skip-invalid-requests` remain available to MCP/settings
+- **Run Options** — optional retries for eligible transport failures and skip DELETE for the run (workspace settings)
 - **Outcomes:** `passed` / `failed` / `skipped` / `cancelled`
 - **Open Live Report** / **Open Run Report** when finished
 - **Export** the Collection Run Report as redacted JSON or standalone HTML (snapshot of the report model; **Run Again** remains available)
@@ -185,9 +187,9 @@ OS `process.env` is **not** mapped automatically to `{{variable}}`.
 
 ### Authentication
 
-**Providers only:** `none` · `basic` · `bearer` · `apiKey`
+**Providers only:** No Auth · Bearer Token · Basic Auth · API Key (`none` · `bearer` · `basic` · `apiKey`)
 
-Profiles live in **API Hero: Manage Authentication**. Attach with `@auth <profile-id>`, a collection default, or a one-shot Bearer in the Request Editor (not persisted to `.api`).
+Profiles live in **API Hero: Manage Authentication**. The same centralized Authentication UI appears on the Request Editor Auth tab, Collection default auth, and Collection Run Setup. Attach with `@auth <profile-id>`, a collection default, or a one-shot Bearer in the Request Editor (not persisted to `.api`).
 
 **OAuth2 Account Login is not available.** Authentication Login API (session login against *your* API) **is** included — that is separate from Account Login.
 
@@ -447,7 +449,7 @@ From a local build:
 ```bash
 npm install
 npm run package
-code --install-extension release/api-hero-2.12.0.vsix
+code --install-extension release/api-hero-2.12.1.vsix
 ```
 
 Open **API Hero: Open Overview** anytime for quick actions.
@@ -480,6 +482,7 @@ Requires **Node.js 18+**. See [CLI](#cli).
 | CLI | [cli.md](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/cli.md) |
 | MCP for AI agents | [mcp.md](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/mcp.md) |
 | Configuration | [configuration.md](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/reference/configuration.md) |
+| Release notes 2.12.1 | [v2.12.1-release-notes.md](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/release/v2.12.1-release-notes.md) |
 | Release notes 2.12.0 | [v2.12.0-release-notes.md](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/release/v2.12.0-release-notes.md) |
 | Release notes 2.11.0 | [v2.11.0-release-notes.md](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/release/v2.11.0-release-notes.md) |
 | Release notes 2.10.1 | [v2.10.1-release-notes.md](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/release/v2.10.1-release-notes.md) |
