@@ -6,7 +6,10 @@ import {
   type TextDocument,
 } from 'vscode';
 
-import { registerCommandWithLegacyAlias } from '../../commands';
+import {
+  registerCommandWithLegacyAlias,
+  type MappedRunRequestSource,
+} from '../../commands';
 import type { CollectionDiscoveryService } from '../../collections';
 import { COMMAND_IDS } from '../../constants';
 import { API_LANGUAGE_ID } from '../../language-support/constants';
@@ -14,6 +17,7 @@ import type { Logger } from '../../shared';
 import {
   catalogFromWorkspace,
   type CatalogDocumentOverlay,
+  type CatalogRequest,
   type SourceIntegrationCatalog,
 } from '../index';
 import {
@@ -22,6 +26,7 @@ import {
   resolveMappedRequest,
 } from './commands';
 import { SOURCE_LANGUAGE_IDS } from '../languages';
+import { resolveSourceRun as resolveSourceRunRequest } from './resolve-source-run';
 import { SourceIntegrationCodeLensProvider } from './source-code-lens-provider';
 import { SourceIntegrationHoverProvider } from './source-hover-provider';
 
@@ -33,7 +38,8 @@ export interface RegisterSourceIntegrationOptions {
 
 /**
  * Registers VS Code CodeLens, hover, and navigation for explicit source ↔ `.api`
- * mappings. Does not scan the workspace on activation.
+ * mappings, plus Quick Run from a detectable `fetch("https://...")` call.
+ * Does not scan the workspace on activation.
  */
 export function registerSourceIntegration(
   options: RegisterSourceIntegrationOptions,
@@ -142,6 +148,8 @@ export function registerSourceIntegration(
         getWorkspaceRoots(),
         suppliedArgument,
       ),
+    resolveSourceRun: async (suppliedArgument: unknown) =>
+      resolveSourceRunRequest(getCatalog(), getWorkspaceRoots(), suppliedArgument),
   };
 }
 
@@ -149,7 +157,10 @@ export interface SourceIntegrationRegistration {
   readonly disposables: readonly Disposable[];
   readonly resolveMappedRun: (
     suppliedArgument: unknown,
-  ) => Promise<import('../models').CatalogRequest | undefined>;
+  ) => Promise<CatalogRequest | undefined>;
+  readonly resolveSourceRun: (
+    suppliedArgument: unknown,
+  ) => Promise<MappedRunRequestSource | undefined>;
 }
 
 function collectOpenApiOverlays(): readonly CatalogDocumentOverlay[] {

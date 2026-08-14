@@ -91,7 +91,7 @@ export function documentToRequestSource(
 
   const { baseUrl, queryParams } = splitUrlAndQuery(request.url);
   const headers = collectHeaders(request);
-  const body = mapBody(request.body, headers);
+  const body = mapBody(request.body, headers, protocol);
   const expectLines = extractAssertionsForDocument(document, sourceText)[0]
     ?.lines.map((line) => line.text.trim())
     .filter((line) => line.length > 0);
@@ -277,6 +277,7 @@ function parseDisabledHeaderComment(
 function mapBody(
   body: BodyNode | undefined,
   headers: readonly RequestSourceHeader[],
+  protocol: string | undefined,
 ): RequestSourceBody | undefined {
   if (body === undefined) {
     return { type: 'none' };
@@ -284,6 +285,7 @@ function mapBody(
 
   const contentType = findHeaderValue(headers, 'content-type');
   const media = mediaType(contentType);
+  const isWebsocket = protocol?.trim().toLowerCase() === 'websocket';
 
   switch (body.type) {
     case AstNodeType.JsonBody:
@@ -301,7 +303,7 @@ function mapBody(
         }));
         return { type: 'form', fields };
       }
-      if (media?.startsWith('text/') === true) {
+      if (media?.startsWith('text/') === true || isWebsocket) {
         return { type: 'text', text: body.content };
       }
       return {

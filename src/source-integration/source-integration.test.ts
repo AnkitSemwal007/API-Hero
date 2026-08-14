@@ -204,6 +204,23 @@ test('unsupported source without annotations has no CodeLens', () => {
   assert.deepEqual(lenses, []);
 });
 
+test('bare fetch URL without @api-hero has no CodeLens', () => {
+  const catalog = buildSourceIntegrationCatalog([
+    request({
+      id: 'request:a#0',
+      name: 'Random User',
+      method: 'GET',
+      url: 'https://randomuser.me/api/',
+    }),
+  ]);
+  const lenses = createSourceFileCodeLensDescriptors(
+    'fetch("https://randomuser.me/api/");\n',
+    catalog,
+    { sourceFilePath: 'file:///ws/src/user.ts', workspaceRoots: ['file:///ws'] },
+  );
+  assert.deepEqual(lenses, []);
+});
+
 test('multi-root: unique path maps; duplicate names across roots do not', () => {
   const catalog = buildSourceIntegrationCatalog([
     request({

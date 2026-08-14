@@ -3,6 +3,7 @@
  */
 
 import {
+  compileGraphqlEditorEnvelope,
   serializeRequestDocument,
   type RequestSourceBody,
   type RequestSourceDocument,
@@ -82,7 +83,7 @@ export function mapPostmanRequest(input: MapRequestInput): MapRequestResult {
   }
 
   const req = input.request as PostmanRequestLike;
-  const method = normalizeMethod(req.method);
+  let method = normalizeMethod(req.method);
   const urlResult = mapUrl(req.url, `${input.path}/url`);
   diagnostics.push(...urlResult.diagnostics);
 
@@ -90,9 +91,9 @@ export function mapPostmanRequest(input: MapRequestInput): MapRequestResult {
   const bodyResult = mapBody(req.body, `${input.path}/body`);
   diagnostics.push(...bodyResult.diagnostics);
 
-  const comments: string[] = [];
-  if (bodyResult.comment !== undefined) {
-    comments.push(bodyResult.comment);
+  // GraphQL-over-HTTP: same GET/empty → POST coercion as New Request.
+  if (bodyResult.protocol === 'graphql' && method === 'GET') {
+    method = 'POST';
   }
 
   const description =
@@ -129,12 +130,12 @@ export function mapPostmanRequest(input: MapRequestInput): MapRequestResult {
     ...(input.authProfileId !== undefined
       ? { authProfileId: input.authProfileId }
       : {}),
-    ...(comments.length > 0 ? { comments } : {}),
     ...(filteredHeaders.length > 0 ? { headers: filteredHeaders } : {}),
     ...(urlResult.queryParams.length > 0
       ? { queryParams: urlResult.queryParams }
       : {}),
     ...(bodyResult.body !== undefined ? { body: bodyResult.body } : {}),
+    ...(bodyResult.protocol === 'graphql' ? { protocol: 'graphql' as const } : {}),
     ...(variables.length > 0 ? { variables } : {}),
   };
 
@@ -401,7 +402,7 @@ function mapBody(
   path: string,
 ): {
   readonly body?: RequestSourceBody;
-  readonly comment?: string;
+  readonly protocol?: 'graphql';
   readonly diagnostics: readonly ImportDiagnostic[];
 } {
   const diagnostics: ImportDiagnostic[] = [];
@@ -479,43 +480,7 @@ function mapBody(
       return { body: { type: 'multipart', fields }, diagnostics };
     }
     case 'graphql': {
-      diagnostics.push({
-        code: 'postman-unsupported-graphql',
-        severity: 'warning',
-        path,
-        message:
-          'GraphQL request body is not fully supported; imported as raw JSON stub when possible.',
-      });
-      const gql = body.graphql;
-      if (isPlainObject(gql)) {
-        const query = typeof gql.query === 'string' ? gql.query : '';
-        let variablesValue: unknown;
-        if (gql.variables !== undefined) {
-          if (typeof gql.variables === 'string') {
-            try {
-              variablesValue = JSON.parse(gql.variables) as unknown;
-            } catch {
-              variablesValue = gql.variables;
-            }
-          } else {
-            variablesValue = gql.variables;
-          }
-        }
-        const stubObj = {
-          query,
-          ...(variablesValue !== undefined ? { variables: variablesValue } : {}),
-        };
-        const scrubbed = scrubSensitiveExampleValue(stubObj);
-        return {
-          body: {
-            type: 'json',
-            text: JSON.stringify(scrubbed, null, 2),
-          },
-          comment: 'Imported from Postman GraphQL body (best-effort).',
-          diagnostics,
-        };
-      }
-      return { diagnostics };
+      return mapGraphqlBody(body.graphql, path);
     }
     case 'file': {
       diagnostics.push({
@@ -541,6 +506,101 @@ function mapBody(
       return { diagnostics };
     }
   }
+}
+
+/**
+ * Maps Postman `body.mode === 'graphql'` onto the native GraphQL envelope.
+ * Detects GraphQL only from mode — never from URL.
+ */
+function mapGraphqlBody(
+  graphqlRaw: unknown,
+  path: string,
+): {
+  readonly body?: RequestSourceBody;
+  readonly protocol?: 'graphql';
+  readonly diagnostics: readonly ImportDiagnostic[];
+} {
+  const diagnostics: ImportDiagnostic[] = [];
+  if (!isPlainObject(graphqlRaw)) {
+    diagnostics.push({
+      code: 'postman-unsupported-graphql',
+      severity: 'warning',
+      path,
+      message:
+        'GraphQL body is missing a graphql object; request was not imported as GraphQL.',
+    });
+    return { diagnostics };
+  }
+
+  const queryRaw = typeof graphqlRaw.query === 'string' ? graphqlRaw.query : '';
+  if (queryRaw.trim().length === 0) {
+    diagnostics.push({
+      code: 'postman-unsupported-graphql',
+      severity: 'warning',
+      path,
+      message:
+        typeof graphqlRaw.query === 'string'
+          ? 'GraphQL query is empty; request was not imported as GraphQL.'
+          : 'GraphQL query is missing; request was not imported as GraphQL.',
+    });
+    return { diagnostics };
+  }
+
+  const queryScrubbed = scrubSensitiveExampleValue(queryRaw);
+  const query = typeof queryScrubbed === 'string' ? queryScrubbed : queryRaw;
+
+  const variables = graphqlVariablesText(graphqlRaw.variables);
+  if (variables.omitted) {
+    diagnostics.push({
+      code: 'postman-unsupported-graphql-variables',
+      severity: 'warning',
+      path,
+      message:
+        'GraphQL variables were not a JSON object and were omitted.',
+    });
+  }
+
+  const operationName =
+    typeof graphqlRaw.operationName === 'string'
+      ? graphqlRaw.operationName
+      : '';
+
+  return {
+    body: compileGraphqlEditorEnvelope(query, variables.text, operationName),
+    protocol: 'graphql',
+    diagnostics,
+  };
+}
+
+function graphqlVariablesText(raw: unknown): {
+  readonly text: string;
+  readonly omitted: boolean;
+} {
+  if (raw === undefined) {
+    return { text: '{}', omitted: false };
+  }
+  if (typeof raw === 'string') {
+    try {
+      return graphqlVariablesFromObject(JSON.parse(raw) as unknown);
+    } catch {
+      return { text: '{}', omitted: true };
+    }
+  }
+  return graphqlVariablesFromObject(raw);
+}
+
+function graphqlVariablesFromObject(value: unknown): {
+  readonly text: string;
+  readonly omitted: boolean;
+} {
+  if (!isPlainObject(value)) {
+    return { text: '{}', omitted: true };
+  }
+  const scrubbed = scrubSensitiveExampleValue(value);
+  if (!isPlainObject(scrubbed)) {
+    return { text: '{}', omitted: true };
+  }
+  return { text: JSON.stringify(scrubbed, null, 2), omitted: false };
 }
 
 function mapFormFields(

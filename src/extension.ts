@@ -1,5 +1,5 @@
 import type { ExtensionContext } from 'vscode';
-import { commands, languages, Position, Uri, window, workspace } from 'vscode';
+import { commands, languages, window } from 'vscode';
 
 import {
   CommandRegistrar,
@@ -814,20 +814,8 @@ export async function activate(context: ExtensionContext): Promise<void> {
     logger,
     discovery: collectionsRegistration.discovery,
   });
-  mappedRunHolder.current = async (argument) => {
-    const request = await sourceIntegration.resolveMappedRun(argument);
-    if (request === undefined) {
-      return undefined;
-    }
-    const document = await workspace.openTextDocument(Uri.parse(request.filePath));
-    return {
-      text: document.getText(),
-      sourceId: document.uri.toString(),
-      offset: document.offsetAt(
-        new Position(request.range.start.line, request.range.start.column),
-      ),
-    };
-  };
+  mappedRunHolder.current = async (argument) =>
+    sourceIntegration.resolveSourceRun(argument);
 
   context.subscriptions.push(
     outputChannel,

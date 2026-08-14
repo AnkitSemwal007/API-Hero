@@ -20,7 +20,12 @@ import {
   iconHtml,
   WEBVIEW_SHARED_CSS,
 } from '../../ui/webview';
-import type { RequestSourceDocument } from '../../request-source';
+import {
+  DEFAULT_GRAPHQL_REQUEST_URL,
+  DEFAULT_HTTP_REQUEST_URL,
+  DEFAULT_WEBSOCKET_REQUEST_URL,
+  type RequestSourceDocument,
+} from '../../request-source';
 import { VARIABLE_INTELLISENSE_SCRIPT } from './variable-intellisense-script';
 
 export { escapeAttribute, escapeHtml };
@@ -54,7 +59,7 @@ export function renderRequestEditorHtml(nonce: string): string {
         <option value="websocket">WebSocket</option>
       </select>
     </label>
-    <label class="field method">
+    <label class="field method" id="methodField">
       <span class="sr-only">Method</span>
       <select id="method" class="method-select method-get" aria-label="HTTP method">${methodOptions}</select>
     </label>
@@ -368,7 +373,7 @@ export function emptyRequestEditorModel(): RequestSourceDocument {
   return {
     name: 'New Request',
     method: 'GET',
-    url: 'https://httpbin.org/get',
+    url: DEFAULT_HTTP_REQUEST_URL,
     headers: [],
     queryParams: [],
     body: { type: 'none' },
@@ -1013,6 +1018,9 @@ const EDITOR_SCRIPT = `
   /** Host Authentication list for Saved mode preview (metadata only; no secrets). */
   let authProfileOptions = [];
   const AUTH_MASK = ${JSON.stringify(AUTHENTICATION_PRESENTATION_MASK)};
+  const DEFAULT_HTTP_REQUEST_URL = ${JSON.stringify(DEFAULT_HTTP_REQUEST_URL)};
+  const DEFAULT_GRAPHQL_REQUEST_URL = ${JSON.stringify(DEFAULT_GRAPHQL_REQUEST_URL)};
+  const DEFAULT_WEBSOCKET_REQUEST_URL = ${JSON.stringify(DEFAULT_WEBSOCKET_REQUEST_URL)};
   /** Last request authProfileId from the model — oneshot must not strip it. */
   let modelAuthProfileId = '';
   /** Last applied protocol select value — used to detect GraphQL switch-in/out. */
@@ -1089,7 +1097,7 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
     return {
       name: 'New Request',
       method: 'GET',
-      url: 'https://httpbin.org/get',
+      url: DEFAULT_HTTP_REQUEST_URL,
       headers: [],
       queryParams: [],
       body: { type: 'none' },
@@ -1724,6 +1732,18 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
     renderKvRows('headersTable', rows, true);
   }
 
+  function dropStockJsonContentTypeHeader() {
+    const rows = readKvTable('headersTable', true);
+    const next = rows.filter((row) => {
+      const name = String(row.name || '').trim().toLowerCase();
+      const value = String(row.value || '').trim().toLowerCase();
+      return !(name === 'content-type' && value === 'application/json');
+    });
+    if (next.length !== rows.length) {
+      renderKvRows('headersTable', next, true);
+    }
+  }
+
   function graphqlEditorFieldsAreEmpty() {
     return String(el('graphqlQuery').value || '').trim().length === 0
       && String(el('graphqlOperationName').value || '').trim().length === 0;
@@ -1786,13 +1806,63 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
     el('bodyText').value = compiled.text;
   }
 
+  function isStockHttpOrGraphqlDefaultUrl(url) {
+    const trimmed = String(url || '').trim();
+    return trimmed.length === 0
+      || trimmed === DEFAULT_HTTP_REQUEST_URL
+      || trimmed === DEFAULT_GRAPHQL_REQUEST_URL;
+  }
+
+  function isStockWebsocketOrGraphqlDefaultUrl(url) {
+    const trimmed = String(url || '').trim();
+    return trimmed === DEFAULT_WEBSOCKET_REQUEST_URL
+      || trimmed === DEFAULT_GRAPHQL_REQUEST_URL;
+  }
+
+  function coerceWebsocketBodyTypeInForm() {
+    const type = el('bodyType').value;
+    if (type === 'none' || type === 'json' || type === 'text') {
+      return;
+    }
+    const text = String(el('bodyText').value || '').trim();
+    el('bodyType').value = text.length > 0 ? 'text' : 'none';
+    if (text.length === 0) {
+      el('bodyText').value = '';
+    }
+    el('rawContentType').value = '';
+  }
+
   function handleProtocolChange() {
     const next = String(el('protocol').value || '');
     const prev = lastProtocol;
     if (isGraphqlProtocol(next) && !isGraphqlProtocol(prev)) {
       applyGraphqlSwitchIn();
+      const url = el('url');
+      if (url && String(url.value || '').trim() === DEFAULT_WEBSOCKET_REQUEST_URL) {
+        url.value = DEFAULT_GRAPHQL_REQUEST_URL;
+      }
     } else if (!isGraphqlProtocol(next) && isGraphqlProtocol(prev)) {
       applyGraphqlSwitchOut();
+    }
+    if (isWebsocketProtocol(next) && !isWebsocketProtocol(prev)) {
+      coerceWebsocketBodyTypeInForm();
+      const methodSelect = el('method');
+      if (methodSelect) {
+        methodSelect.value = 'GET';
+        syncMethodSelect();
+      }
+      if (isGraphqlProtocol(prev)) {
+        dropStockJsonContentTypeHeader();
+      }
+      const url = el('url');
+      if (url && isStockHttpOrGraphqlDefaultUrl(url.value)) {
+        url.value = DEFAULT_WEBSOCKET_REQUEST_URL;
+      }
+    } else if (!isWebsocketProtocol(next) && !isGraphqlProtocol(next)) {
+      const url = el('url');
+      if (url && isStockWebsocketOrGraphqlDefaultUrl(url.value)) {
+        url.value = DEFAULT_HTTP_REQUEST_URL;
+      }
     }
     lastProtocol = next;
     applyProtocolChrome();
@@ -1803,8 +1873,10 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
     const protocol = el('protocol') ? el('protocol').value : '';
     const websocket = isWebsocketProtocol(protocol);
     const graphql = isGraphqlProtocol(protocol);
-    const methodField = el('method') ? el('method').closest('.field') : null;
+    const methodField = el('methodField') || (el('method') ? el('method').closest('.field') : null);
     if (methodField) methodField.hidden = websocket;
+    const methodSelect = el('method');
+    if (methodSelect) methodSelect.hidden = websocket;
     const badge = el('protocolBadge');
     if (badge) {
       if (websocket) {
@@ -1819,8 +1891,8 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
     }
     const url = el('url');
     if (url) {
-      url.placeholder = websocket ? 'ws://localhost:8080/socket' : 'https://api.example.com/resource';
-      url.setAttribute('aria-label', 'URL');
+      url.placeholder = websocket ? DEFAULT_WEBSOCKET_REQUEST_URL : 'https://api.example.com/resource';
+      url.setAttribute('aria-label', websocket ? 'WebSocket URL' : 'URL');
     }
     const connection = el('websocketConnection');
     const messagesPanel = el('websocketMessagesPanel');
@@ -1905,6 +1977,12 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
       );
     }
     const type = el('bodyType').value;
+    if (isWebsocketProtocol(el('protocol').value) && type !== 'none' && type !== 'json' && type !== 'text') {
+      const text = el('bodyText').value;
+      return String(text || '').trim().length > 0
+        ? { type: 'text', text: text }
+        : { type: 'none' };
+    }
     if (type === 'none') return { type: 'none' };
     if (type === 'json') return { type: 'json', text: el('bodyText').value };
     if (type === 'text') return { type: 'text', text: el('bodyText').value };
@@ -2102,6 +2180,7 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
 
   function updateBodyVisibility() {
     const graphql = isGraphqlProtocol(el('protocol').value);
+    const websocket = isWebsocketProtocol(el('protocol').value);
     const bodyGraphql = el('bodyGraphql');
     const bodyTypeField = el('bodyTypeField');
     if (bodyGraphql) bodyGraphql.hidden = !graphql;
@@ -2116,7 +2195,7 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
     }
     const type = el('bodyType').value;
     el('bodyJsonText').hidden = !(type === 'json' || type === 'text' || type === 'raw');
-    el('rawContentTypeField').hidden = type !== 'raw';
+    el('rawContentTypeField').hidden = websocket || type !== 'raw';
     el('bodyForm').hidden = type !== 'form';
     el('bodyMultipart').hidden = type !== 'multipart';
     el('bodyBinary').hidden = type !== 'binary';
@@ -2193,6 +2272,13 @@ ${VARIABLE_INTELLISENSE_SCRIPT}
       }
       updateBodyVisibility();
       return;
+    }
+    if (isWebsocketProtocol(el('protocol').value)) {
+      const incomingType = body && body.type ? body.type : 'none';
+      if (incomingType !== 'json' && incomingType !== 'text' && incomingType !== 'none') {
+        const text = typeof body.text === 'string' ? body.text : '';
+        body = text.trim().length > 0 ? { type: 'text', text: text } : { type: 'none' };
+      }
     }
     const type = body && body.type ? body.type : 'none';
     setFieldValue('bodyType', type);

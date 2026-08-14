@@ -12,11 +12,15 @@
 
 Yes — **queries and mutations over HTTP**. Add `@protocol graphql` (or choose GraphQL in the Request Editor protocol selector). The Body tab becomes Query / Variables / Operation name. See [GraphQL](./graphql.md).
 
-Subscriptions, GraphQL schema / Postman GraphQL import are not supported. Bounded WebSocket sessions are a separate protocol — see [WebSocket](./websocket.md).
+Postman Collection GraphQL bodies import as native `@protocol graphql`. Insomnia GraphQL remains a stub. Subscriptions and GraphQL schema import are not supported. Bounded WebSocket sessions are a separate protocol — see [WebSocket](./websocket.md).
 
 ## Is WebSocket supported?
 
-Yes — **bounded connect / send / receive / close sessions** (`ws://` and `wss://`). Add `@protocol websocket` (or choose WebSocket in the Request Editor). **Run Session** is not a persistent connection. Persistent connections, subscriptions, reconnect, and binary frames are not supported. See [WebSocket](./websocket.md).
+Yes — **bounded connect / send / receive / close sessions** (`ws://` and `wss://`). Add `@protocol websocket` (or choose WebSocket in the Request Editor). There is no HTTP method selector; the toolbar is Protocol | WS | URL, and the Body tab is **Message**. **Run Session** is not a persistent connection. Persistent connections, subscriptions, reconnect, and binary frames are not supported. See [WebSocket](./websocket.md).
+
+## Can I run a request from source without `@api-hero`?
+
+Yes — **Quick Run**. Right-click a JS/TS `fetch("https://...")` and **Run Request**. Unique catalog matches reuse the existing `.api` file; otherwise a temporary request runs through `ExecutionOrchestrator`. That is not automatic persistent mapping. CodeLens, Open API Definition, and Generate TypeScript still require `@api-hero`. See [Source-code integration](./source-integration.md).
 
 ## Is OAuth2 supported?
 

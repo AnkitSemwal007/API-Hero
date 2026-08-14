@@ -738,7 +738,23 @@ describe('request editor webview helpers', () => {
     assert.match(html, /id="websocketStatus"/u);
     assert.match(html, /role="status"/u);
     assert.match(html, /id="websocketMessages"/u);
+    assert.match(html, /id="methodField"/u);
+    assert.match(html, /id="protocolBadge"/u);
     assert.match(html, /function applyProtocolChrome/u);
+    assert.match(html, /methodField\.hidden = websocket/u);
+    assert.match(html, /methodSelect\.hidden = websocket/u);
+    assert.match(html, /badge\.textContent = 'WS'/u);
+    assert.match(
+      html,
+      /\[hidden\]\s*\{\s*display:\s*none\s*!important;/u,
+    );
+    assert.match(html, /ws:\/\/localhost:8080\/socket/u);
+    assert.match(html, /coerceWebsocketBodyTypeInForm/u);
+    assert.match(html, /dropStockJsonContentTypeHeader/u);
+    assert.match(html, /methodSelect\.value = 'GET'/u);
+    assert.match(html, /isStockHttpOrGraphqlDefaultUrl/u);
+    assert.match(html, /url\.value = DEFAULT_GRAPHQL_REQUEST_URL/u);
+    assert.match(html, /rawContentTypeField'\)\.hidden = websocket \|\| type !== 'raw'/u);
     assert.match(html, /Run Session/u);
     assert.match(html, /id="runLabel">Run<\/span>/u);
     assert.match(html, /message\.type === 'websocketSession'/u);
@@ -749,6 +765,9 @@ describe('request editor webview helpers', () => {
     assert.match(html, /No request found in this file/u);
     assert.doesNotMatch(html, /No HTTP request found/u);
     assert.doesNotMatch(html, /no protocol dropdown in Phase 1/u);
+    assert.equal(emptyRequestEditorModel().method, 'GET');
+    assert.equal(emptyRequestEditorModel().url, 'https://httpbin.org/get');
+    assert.equal(emptyRequestEditorModel().protocol, undefined);
     assert.equal(
       parseRequestSourceDocument({
         name: 'Echo',
@@ -761,6 +780,17 @@ describe('request editor webview helpers', () => {
     assert.deepEqual(parseRequestEditorMessage({ type: 'run' }), {
       type: 'run',
     });
+  });
+
+  test('WebSocket editor does not apply HTTP Content-Type defaults', () => {
+    const html = renderRequestEditorHtml('ws-ct');
+    assert.match(html, /el\('rawContentTypeField'\)\.hidden = websocket \|\| type !== 'raw'/u);
+    assert.match(html, /el\('rawContentType'\)\.value = ''/u);
+    assert.match(html, /placeholder="application\/xml"/u);
+    assert.match(
+      html,
+      /isWebsocketProtocol\(el\('protocol'\)\.value\) && type !== 'none' && type !== 'json' && type !== 'text'/u,
+    );
   });
 
   test('createWebsocketSessionMessage builds secret-free host messages', () => {

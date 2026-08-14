@@ -383,6 +383,29 @@ describe('documentToRequestSource / parseSourceToRequestDocument', () => {
     }
   });
 
+  test('projects @protocol websocket with GET and text body from existing source', () => {
+    const parsed = parseSourceToRequestDocument(
+      [
+        '@protocol websocket',
+        'GET wss://example.test/socket',
+        '',
+        'Hello world',
+        '',
+      ].join('\n'),
+    );
+    assert.equal(parsed.kind, 'single');
+    if (parsed.kind !== 'single') {
+      return;
+    }
+    assert.equal(parsed.document.protocol, 'websocket');
+    assert.equal(parsed.document.method, 'GET');
+    assert.equal(parsed.document.url, 'wss://example.test/socket');
+    assert.equal(parsed.document.body?.type, 'text');
+    if (parsed.document.body?.type === 'text') {
+      assert.equal(parsed.document.body.text, 'Hello world');
+    }
+  });
+
   test('projects @protocol websocket', () => {
     const parsed = parseSourceToRequestDocument(
       [
@@ -400,9 +423,15 @@ describe('documentToRequestSource / parseSourceToRequestDocument', () => {
       return;
     }
     assert.equal(parsed.document.protocol, 'websocket');
-    const roundTrip = parseSourceToRequestDocument(
-      serializeRequestDocument(parsed.document),
-    );
+    assert.equal(parsed.document.method, 'GET');
+    assert.equal(parsed.document.url, 'ws://example.test/socket');
+    assert.equal(parsed.document.body?.type, 'text');
+    if (parsed.document.body?.type === 'text') {
+      assert.equal(parsed.document.body.text, 'ping');
+    }
+    const serialized = serializeRequestDocument(parsed.document);
+    assert.doesNotMatch(serialized, /Content-Type/u);
+    const roundTrip = parseSourceToRequestDocument(serialized);
     assert.equal(roundTrip.kind, 'single');
     if (roundTrip.kind === 'single') {
       assert.equal(roundTrip.document.protocol, 'websocket');

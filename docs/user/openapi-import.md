@@ -48,7 +48,7 @@ If document- or operation-level `security` names a scheme that is **missing** fr
 - Max file / response size: `apiHero.import.maxFileBytes` (default 5 MiB).
 - Local `#/` `$ref` resolution with depth/cycle caps; remote `$ref` is out of scope (not fetched over the network).
 - Error diagnostics prevent writes and settings patches; warnings alone may still succeed.
-- Swagger 2.0 and GraphQL **import** are not supported (GraphQL bodies from Postman/Insomnia remain best-effort stubs with warnings). Authored `@protocol graphql` requests are supported — see [GraphQL](./graphql.md).
+- Swagger 2.0 is not supported. GraphQL **schema** import is not supported. Postman Collection GraphQL bodies (`body.mode = graphql`) import as native `@protocol graphql` requests — see [GraphQL](./graphql.md). Insomnia GraphQL bodies remain best-effort stubs with warnings.
 
 ## Postman Collection import
 
@@ -63,8 +63,8 @@ Import **Postman Collection v2 / v2.1** (local JSON file) through the same
 5. Review the summary (files written, environments/auth metadata patched).
 
 Secrets in names, descriptions, headers, and body examples are masked or
-replaced with placeholders. Binary file bodies and GraphQL are best-effort
-stubs with warnings.
+replaced with placeholders. Binary file bodies are stubs with warnings.
+Postman GraphQL bodies import as native GraphQL requests (`@protocol graphql`).
 
 ## Insomnia export import
 
@@ -98,7 +98,7 @@ and wizard host as Postman (local file only).
   `unit_test_suite`, `mock`
 - Auth types beyond bearer / basic / apiKey (oauth2, digest, hawk, …) —
   metadata-only `none` profiles where applicable
-- Binary / file multipart bodies (stubs + warnings); GraphQL best-effort stub
+- Binary / file multipart bodies (stubs + warnings); Insomnia GraphQL bodies remain a best-effort stub with warnings
 
 ## URL import security
 

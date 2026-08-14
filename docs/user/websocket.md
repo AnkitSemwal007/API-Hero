@@ -6,7 +6,7 @@ Persistent connections, subscriptions, reconnect, infinite streams, and binary f
 
 ## Author a WebSocket request
 
-Add `@protocol websocket` and use a `ws://` or `wss://` URL. The outgoing message is the request body. Prefer JSON (or a multi-word text line). A single alphabetic token such as `ping` is parsed as an HTTP method, not a body.
+Add `@protocol websocket` and use a `ws://` or `wss://` URL. The outgoing message is the request body, including plaintext and JSON.
 
 ```api
 @protocol websocket
@@ -33,7 +33,11 @@ Failures are connection, send, receive timeout, cancellation, or assertion/extra
 
 ## Request Editor
 
-The Request Editor protocol dropdown can set HTTP, GraphQL, or WebSocket (`@protocol`). **Run Session** is the same bounded session as CLI: connect → optional send of the Message body → receive one text frame → close. The socket is **not** kept open after the run.
+**New Request** and the Request Editor hide the HTTP method selector for WebSocket. Method stays `GET` internally on the `.api` request line for compatibility. The WebSocket URL defaults to `ws://localhost:8080/socket`.
+
+The Request Editor toolbar for WebSocket is **Protocol | WS | URL**. **Run Session** is the same bounded session as CLI: connect → optional send of the Message body → receive one text frame → close. The socket is **not** kept open after the run.
+
+The Message tab accepts **none / json / text** only. WebSocket messages do not get HTTP Content-Type defaults (`application/json`, `text/plain`, or the raw `application/xml` placeholder). Handshake headers you add yourself, including Content-Type, are kept.
 
 Params, Headers, Auth, Variables, Tests, Extract, and Settings stay available (handshake headers and auth already apply). Persistent connections are not supported.
 

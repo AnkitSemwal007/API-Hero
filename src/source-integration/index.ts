@@ -22,6 +22,19 @@ export {
   parseSourceDirectiveValue,
   sourcePathMatches,
 } from './source-ref';
+export {
+  QUICK_RUN_SOURCE_ID,
+  detectFetchAtCursor,
+  matchCatalogByMethodAndUrl,
+  normalizeConcreteHttpUrl,
+  requestDocumentFromDetectedFetch,
+  requestNameFromUrl,
+  serializeDetectedFetch,
+} from './quick-run';
+export type {
+  CatalogMethodUrlMatch,
+  DetectedFetchCall,
+} from './quick-run';
 export type {
   AnnotationResolveContext,
   CatalogRequest,

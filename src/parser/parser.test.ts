@@ -408,3 +408,33 @@ test('parses empty body, unicode headers, and very long URL lines', () => {
     'large parser document hang detector',
   );
 });
+
+test('does not report plaintext WebSocket bodies as unknown HTTP methods', () => {
+  const result = parseSource(
+    [
+      '@name New Request',
+      '@description Hello API Hero WebSocket',
+      '@protocol websocket',
+      '',
+      'GET wss://ws.postman-echo.com/raw',
+      'Content-Type: text/plain',
+      '',
+      'Hello API Hero WebSocket',
+    ].join('\n'),
+  );
+
+  assert.equal(
+    result.diagnostics.some(
+      (diagnostic) =>
+        diagnostic.code === 'lexer.unknown-http-method' ||
+        /Unknown HTTP method/.test(diagnostic.message),
+    ),
+    false,
+  );
+  assert.equal(result.ast.requests[0]?.method, 'GET');
+  assert.equal(result.ast.requests[0]?.url, 'wss://ws.postman-echo.com/raw');
+  assert.equal(result.ast.requests[0]?.body?.type, AstNodeType.RawBody);
+  if (result.ast.requests[0]?.body?.type === AstNodeType.RawBody) {
+    assert.equal(result.ast.requests[0].body.content, 'Hello API Hero WebSocket');
+  }
+});

@@ -6,7 +6,12 @@ import {
   renderNewRequestDialogHtml,
   validateCreateMessage,
 } from './new-request-dialog-html';
-import { serializeRequestDocument } from '../../request-source';
+import {
+  DEFAULT_GRAPHQL_REQUEST_URL,
+  DEFAULT_HTTP_REQUEST_URL,
+  DEFAULT_WEBSOCKET_REQUEST_URL,
+  serializeRequestDocument,
+} from '../../request-source';
 
 test('renderNewRequestDialogHtml uses nonce CSP and form controls', () => {
   const html = renderNewRequestDialogHtml('dialogNonce');
@@ -14,7 +19,9 @@ test('renderNewRequestDialogHtml uses nonce CSP and form controls', () => {
   assert.match(html, /script-src 'nonce-dialogNonce'/u);
   assert.match(html, /id="name"/u);
   assert.match(html, /id="method"/u);
+  assert.match(html, /id="methodField"/u);
   assert.match(html, /id="url"/u);
+  assert.match(html, /id="urlLabel"/u);
   assert.match(html, /id="collection"/u);
   assert.match(html, /id="folder"/u);
   assert.match(html, /id="protocol"/u);
@@ -136,7 +143,7 @@ test('validateCreateMessage seeds GraphQL protocol, POST, envelope, and Content-
     {
       name: 'GetUser',
       method: 'GET',
-      url: 'https://api.example.com/graphql',
+      url: DEFAULT_GRAPHQL_REQUEST_URL,
       description: '',
       collectionId: 'c1',
       folderRelativePath: '',
@@ -147,6 +154,7 @@ test('validateCreateMessage seeds GraphQL protocol, POST, envelope, and Content-
   assert.equal(created.error, undefined);
   assert.equal(created.model?.protocol, 'graphql');
   assert.equal(created.model?.method, 'POST');
+  assert.equal(created.model?.url, DEFAULT_GRAPHQL_REQUEST_URL);
   assert.equal(created.model?.body?.type, 'json');
   if (created.model?.body?.type === 'json') {
     assert.match(created.model.body.text, /"query"/u);
@@ -168,7 +176,7 @@ test('validateCreateMessage seeds GraphQL protocol, POST, envelope, and Content-
     {
       name: 'REST',
       method: 'GET',
-      url: 'https://example.test/users',
+      url: DEFAULT_HTTP_REQUEST_URL,
       description: '',
       collectionId: 'c1',
       folderRelativePath: '',
@@ -176,12 +184,16 @@ test('validateCreateMessage seeds GraphQL protocol, POST, envelope, and Content-
     destinations,
   );
   assert.equal(http.model?.protocol, undefined);
+  assert.equal(http.model?.method, 'GET');
+  assert.equal(http.model?.url, DEFAULT_HTTP_REQUEST_URL);
+  assert.equal(http.model?.body, undefined);
+  assert.equal(http.model?.headers, undefined);
 
   const websocket = validateCreateMessage(
     {
       name: 'Echo',
       method: 'GET',
-      url: 'ws://example.test/socket',
+      url: DEFAULT_WEBSOCKET_REQUEST_URL,
       description: '',
       collectionId: 'c1',
       folderRelativePath: '',
@@ -189,7 +201,47 @@ test('validateCreateMessage seeds GraphQL protocol, POST, envelope, and Content-
     },
     destinations,
   );
+  assert.equal(websocket.error, undefined);
   assert.equal(websocket.model?.protocol, 'websocket');
+  assert.equal(websocket.model?.method, 'GET');
+  assert.equal(websocket.model?.url, DEFAULT_WEBSOCKET_REQUEST_URL);
+  assert.equal(websocket.model?.body?.type, 'none');
+  assert.equal(websocket.model?.headers, undefined);
+  const websocketSource = serializeRequestDocument(websocket.model!);
+  assert.match(websocketSource, /@protocol websocket\n/u);
+  assert.match(websocketSource, /GET ws:\/\/localhost:8080\/socket\n/u);
+  assert.doesNotMatch(websocketSource, /Content-Type/u);
+
+  const websocketEmptyMethod = validateCreateMessage(
+    {
+      name: 'Echo',
+      method: '',
+      url: DEFAULT_WEBSOCKET_REQUEST_URL,
+      description: '',
+      collectionId: 'c1',
+      folderRelativePath: '',
+      protocol: 'websocket',
+    },
+    destinations,
+  );
+  assert.equal(websocketEmptyMethod.model?.method, 'GET');
+  assert.equal(websocketEmptyMethod.model?.protocol, 'websocket');
+
+  const websocketStalePost = validateCreateMessage(
+    {
+      name: 'Echo',
+      method: 'POST',
+      url: DEFAULT_WEBSOCKET_REQUEST_URL,
+      description: '',
+      collectionId: 'c1',
+      folderRelativePath: '',
+      protocol: 'websocket',
+    },
+    destinations,
+  );
+  assert.equal(websocketStalePost.model?.method, 'GET');
+  assert.equal(websocketStalePost.model?.protocol, 'websocket');
+  assert.equal(websocketStalePost.model?.body?.type, 'none');
 
   const unknown = validateCreateMessage(
     {
@@ -205,4 +257,29 @@ test('validateCreateMessage seeds GraphQL protocol, POST, envelope, and Content-
   );
   assert.equal(unknown.model, undefined);
   assert.match(unknown.error ?? '', /Unsupported protocol/u);
+});
+
+test('WebSocket New Request hides HTTP method and uses the WebSocket URL default', () => {
+  const html = renderNewRequestDialogHtml('ws-dialog');
+  assert.match(html, /id="methodField"/u);
+  assert.match(html, /id="urlLabel"/u);
+  assert.match(html, /function applyProtocolChrome/u);
+  assert.match(html, /methodField\.hidden = websocket/u);
+  assert.match(html, /methodSelect\.hidden = websocket/u);
+  assert.match(html, /urlLabel\.textContent = websocket \? 'WebSocket URL' : 'URL'/u);
+  assert.match(html, /id="requestLineGroup"/u);
+  assert.match(
+    html,
+    /requestLineGroup\.setAttribute\(\s*'aria-label',\s*websocket \? 'WebSocket URL' : 'Method and URL'/u,
+  );
+  assert.match(html, /ws:\/\/localhost:8080\/socket/u);
+  assert.match(
+    html,
+    /method: protocolSelect\.value === 'websocket' \? 'GET' : methodSelect\.value/u,
+  );
+  assert.doesNotMatch(
+    html,
+    /if \(protocolSelect\.value !== 'graphql'\) return/u,
+  );
+  assert.match(html, /\[hidden\]\s*\{\s*display:\s*none\s*!important;/u);
 });

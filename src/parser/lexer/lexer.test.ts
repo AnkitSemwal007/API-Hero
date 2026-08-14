@@ -14,6 +14,12 @@ function significant(tokens: readonly LexicalToken[]): readonly LexicalToken[] {
   );
 }
 
+function unknownHttpMethodDiagnostics(source: string) {
+  return lex(source).diagnostics.filter(
+    (diagnostic) => diagnostic.code === 'unknown-http-method',
+  );
+}
+
 test('consumes tokenizer output and normalizes supported HTTP methods', () => {
   const source = ['get', 'POST', 'put', 'PATCH', 'delete', 'HEAD', 'options']
     .map((method) => `${method} /resource`)
@@ -292,3 +298,66 @@ test('processes large files in one recoverable lexical pass', () => {
   assert.equal(result.diagnostics.length, 0);
   assert.equal(result.tokens.at(-1)?.kind, 'EOF');
 });
+
+test('does not treat request-body identifiers as unknown HTTP methods', () => {
+  const multiWordSource = [
+    '@protocol websocket',
+    'GET wss://ws.postman-echo.com/raw',
+    'Content-Type: text/plain',
+    '',
+    'Hello API Hero WebSocket',
+  ].join('\n');
+  const websocket = lex(multiWordSource);
+  const hello = websocket.tokens.find((token) => token.raw === 'Hello');
+  const api = websocket.tokens.find((token) => token.raw === 'API');
+
+  assert.equal(unknownHttpMethodDiagnostics(multiWordSource).length, 0);
+  assert.equal(hello?.kind, 'Identifier');
+  assert.equal(hello?.diagnostics, undefined);
+  assert.equal(api?.kind, 'Identifier');
+
+  assert.equal(
+    unknownHttpMethodDiagnostics('GET https://example.test/echo\nhello\n').length,
+    0,
+  );
+  assert.equal(
+    unknownHttpMethodDiagnostics('GET /echo\nping\n').length,
+    0,
+  );
+
+  const graphql = lex('POST /graphql\nquery {\n  ping\n}\n');
+  const query = graphql.tokens.find((token) => token.raw === 'query');
+  assert.equal(
+    graphql.diagnostics.some(
+      (diagnostic) => diagnostic.code === 'unknown-http-method',
+    ),
+    false,
+  );
+  assert.equal(query?.kind, 'Identifier');
+  assert.equal(query?.diagnostics, undefined);
+});
+
+test('still reports unknown HTTP methods on request lines at block start', () => {
+  const fetchPath = unknownHttpMethodDiagnostics('FETCH /unknown');
+  assert.equal(fetchPath.length, 1);
+  assert.equal(fetchPath[0]?.message, 'Unknown HTTP method "FETCH".');
+
+  const fetchHttps = unknownHttpMethodDiagnostics(
+    'FETCH https://example.test/users',
+  );
+  assert.equal(fetchHttps.length, 1);
+  assert.equal(fetchHttps[0]?.message, 'Unknown HTTP method "FETCH".');
+
+  const afterBoundary = unknownHttpMethodDiagnostics(
+    ['GET /first', '###', 'FETCH /next'].join('\n'),
+  );
+  assert.equal(afterBoundary.length, 1);
+  assert.equal(afterBoundary[0]?.message, 'Unknown HTTP method "FETCH".');
+
+  const fetchVariable = unknownHttpMethodDiagnostics(
+    'FETCH {{baseUrl}}/users',
+  );
+  assert.equal(fetchVariable.length, 1);
+  assert.equal(fetchVariable[0]?.message, 'Unknown HTTP method "FETCH".');
+});
+

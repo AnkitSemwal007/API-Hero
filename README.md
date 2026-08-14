@@ -4,7 +4,7 @@
 
 Author `.api` requests beside your code, organize them in Git-friendly collections, run with assertions, and reuse the same workflows from MCP or the `apihero` CLI.
 
-> Extension ID: **`ankitsemwal.api-hero`** · Version: **2.12.1** · License: [MIT](LICENSE)
+> Extension ID: **`ankitsemwal.api-hero`** · Version: **2.12.2** · License: [MIT](LICENSE)
 
 [Website](https://apihero.in/) · [Marketplace](https://marketplace.visualstudio.com/items?itemName=ankitsemwal.api-hero) · [npm CLI](https://www.npmjs.com/package/@ankitsemwal007/api-hero) · [Documentation](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/README.md) · [Changelog](CHANGELOG.md) · [Support](SUPPORT.md)
 
@@ -12,7 +12,7 @@ Author `.api` requests beside your code, organize them in Git-friendly collectio
 
 Install from the Marketplace, open a folder workspace, create a `.api` request, and run it with `Ctrl+Alt+R` / `Cmd+Alt+R`.
 
-**2.12.1** includes HTTP / REST, GraphQL-over-HTTP, bounded WebSocket sessions, first-class GraphQL and WebSocket Request Editors, Environment & Variables UI, centralized Authentication UI (No Auth, Bearer Token, Basic Auth, API Key), Collection Run Setup, Collections, Variables, Environments, Assertions, Extraction, OpenAPI / Postman / Insomnia / cURL import, TypeScript generation, source-code integration (CodeLens), Collection Run Report export, portable `.apihero` project packages, MCP, and the `apihero` CLI.
+**2.12.2** includes HTTP / REST, GraphQL-over-HTTP, bounded WebSocket sessions, first-class GraphQL and WebSocket Request Editors, Environment & Variables UI, centralized Authentication UI (No Auth, Bearer Token, Basic Auth, API Key), Collection Run Setup, Collections, Variables, Environments, Assertions, Extraction, OpenAPI / Postman / Insomnia / cURL import (Postman GraphQL as native `@protocol graphql`), TypeScript generation, source-code integration (CodeLens plus Quick Run from `fetch("https://...")`), Collection Run Report export, portable `.apihero` project packages, MCP, and the `apihero` CLI.
 
 ---
 
@@ -96,7 +96,7 @@ Custom editor view type: **`apiHero.requestEditor`** (default for `*.api`).
 | Area | What you can do |
 | --- | --- |
 | Protocol | HTTP, GraphQL, or WebSocket (`@protocol`; HTTP omits the directive) |
-| Method / URL | Edit method and URL (including `{{variables}}`) |
+| Method / URL | REST/GraphQL: method and URL (including `{{variables}}`). WebSocket: URL only — no HTTP method UI |
 | Params | Query parameters |
 | Headers | Request headers |
 | Body | REST: JSON / form / raw. GraphQL: Query / Variables / Operation name. WebSocket: Message body |
@@ -298,7 +298,7 @@ Bring existing definitions into Git-first `.api` collections. Preview before wri
 - Imported environments are created and selectable; an **existing active environment is preserved**
 - Size limit: `apiHero.import.maxFileBytes` (default 5 MiB) for OpenAPI/Postman/Insomnia; cURL paste capped at 256 KiB
 
-**Not supported:** Swagger 2.0, Insomnia Document / YAML v5, HAR, GraphQL **import** (Postman/Insomnia stub only), remote `$ref`, OAuth2 as a live auth flow, authenticated specification URLs, Postman/Insomnia script execution, gRPC / WebSocket request resources from Insomnia.
+**Not supported:** Swagger 2.0, Insomnia Document / YAML v5, HAR, GraphQL **schema** import, Insomnia GraphQL (stub only; Postman GraphQL imports as native `@protocol graphql`), remote `$ref`, OAuth2 as a live auth flow, authenticated specification URLs, Postman/Insomnia script execution, gRPC / WebSocket request resources from Insomnia.
 
 → [OpenAPI Import](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/openapi-import.md)
 
@@ -358,6 +358,8 @@ The Collection Run Debugger holds the **last run in memory** — it is **not** R
 ## Source-code integration
 
 Map TypeScript / JavaScript / TSX / JSX to a `.api` request with an explicit `// @api-hero` comment. On `.api` files, `@source` points back to application code.
+
+**Quick Run** — right-click a JS/TS `fetch("https://...")` and **Run Request** without `@api-hero`. Unique catalog matches reuse the existing `.api` file; otherwise a temporary request runs through the existing orchestrator (no untitled editor). `@api-hero` remains the persistent mapping for CodeLens.
 
 CodeLens actions: **Run Request**, **Open API Definition**, **Generate TypeScript**. Hover and **Open Related Source** use the same mappings. Ambiguous, deleted, or renamed targets produce no CodeLens.
 
@@ -449,7 +451,7 @@ From a local build:
 ```bash
 npm install
 npm run package
-code --install-extension release/api-hero-2.12.1.vsix
+code --install-extension release/api-hero-2.12.2.vsix
 ```
 
 Open **API Hero: Open Overview** anytime for quick actions.
@@ -482,6 +484,7 @@ Requires **Node.js 18+**. See [CLI](#cli).
 | CLI | [cli.md](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/cli.md) |
 | MCP for AI agents | [mcp.md](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/user/mcp.md) |
 | Configuration | [configuration.md](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/reference/configuration.md) |
+| Release notes 2.12.2 | [v2.12.2-release-notes.md](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/release/v2.12.2-release-notes.md) |
 | Release notes 2.12.1 | [v2.12.1-release-notes.md](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/release/v2.12.1-release-notes.md) |
 | Release notes 2.12.0 | [v2.12.0-release-notes.md](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/release/v2.12.0-release-notes.md) |
 | Release notes 2.11.0 | [v2.11.0-release-notes.md](https://github.com/AnkitSemwal007/API-Hero/blob/main/docs/release/v2.11.0-release-notes.md) |

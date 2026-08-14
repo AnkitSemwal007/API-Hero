@@ -67,6 +67,10 @@ describe('ui/webview helpers', () => {
     assert.match(WEBVIEW_SHARED_CSS, /\.empty-state/u);
     assert.match(WEBVIEW_SHARED_CSS, /\.method-badge/u);
     assert.match(WEBVIEW_SHARED_CSS, /\.method-get/u);
+    assert.match(
+      WEBVIEW_SHARED_CSS,
+      /\[hidden\]\s*\{\s*display:\s*none\s*!important;/u,
+    );
   });
 
   test('methodBadgeClass maps known methods and falls back for others', () => {

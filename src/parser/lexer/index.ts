@@ -107,6 +107,7 @@ export class Lexer {
       tokenized.diagnostics,
     );
     let lineHasContent = false;
+    let seenHttpMethodInBlock = false;
 
     for (let index = 0; index < tokenized.tokens.length; index += 1) {
       const token = tokenized.tokens[index];
@@ -127,8 +128,10 @@ export class Lexer {
 
       if (
         !lineHasContent &&
+        !seenHttpMethodInBlock &&
         token.kind === TokenKind.Identifier &&
-        isMethodCandidate(token.raw)
+        isMethodCandidate(token.raw) &&
+        lineRemainderLooksLikeUrl(tokenized.tokens, index)
       ) {
         tokenDiagnostics.push(
           this.createDiagnostic(
@@ -173,6 +176,10 @@ export class Lexer {
       tokens.push(lexicalToken);
       diagnostics.push(...tokenDiagnostics);
 
+      if (token.kind === TokenKind.HttpMethod) {
+        seenHttpMethodInBlock = true;
+      }
+
       if (token.kind === TokenKind.Newline) {
         lineHasContent = false;
       } else if (
@@ -180,6 +187,9 @@ export class Lexer {
         lexicalToken.kind === 'RequestBoundary'
       ) {
         lineHasContent = true;
+        if (lexicalToken.kind === 'RequestBoundary') {
+          seenHttpMethodInBlock = false;
+        }
       }
     }
 
@@ -331,6 +341,47 @@ function isMethodCandidate(raw: string): boolean {
     }
   }
   return true;
+}
+
+/**
+ * Reconstructs the rest of the current line after a start-of-line identifier
+ * (tokenizer splits `https://…` at `:`) and treats it as a request URL when
+ * it starts with a URL-like prefix.
+ */
+function lineRemainderLooksLikeUrl(
+  tokens: readonly Token[],
+  identifierIndex: number,
+): boolean {
+  let remainder = '';
+  for (let index = identifierIndex + 1; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    if (token === undefined || token.kind === TokenKind.Whitespace) {
+      continue;
+    }
+    if (
+      token.kind === TokenKind.Newline ||
+      token.kind === TokenKind.EOF ||
+      token.kind === TokenKind.Comment
+    ) {
+      break;
+    }
+    remainder += token.raw;
+  }
+  return isUrlLikePrefix(remainder);
+}
+
+function isUrlLikePrefix(raw: string): boolean {
+  const lower = raw.toLowerCase();
+  return (
+    lower.startsWith('http://') ||
+    lower.startsWith('https://') ||
+    lower.startsWith('ws://') ||
+    lower.startsWith('wss://') ||
+    lower.startsWith('/') ||
+    lower.startsWith('./') ||
+    lower.startsWith('../') ||
+    lower.startsWith('{{')
+  );
 }
 
 function isAdjacentIdentifier(next: Token | undefined, current: Token): boolean {

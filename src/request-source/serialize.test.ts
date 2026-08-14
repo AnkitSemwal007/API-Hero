@@ -311,6 +311,44 @@ test('emits @protocol only when set', () => {
     body: { type: 'text', text: 'ping' },
   });
   assert.match(websocket, /@protocol websocket\n/u);
+  assert.match(websocket, /GET ws:\/\/example\.test\/socket\n/u);
+  assert.match(websocket, /\nping\n/u);
+  assert.doesNotMatch(websocket, /Content-Type/u);
+
+  const websocketJson = serializeRequestDocument({
+    name: 'EchoJson',
+    method: 'GET',
+    url: 'ws://example.test/socket',
+    protocol: 'websocket',
+    body: { type: 'json', text: '{"type":"ping"}' },
+  });
+  assert.match(websocketJson, /@protocol websocket\n/u);
+  assert.doesNotMatch(websocketJson, /Content-Type/u);
+
+  const websocketHandshake = serializeRequestDocument({
+    name: 'EchoAuth',
+    method: 'GET',
+    url: 'wss://example.test/socket',
+    protocol: 'websocket',
+    headers: [
+      { name: 'Content-Type', value: 'application/json', enabled: true },
+    ],
+    body: { type: 'json', text: '{"type":"ping"}' },
+  });
+  assert.match(websocketHandshake, /Content-Type: application\/json\n/u);
+  assert.equal(
+    (websocketHandshake.match(/Content-Type:/gu) ?? []).length,
+    1,
+  );
+
+  const websocketEmptyUrl = serializeRequestDocument({
+    name: 'EchoEmpty',
+    method: 'GET',
+    url: '',
+    protocol: 'websocket',
+  });
+  assert.match(websocketEmptyUrl, /GET ws:\/\/localhost:8080\/socket\n/u);
+  assert.doesNotMatch(websocketEmptyUrl, /httpbin/u);
 
   const unknown = serializeRequestDocument({
     name: 'Bad',

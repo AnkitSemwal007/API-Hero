@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.12.2] - 2026-08-14
+
+WebSocket Request Editor and New Request polish, Postman GraphQL native import, and Source Quick Run. Backward compatible with **2.12.1**.
+
+### Added
+
+- **Quick Run from source** — Right-click a JS/TS `fetch("https://...")` and Run Request without `@api-hero`. Unique catalog matches reuse the existing `.api` file; otherwise a temporary request runs through `ExecutionOrchestrator`. Persistent `@api-hero` CodeLens is unchanged. GraphQL and WebSocket catalog entries are not Quick Run matches.
+- **Postman GraphQL import** — Collection `body.mode = graphql` maps to native `@protocol graphql` (query, variables, operation name). Insomnia GraphQL import remains a stub.
+
+### Improved
+
+- WebSocket New Request and Request Editor: no HTTP method selector; WebSocket URL defaults to `ws://localhost:8080/socket`; Message tab; no REST Content-Type default on the message.
+
+### Fixed
+
+- Request bodies that start with an alphabetic word (WebSocket plaintext, GraphQL `query` / `mutation`, HTTP text) are no longer reported as unknown HTTP methods. WebSocket messages are never treated as an HTTP method. The lexer still detects real unknown request methods such as `FETCH /unknown`.
+
+### Notes
+
+- WebSocket remains a bounded session: connect → optional send → receive one text frame → close. It is not a persistent WebSocket client.
+- Existing WebSocket `.api` files and the bounded execution pipeline are unchanged.
+- Successful Postman GraphQL imports are native GraphQL requests, not unsupported/raw JSON stubs.
+- Scenarios, OAuth, GraphQL subscriptions, and schema explorer are not included.
+
 ## [2.12.1] - 2026-08-14
 
 First-class GraphQL and WebSocket Request Editor UX, Environment & Variables UI, centralized Authentication UI, and Collection Run Setup. Backward compatible with **2.12.0**.

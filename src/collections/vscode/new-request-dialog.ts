@@ -4,7 +4,10 @@
 
 import { ViewColumn, window, type Disposable } from 'vscode';
 
-import type { RequestSourceDocument } from '../../request-source';
+import {
+  DEFAULT_HTTP_REQUEST_URL,
+  type RequestSourceDocument,
+} from '../../request-source';
 import { createWebviewNonce } from '../../ui/webview';
 import {
   parseNewRequestDialogMessage,
@@ -87,7 +90,7 @@ export async function openNewRequestDialog(
         : {}),
       defaultName: 'New Request',
       defaultMethod: 'GET',
-      defaultUrl: 'https://httpbin.org/get',
+      defaultUrl: DEFAULT_HTTP_REQUEST_URL,
     };
 
     disposables.push(

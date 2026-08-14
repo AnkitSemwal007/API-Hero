@@ -37,6 +37,8 @@ Unknown `@protocol` values are a validation error. They are never treated as HTT
 
 GraphQL `variables` in the JSON body use the same `{{name}}` substitution and precedence as REST (`run > document > environment > collection > workspace > global`). Existing authentication profiles and headers apply to the HTTP request. GraphQL requests can run in collections, CLI (`apihero run request`), and MCP through the shared execution path.
 
+Postman Collection import maps `body.mode = graphql` to this same `@protocol graphql` envelope (query, variables, operation name). Insomnia GraphQL bodies remain stubs.
+
 ## Success and errors
 
 HTTP transport success (a response was received) is not the same as a successful GraphQL operation.

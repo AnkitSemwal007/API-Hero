@@ -466,3 +466,113 @@ test('runImportPipeline imports Postman with skipWrite preview and write', async
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test('mixed REST and GraphQL collection maps native GraphQL in nested folders', async () => {
+  const provider = new PostmanImportProvider();
+  const artifacts = await provider.importSpecification(
+    {
+      info: {
+        name: 'Mixed API',
+        schema: SCHEMA_V21,
+      },
+      item: [
+        {
+          name: 'REST List',
+          request: {
+            method: 'GET',
+            header: [{ key: 'Accept', value: 'application/json' }],
+            url: '{{BASE_URL}}/users',
+          },
+        },
+        {
+          name: 'GetUsers',
+          request: {
+            method: 'POST',
+            url: '{{BASE_URL}}/graphql',
+            body: {
+              mode: 'graphql',
+              graphql: {
+                query: 'query GetUsers { users { id } }',
+                operationName: 'GetUsers',
+              },
+            },
+          },
+        },
+        {
+          name: 'Users',
+          item: [
+            {
+              name: 'Admin',
+              item: [
+                {
+                  name: 'UpdateUser',
+                  request: {
+                    method: 'POST',
+                    url: '{{BASE_URL}}/graphql',
+                    body: {
+                      mode: 'graphql',
+                      graphql: {
+                        query:
+                          'mutation UpdateUser($id: ID!) { updateUser(id: $id) { id } }',
+                        variables: { id: '{{userId}}' },
+                      },
+                    },
+                  },
+                },
+              ],
+            },
+          ],
+        },
+        {
+          name: 'REST Create',
+          request: {
+            method: 'POST',
+            url: '{{BASE_URL}}/users',
+            body: {
+              mode: 'raw',
+              raw: '{"name":"Ada"}',
+              options: { raw: { language: 'json' } },
+            },
+          },
+        },
+      ],
+      variable: [{ key: 'BASE_URL', value: 'https://api.example.com' }],
+    },
+    {
+      sourceText: '{}',
+      limits: {
+        maxFileBytes: 5_000_000,
+        maxRefDepth: 64,
+        maxSchemaDepth: 32,
+      },
+      existingEnvironments: [],
+      existingAuthProfiles: [],
+    },
+  );
+
+  const apiFiles = artifacts.files.filter((file) =>
+    file.relativePath.endsWith('.api'),
+  );
+  assert.equal(apiFiles.length, 4);
+  const restFiles = apiFiles.filter(
+    (file) => !file.content.includes('@protocol graphql'),
+  );
+  const graphqlFiles = apiFiles.filter((file) =>
+    file.content.includes('@protocol graphql'),
+  );
+  assert.equal(restFiles.length, 2);
+  assert.equal(graphqlFiles.length, 2);
+  const nested = graphqlFiles.find((file) =>
+    /Users\/Admin\//u.test(file.relativePath),
+  );
+  assert.ok(nested);
+  assert.match(nested!.content, /mutation UpdateUser/u);
+  assert.equal(
+    artifacts.diagnostics.some(
+      (item) =>
+        item.code === 'postman-unsupported-graphql' ||
+        item.message.includes('imported as raw JSON stub'),
+    ),
+    false,
+  );
+});

@@ -28,6 +28,13 @@ export {
 } from './serialize';
 
 export {
+  DEFAULT_GRAPHQL_REQUEST_URL,
+  DEFAULT_HTTP_REQUEST_URL,
+  DEFAULT_WEBSOCKET_REQUEST_URL,
+  isStockProtocolDefaultUrl,
+} from './protocol-defaults';
+
+export {
   GRAPHQL_STARTER_QUERY,
   compileGraphqlEditorEnvelope,
   isGraphqlProtocol,

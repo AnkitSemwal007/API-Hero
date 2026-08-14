@@ -196,6 +196,15 @@ plaintext settings. The summary lists SecretStorage hints for the user.
 - Sensitive header/parameter examples and credential-like body blobs are
   replaced with placeholders (never written as literals into `.api` files).
 
+## Postman GraphQL
+
+Postman Collection `body.mode === "graphql"` maps to native `@protocol graphql`
+via `compileGraphqlEditorEnvelope` (query, variables as object or JSON string,
+optional operationName). Detection is from `body.mode` only, never from URL.
+Missing or empty query is `postman-unsupported-graphql` and is not imported as
+GraphQL. Invalid variables are omitted (`postman-unsupported-graphql-variables`)
+while the request remains GraphQL. Insomnia GraphQL bodies remain stubs.
+
 ## Limitations (intentionally deferred)
 
 - Swagger 2.0, export, GraphQL-as-a-format import

@@ -4,6 +4,9 @@
 
 import {
   compileGraphqlEditorEnvelope,
+  DEFAULT_GRAPHQL_REQUEST_URL,
+  DEFAULT_HTTP_REQUEST_URL,
+  DEFAULT_WEBSOCKET_REQUEST_URL,
   GRAPHQL_STARTER_QUERY,
   type RequestSourceDocument,
 } from '../../request-source';
@@ -113,8 +116,13 @@ export function validateCreateMessage(
   if (url.length === 0) {
     return { error: 'URL is required.' };
   }
+  const protocolRaw = (message.protocol ?? '').trim().toLowerCase();
+  const isWebsocketEarly = protocolRaw === 'websocket';
   const methodUpper = message.method.trim().toUpperCase();
-  if (!HTTP_METHODS.includes(methodUpper as HttpMethod)) {
+  if (
+    !(isWebsocketEarly && methodUpper.length === 0) &&
+    !HTTP_METHODS.includes(methodUpper as HttpMethod)
+  ) {
     return { error: `Unsupported HTTP method "${message.method}".` };
   }
   if (message.collectionId.trim().length === 0) {
@@ -131,7 +139,6 @@ export function validateCreateMessage(
     return { error: 'Select a valid collection folder.' };
   }
 
-  const protocolRaw = (message.protocol ?? '').trim().toLowerCase();
   if (
     protocolRaw.length > 0 &&
     protocolRaw !== 'http' &&
@@ -144,8 +151,9 @@ export function validateCreateMessage(
   const description = message.description.trim();
   const isGraphql = protocolRaw === 'graphql';
   const isWebsocket = protocolRaw === 'websocket';
-  const method: HttpMethod =
-    isGraphql && (methodUpper === 'GET' || methodUpper.length === 0)
+  const method: HttpMethod = isWebsocket
+    ? 'GET'
+    : isGraphql && (methodUpper === 'GET' || methodUpper.length === 0)
       ? 'POST'
       : (methodUpper as HttpMethod);
 
@@ -167,7 +175,9 @@ export function validateCreateMessage(
           ],
         }
       : {}),
-    ...(isWebsocket ? { protocol: 'websocket' as const } : {}),
+    ...(isWebsocket
+      ? { protocol: 'websocket' as const, body: { type: 'none' as const } }
+      : {}),
   };
   return { model };
 }
@@ -208,13 +218,13 @@ export function renderNewRequestDialogHtml(nonce: string): string {
         <option value="websocket">WebSocket</option>
       </select>
     </label>
-    <div class="row request-line" role="group" aria-label="Method and URL">
-      <label class="field method">
+    <div class="row request-line" id="requestLineGroup" role="group" aria-label="Method and URL">
+      <label class="field method" id="methodField">
         <span>Method</span>
         <select id="method" class="method-select method-get">${methodOptions}</select>
       </label>
       <label class="field grow">
-        <span>URL</span>
+        <span id="urlLabel">URL</span>
         <input id="url" type="text" autocomplete="off" required placeholder="https://api.example.com/users" />
       </label>
     </div>
@@ -359,8 +369,11 @@ const DIALOG_SCRIPT = `
   const form = document.getElementById('form');
   const nameInput = document.getElementById('name');
   const methodSelect = document.getElementById('method');
+  const methodField = document.getElementById('methodField');
+  const requestLineGroup = document.getElementById('requestLineGroup');
   const protocolSelect = document.getElementById('protocol');
   const urlInput = document.getElementById('url');
+  const urlLabel = document.getElementById('urlLabel');
   const descriptionInput = document.getElementById('description');
   const collectionSelect = document.getElementById('collection');
   const folderSelect = document.getElementById('folder');
@@ -369,6 +382,9 @@ const DIALOG_SCRIPT = `
   const cancelBtn = document.getElementById('cancel');
 
   let initDefaultUrl = '';
+  const DEFAULT_HTTP_REQUEST_URL = ${JSON.stringify(DEFAULT_HTTP_REQUEST_URL)};
+  const DEFAULT_GRAPHQL_REQUEST_URL = ${JSON.stringify(DEFAULT_GRAPHQL_REQUEST_URL)};
+  const DEFAULT_WEBSOCKET_REQUEST_URL = ${JSON.stringify(DEFAULT_WEBSOCKET_REQUEST_URL)};
 
   function syncMethodSelect() {
     const map = { GET: 'get', POST: 'post', PUT: 'put', PATCH: 'patch', DELETE: 'delete', HEAD: 'head', OPTIONS: 'options' };
@@ -443,10 +459,56 @@ const DIALOG_SCRIPT = `
     }
   }
 
+  function applyProtocolChrome() {
+    const protocol = String(protocolSelect.value || '');
+    const websocket = protocol === 'websocket';
+    const graphql = protocol === 'graphql';
+    if (methodField) methodField.hidden = websocket;
+    methodSelect.hidden = websocket;
+    if (requestLineGroup) {
+      requestLineGroup.setAttribute(
+        'aria-label',
+        websocket ? 'WebSocket URL' : 'Method and URL',
+      );
+    }
+    if (urlLabel) urlLabel.textContent = websocket ? 'WebSocket URL' : 'URL';
+    urlInput.placeholder = websocket
+      ? DEFAULT_WEBSOCKET_REQUEST_URL
+      : 'https://api.example.com/users';
+    const url = String(urlInput.value || '').trim();
+    if (websocket) {
+      if (
+        url.length === 0 ||
+        url === DEFAULT_HTTP_REQUEST_URL ||
+        url === DEFAULT_GRAPHQL_REQUEST_URL ||
+        url === initDefaultUrl
+      ) {
+        urlInput.value = DEFAULT_WEBSOCKET_REQUEST_URL;
+      }
+    } else if (graphql) {
+      if (methodSelect.value === 'GET') {
+        methodSelect.value = 'POST';
+        syncMethodSelect();
+      }
+      if (
+        url.length === 0 ||
+        url === initDefaultUrl ||
+        url === DEFAULT_WEBSOCKET_REQUEST_URL
+      ) {
+        urlInput.value = DEFAULT_GRAPHQL_REQUEST_URL;
+      }
+    } else if (
+      url === DEFAULT_WEBSOCKET_REQUEST_URL ||
+      url === DEFAULT_GRAPHQL_REQUEST_URL
+    ) {
+      urlInput.value = initDefaultUrl || DEFAULT_HTTP_REQUEST_URL;
+    }
+  }
+
   function applyInit(next) {
     state = next;
     nameInput.value = next.defaultName ?? 'New Request';
-    urlInput.value = next.defaultUrl ?? 'https://httpbin.org/get';
+    urlInput.value = next.defaultUrl ?? DEFAULT_HTTP_REQUEST_URL;
     initDefaultUrl = urlInput.value;
     if (next.defaultMethod) {
       methodSelect.value = next.defaultMethod;
@@ -454,23 +516,14 @@ const DIALOG_SCRIPT = `
     syncMethodSelect();
     fillCollections();
     fillFolders();
+    applyProtocolChrome();
     showError('');
     nameInput.focus();
     nameInput.select();
   }
 
   methodSelect.addEventListener('change', syncMethodSelect);
-  protocolSelect.addEventListener('change', () => {
-    if (protocolSelect.value !== 'graphql') return;
-    if (methodSelect.value === 'GET') {
-      methodSelect.value = 'POST';
-      syncMethodSelect();
-    }
-    const url = urlInput.value.trim();
-    if (url.length === 0 || url === initDefaultUrl) {
-      urlInput.value = 'https://api.example.com/graphql';
-    }
-  });
+  protocolSelect.addEventListener('change', applyProtocolChrome);
   collectionSelect.addEventListener('change', () => {
     fillFolders();
   });
@@ -510,7 +563,7 @@ const DIALOG_SCRIPT = `
     vscode.postMessage({
       type: 'create',
       name,
-      method: methodSelect.value,
+      method: protocolSelect.value === 'websocket' ? 'GET' : methodSelect.value,
       url,
       description: descriptionInput.value.trim(),
       collectionId,

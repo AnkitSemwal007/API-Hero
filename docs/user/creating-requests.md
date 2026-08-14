@@ -6,7 +6,7 @@ Requests live in `.api` files. The **Request Editor** is the default custom edit
 
 1. **API Hero: New Request** (Collections toolbar or Command Palette).
 2. Choose collection/folder and name when prompted.
-3. Edit protocol (HTTP / GraphQL / WebSocket), method, URL, headers, query, body, variables, and auth in the Request Editor, or edit the text file directly.
+3. Edit protocol (HTTP / GraphQL / WebSocket), URL, headers, query, body, variables, and auth in the Request Editor, or edit the text file directly. WebSocket has no HTTP method selector (method stays `GET` internally for `.api` compatibility) and the WebSocket URL defaults to `ws://localhost:8080/socket`.
 
 ## `.api` basics
 
@@ -47,7 +47,7 @@ For how `@extract` and `@depends-on` chain requests during a collection run, see
 
 Snippets (`get`, `post`, `graphql`, `websocket`, `separator`, and others) are available in the `api` language.
 
-The Request Editor toolbar **Protocol** selector writes `@protocol` (`http` omits the directive; GraphQL and WebSocket persist). GraphQL uses Query / Variables / Operation name. WebSocket **Run Session** is a bounded connect → optional send → first text frame → close session — not a persistent connection.
+The Request Editor toolbar **Protocol** selector writes `@protocol` (`http` omits the directive; GraphQL and WebSocket persist). GraphQL uses Query / Variables / Operation name. For WebSocket there is no HTTP method selector; the URL defaults to `ws://localhost:8080/socket`. WebSocket **Run Session** is a bounded connect → optional send → first text frame → close session — not a persistent connection.
 
 ## Run a request
 

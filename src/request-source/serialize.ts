@@ -23,6 +23,11 @@ import type {
   RequestSourceHeader,
   RequestSourceQueryParam,
 } from './models';
+import {
+  DEFAULT_GRAPHQL_REQUEST_URL,
+  DEFAULT_HTTP_REQUEST_URL,
+  DEFAULT_WEBSOCKET_REQUEST_URL,
+} from './protocol-defaults';
 
 /**
  * Serializes one request document to `.api` source.
@@ -98,14 +103,16 @@ export function serializeRequestDocument(
   lines.push('');
 
   const method = String(document.method).toUpperCase();
-  const url = buildUrl(document.url, document.queryParams);
+  const url = buildUrl(document.url, document.queryParams, protocol);
   lines.push(`${method} ${url}`);
 
   const body = document.body ?? { type: 'none' };
   const { contentType, bodyLines } = serializeBody(body);
   const headers = [...(document.headers ?? [])];
+  const skipAutoContentType = protocol === 'websocket';
 
   if (
+    !skipAutoContentType &&
     contentType !== undefined &&
     !hasHeaderName(headers, 'content-type')
   ) {
@@ -143,15 +150,24 @@ export function serializePlaceholderRequest(name: string): string {
   return serializeRequestDocument({
     name: name.trim().length > 0 ? name.trim() : 'New Request',
     method: 'GET',
-    url: 'https://httpbin.org/get',
+    url: DEFAULT_HTTP_REQUEST_URL,
   });
 }
 
 function buildUrl(
   rawUrl: string,
   queryParams: readonly RequestSourceQueryParam[] | undefined,
+  protocol: string | undefined,
 ): string {
-  const base = rawUrl.trim().length > 0 ? rawUrl.trim() : 'https://httpbin.org/get';
+  const trimmed = rawUrl.trim();
+  const base =
+    trimmed.length > 0
+      ? trimmed
+      : protocol === 'websocket'
+        ? DEFAULT_WEBSOCKET_REQUEST_URL
+        : protocol === 'graphql'
+          ? DEFAULT_GRAPHQL_REQUEST_URL
+          : DEFAULT_HTTP_REQUEST_URL;
   const enabled = (queryParams ?? []).filter(
     (param) => param.enabled !== false && param.name.trim().length > 0,
   );

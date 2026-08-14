@@ -1,6 +1,6 @@
 # Marketplace assets — 2.9.1
 
-Guidance for listing media. Current product version is **2.12.1**; screenshot inventory below remains the 2.9.1 Cloudinary set (no new screenshots invented for 2.12.1).
+Guidance for listing media. Current product version is **2.12.2**; screenshot inventory below remains the 2.9.1 Cloudinary set (no new screenshots invented for 2.12.2).
 
 **Strategy:** README screenshots, banner, social preview, and workflow GIFs are hosted on **Cloudinary** (absolute HTTPS URLs). That keeps the VSIX small. Only in-extension chrome icons ship inside the package (`images/icon.png`, `images/api-*.svg`, `images/execution-*.svg`).
 

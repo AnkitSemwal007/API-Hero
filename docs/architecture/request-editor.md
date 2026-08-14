@@ -23,7 +23,7 @@ VS Code adapters live in `src/request-editor/vscode/`.
 | Request | Name, description, method, URL |
 | Params | Query table ↔ URL query (`parseParameters` / serializer) |
 | Headers | Key / Value / Enabled (disabled → `# Name: value`) |
-| Body | REST: none / json / text / form / raw / multipart / binary. GraphQL (`@protocol graphql`): Query / Variables / Operation name — a projection of the JSON envelope `{ query, variables, operationName }`, not a second body format. |
+| Body | REST: none / json / text / form / raw / multipart / binary. GraphQL (`@protocol graphql`): Query / Variables / Operation name — a projection of the JSON envelope `{ query, variables, operationName }`, not a second body format. WebSocket (`@protocol websocket`): Message tab with none / json / text only; no HTTP Content-Type default. |
 | Auth | Centralized Authentication UI: No Auth, Bearer Token, Basic Auth, API Key; one-shot Bearer; Saved → `@auth <id>` (no secrets in webview) |
 | Variables | `@variable` rows, `{{name}}` insert, read-only resolution preview, IntelliSense |
 | Tests | Structured UI → `expect …` lines; assertion value field supports `{{vars}}` |
@@ -71,12 +71,19 @@ The Run button calls `ExecutionOrchestrator.runAtSourceLocation` for the documen
 
 The toolbar protocol selector writes `@protocol` (`http` omits it; `graphql` /
 `websocket` persist; unknown values are kept so save cannot coerce them to HTTP).
+Toolbar chrome by protocol:
+
+- REST: Protocol | Method | URL
+- GraphQL: Protocol | POST method | GraphQL badge | URL
+- WebSocket: Protocol | WS badge | URL (no HTTP method selector)
+
 GraphQL Query/Variables compile to the existing JSON body; Run still uses
 `ExecutionOrchestrator` (no second GraphQL executor). Editor envelope helpers in
 the webview are a clone of `src/request-source/graphql-envelope.ts` (lenient
 authoring). Runtime canonicalization stays in `prepareGraphqlHttpRequest`.
 WebSocket chrome (Connection status, Messages recap, **Run Session**) is
-presentation-only. One Run action still executes the bounded session through
+presentation-only. The Message tab is text/JSON only and does not apply HTTP
+Content-Type defaults. One Run action still executes the bounded session through
 `ExecutionOrchestrator`. The in-editor session recap consumes
 `presentExecutionResult` / `PresentedWebsocketSession`, never `RuntimeResponse`.
 

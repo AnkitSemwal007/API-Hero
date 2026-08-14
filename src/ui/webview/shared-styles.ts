@@ -41,6 +41,9 @@ export const WEBVIEW_SHARED_CSS = `
   --ah-radius: 2px;
   --ah-control-height: 24px;
 }
+[hidden] {
+  display: none !important;
+}
 button {
   color: var(--vscode-button-secondaryForeground);
   background: var(--vscode-button-secondaryBackground);

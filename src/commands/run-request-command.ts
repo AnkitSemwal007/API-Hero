@@ -19,8 +19,9 @@ export interface MappedRunRequestSource {
 
 export interface RunRequestCommandOptions {
   /**
-   * Resolves an explicit source-file mapping when no `.api` document is active
-   * and no CodeLens argument was supplied (Command Palette from TypeScript).
+   * Resolves an explicit `@api-hero` mapping or a detectable Quick Run
+   * `fetch("https://...")` call when no `.api` document is active and no
+   * CodeLens argument was supplied (Command Palette / context menu from source).
    */
   readonly resolveMappedRequest?: (
     suppliedArgument: unknown,
@@ -85,7 +86,7 @@ function createRunRequestExecutor(
     }
 
     await window.showErrorMessage(
-      'Open an API Hero request file, or add an @api-hero mapping in source, and try again.',
+      'Open an API Hero request file, add an @api-hero mapping, or place the cursor on a fetch("https://...") call, and try again.',
     );
   };
 }
