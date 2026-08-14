@@ -34,8 +34,11 @@ a bare URL.
 (`http://` or `https://` only), optional literal method/headers/body, then:
 
 1. Unique catalog match on **exact method + normalized concrete URL** → reuse
-   that `.api` file’s text (do not overwrite auth/vars/body/metadata)
-2. Several matches → VS Code QuickPick (name + relativePath); cancel → temporary
+   that `.api` file’s text (do not overwrite auth/vars/body/metadata). If the
+   file cannot be opened, show an error and do **not** synthesize a temporary
+   request.
+2. Several matches → VS Code QuickPick (name + relativePath); cancel → temporary.
+   A picked file that cannot be opened is an error, not a silent synthesize.
 3. None → serialize a temporary `.api` document and pass it to `runAtPosition`
 
 Temporary runs use `MappedRunRequestSource` `{ text, sourceId, offset }` with
@@ -50,7 +53,8 @@ catalog entries are skipped. Identifier URLs/bodies and interpolated templates
 fail closed.
 
 `registerSourceIntegration` exposes `resolveMappedRun` (CatalogRequest, mapping
-only) and `resolveSourceRun` (MappedRunRequestSource: mapping, then Quick Run).
+only; CodeLens / Open API Definition) and `resolveSourceRun` (mapping, then
+Quick Run). `resolveSourceRun` returns `null` when an error was already shown.
 Run Request still prefers an active `.api` document, then `resolveSourceRun`.
 
 The catalog is built from Collection discovery plus open `.api` document

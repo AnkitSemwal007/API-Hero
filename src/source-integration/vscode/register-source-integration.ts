@@ -155,12 +155,14 @@ export function registerSourceIntegration(
 
 export interface SourceIntegrationRegistration {
   readonly disposables: readonly Disposable[];
+  /** Mapping-only (`@api-hero`). Used by CodeLens / Open API Definition. */
   readonly resolveMappedRun: (
     suppliedArgument: unknown,
   ) => Promise<CatalogRequest | undefined>;
+  /** Mapping, then Quick Run. `null` means an error was already shown. */
   readonly resolveSourceRun: (
     suppliedArgument: unknown,
-  ) => Promise<MappedRunRequestSource | undefined>;
+  ) => Promise<MappedRunRequestSource | null | undefined>;
 }
 
 function collectOpenApiOverlays(): readonly CatalogDocumentOverlay[] {

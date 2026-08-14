@@ -207,7 +207,7 @@ while the request remains GraphQL. Insomnia GraphQL bodies remain stubs.
 
 ## Limitations (intentionally deferred)
 
-- Swagger 2.0, export, GraphQL-as-a-format import
+- Swagger 2.0, export, GraphQL schema import; Insomnia GraphQL remains a stub
 - Insomnia Document / YAML v5, HAR, and non–resource-based Insomnia shapes
 - Authenticated OpenAPI URL fetch (401/403 or URLs with embedded credentials)
 - Response schema / assertion generation

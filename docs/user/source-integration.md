@@ -30,7 +30,7 @@ ExecutionOrchestrator
 
 Matching for Quick Run is **exact method + concrete `http://` / `https://` URL** after a small normalize (lowercase host, strip default ports, strip a trailing slash except `/`, keep the query string). There is no fuzzy matching and **no variable expansion** — a catalog URL such as `{{baseUrl}}/products` never matches `https://api.example.com/products`. GraphQL and WebSocket catalog entries are skipped.
 
-If several `.api` files share that method and URL, API Hero shows a QuickPick of name + path. Cancel (Escape) runs a temporary request from the `fetch` snapshot. Unique catalog reuse always runs the **persisted** `.api` text (auth, variables, body, and metadata are not overwritten from source).
+If several `.api` files share that method and URL, API Hero shows a QuickPick of name + path. Cancel (Escape) runs a temporary request from the `fetch` snapshot. Unique catalog reuse always runs the **persisted** `.api` text (auth, variables, body, and metadata are not overwritten from source). If that file cannot be opened, Quick Run stops with an error instead of synthesizing a temporary request.
 
 Temporary Quick Runs are not opened as untitled `.api` editors. History rerun of a Quick Run may not reopen the original source file.
 

@@ -6,7 +6,7 @@ Persistent connections, subscriptions, reconnect, infinite streams, and binary f
 
 ## Author a WebSocket request
 
-Add `@protocol websocket` and use a `ws://` or `wss://` URL. The outgoing message is the request body, including plaintext and JSON.
+Add `@protocol websocket` and use a `ws://` or `wss://` URL. The outgoing message is the request body, including plaintext and JSON. A body line that is a known HTTP method followed by a URL-like remainder can still start a new request.
 
 ```api
 @protocol websocket

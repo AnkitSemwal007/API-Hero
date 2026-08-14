@@ -25,7 +25,7 @@ export interface RunRequestCommandOptions {
    */
   readonly resolveMappedRequest?: (
     suppliedArgument: unknown,
-  ) => Promise<MappedRunRequestSource | undefined>;
+  ) => Promise<MappedRunRequestSource | null | undefined>;
 }
 
 /** Creates the sole command adapter for single-request execution. */
@@ -80,6 +80,9 @@ function createRunRequestExecutor(
     }
 
     const mapped = await options?.resolveMappedRequest?.(args[0]);
+    if (mapped === null) {
+      return;
+    }
     if (mapped !== undefined) {
       await orchestrator.runAtPosition(mapped);
       return;

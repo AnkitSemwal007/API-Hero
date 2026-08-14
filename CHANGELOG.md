@@ -22,7 +22,7 @@ WebSocket Request Editor and New Request polish, Postman GraphQL native import, 
 
 ### Fixed
 
-- Request bodies that start with an alphabetic word (WebSocket plaintext, GraphQL `query` / `mutation`, HTTP text) are no longer reported as unknown HTTP methods. WebSocket messages are never treated as an HTTP method. The lexer still detects real unknown request methods such as `FETCH /unknown`.
+- Request bodies that start with an alphabetic word (WebSocket plaintext, GraphQL `query` / `mutation`, HTTP text) are no longer reported as unknown HTTP methods. WebSocket messages are never treated as an HTTP method. The lexer still detects real unknown request methods such as `FETCH /unknown`. A body line that is a known HTTP method followed by a URL-like remainder can still start a new request.
 
 ### Notes
 

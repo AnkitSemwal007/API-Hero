@@ -21,7 +21,7 @@ export async function resolveSourceRun(
   catalog: SourceIntegrationCatalog,
   workspaceRoots: readonly string[],
   suppliedArgument: unknown,
-): Promise<MappedRunRequestSource | undefined> {
+): Promise<MappedRunRequestSource | null | undefined> {
   const mapped = await resolveMappedRequest(
     catalog,
     workspaceRoots,
@@ -33,6 +33,7 @@ export async function resolveSourceRun(
       await window.showErrorMessage(
         'API Hero could not open the mapped request file.',
       );
+      return null;
     }
     return opened;
   }
@@ -56,20 +57,28 @@ export async function resolveSourceRun(
     detected.url,
   );
   if (match.kind === 'unique') {
-    return (
-      (await openCatalogRequestSource(match.request)) ??
-      synthesizeQuickRun(detected)
-    );
+    return openMatchingCatalogOrReport(match.request);
   }
   if (match.kind === 'ambiguous') {
     const picked = await pickMatchingRequest(match.requests);
     if (picked !== undefined) {
-      return (
-        (await openCatalogRequestSource(picked)) ?? synthesizeQuickRun(detected)
-      );
+      return openMatchingCatalogOrReport(picked);
     }
   }
   return synthesizeQuickRun(detected);
+}
+
+async function openMatchingCatalogOrReport(
+  request: CatalogRequest,
+): Promise<MappedRunRequestSource | null> {
+  const opened = await openCatalogRequestSource(request);
+  if (opened !== undefined) {
+    return opened;
+  }
+  await window.showErrorMessage(
+    'API Hero could not open the matching request file.',
+  );
+  return null;
 }
 
 async function openCatalogRequestSource(
